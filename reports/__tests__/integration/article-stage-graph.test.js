@@ -149,8 +149,12 @@ describe('the article stage through the real graph (phase 4, brief 4.7b)', () =>
     // R38: the line above the headline is the theme's, stamped over the writer's.
     expect(stop.values.contentBundle.headline).toEqual({ main: DIRECTORS_HEADLINE, kicker: 'NovaNews Investigates', deck: MAP.deck });
     expect(stop.values.contentBundle.heroImage.filename).toBe('hero.jpg');
+    // Phase 18, run 2f (R40): the director's headline is recorded as before, and the line under
+    // it and the heading they approved on the map are their lines too.
     expect(stop.values._articleHandEdits.edits).toEqual([
-      expect.objectContaining({ id: 'E1', path: 'headline.main', after: DIRECTORS_HEADLINE })
+      expect.objectContaining({ id: 'E1', path: 'headline.main', after: DIRECTORS_HEADLINE }),
+      expect.objectContaining({ id: 'E2', path: 'headline.deck', after: MAP.deck }),
+      expect.objectContaining({ id: 'E3', path: 'sections[#theStory].heading', after: 'The Story' })
     ]);
 
     // The stop shows the story the director settled at the meeting, as the map's stop did.
@@ -191,11 +195,14 @@ describe('the article stage through the real graph (phase 4, brief 4.7b)', () =>
     expect(factCheck.photoReferences.invalid).toContain('p2.jpg');
     expect(printedPhotos(next.values.contentBundle, 'journalist')).toEqual(['hero.jpg']);
 
-    // The stamp's line stands beside the director's cut.
+    // The stamp's lines stand beside the director's cut (run 2f, R40: the line under the headline
+    // and the heading among them).
     expect(next.values.contentBundle.headline.main).toBe(DIRECTORS_HEADLINE);
     expect(next.values._articleHandEdits.edits.map((e) => [e.id, e.path])).toEqual([
       ['E1', 'headline.main'],
-      ['E2', 'sections[#theStory].content[-]']
+      ['E2', 'headline.deck'],
+      ['E3', 'sections[#theStory].heading'],
+      ['E4', 'sections[#theStory].content[-]']
     ]);
   });
 });

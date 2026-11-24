@@ -552,8 +552,12 @@ function mapCardsLine(map, evidenceBundle = null) {
  * the director's edits at the desk (spec section 7). So the lines on a section's heading, a
  * photo's place, and the headline and deck give the director's version first and the map's
  * otherwise (briefs 4.7c and 4.7d): the heading, headline or deck where the director edited
- * one, and the place where the director moved the photo. The stamp records a headline or deck
- * the director wrote on the map, or a top photo they chose there, as their edit the same way.
+ * one, and the place where the director moved the photo. Since phase 18's run 2f (R40) the stamp
+ * records the map's headline, its deck and each section's heading as the director's edits the same
+ * way, whoever wrote them, since the director approved the map that carries them, and a top photo
+ * where the director chose it on the map (ai-nodes.js stampFromMap). So a rework's <HAND_EDITS>
+ * lists them, and "the director's own" and "the map's" in these lines name the same text until the
+ * director edits one at the desk.
  * The instruction's heading and headline lines defer to this task. The line above the headline
  * (the headline's kicker) is the theme's, which code stamps and a rework carries (phase 18, R38),
  * so neither the task nor the instruction names it, and a kicker the director edited at the desk

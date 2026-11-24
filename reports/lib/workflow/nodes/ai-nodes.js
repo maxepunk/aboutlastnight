@@ -1702,16 +1702,18 @@ function articleWriterInputs(state) {
  * corrections, the photo descriptions and the photos it places), its output held to the article
  * writer's schema, the one its prompt prints (prompt-builder.js WRITER_BUNDLE_SCHEMA; phase 18,
  * run 2b, R23).
- * Code stamps the map's headline, deck and top photo into the draft (stampFromMap; R7). A
- * thread that already holds a bundle (a resume) passes through with no call.
+ * Code stamps the map's headline, deck, section headings and top photo into the draft
+ * (stampFromMap; R7, and R40 for the headings). A thread that already holds a bundle (a resume)
+ * passes through with no call and no stamp.
  *
  * @param {Object} state - the writer's inputs, and the director's standing edits on the map,
- *   which the stamp reads
+ *   which the stamp reads for the top photo
  * @param {Object} config - Graph config: the SDK client, the PromptBuilder and an optional
  *   configurable.contentBundleSchema, which tests pass in the writer's schema's place
  * @returns {Object} the stamped draft (contentBundle), the director's lines the stamp
- *   records as the article stop's standing edits (_articleHandEdits, null when the map
- *   carries none of them), and currentPhase; currentPhase alone when a bundle is in hand
+ *   records as the article stop's standing edits (_articleHandEdits: the map's headline, its
+ *   deck and its headings, and a top photo the director chose; null when the thread holds no
+ *   map), and currentPhase; currentPhase alone when a bundle is in hand
  */
 async function generateContentBundle(state, config) {
   // Skip if content bundle already exists (resume case or pre-populated)
@@ -1776,9 +1778,10 @@ async function generateContentBundle(state, config) {
     contentBundle.metadata.storyDate = themeConfig.display.storyDate;
   }
 
-  // R7 (brief 4.7b): the map's headline, deck and top photo, stamped into the first draft,
-  // and the director's lines among them recorded as the director's at the article stop; R38:
-  // the theme's line above the headline with them.
+  // R7 (brief 4.7b): the map's headline, deck and top photo, stamped into the first draft; R40:
+  // each section's heading with them, and the headline, the deck and the headings recorded as
+  // the director's lines at the article stop, with a top photo the director chose; R38: the
+  // theme's line above the headline.
   const stamped = stampFromMap(contentBundle, state);
 
   return {
@@ -1789,11 +1792,47 @@ async function generateContentBundle(state, config) {
 }
 
 /**
- * The stamp (R7; brief 4.7b): the map's headline, deck and top photo, stamped into the
- * article writer's first draft, where the writer was told to print them as the map gives
- * them. The writer's hero caption stays when it captioned the map's top photo; a caption
- * written for another photo goes with that photo. A map with no top photo, or one the director
- * has left out since, prints no hero (articleMapOf).
+ * A section with `heading` as its heading, or with none when `heading` is empty, its other keys
+ * as they were and in their order: a heading the section already holds is replaced in its place,
+ * and one it lacks goes before its content, where the bundle's schema lists it, so the article
+ * reads the same way to every later reader of its JSON.
+ *
+ * @param {Object} section - a section of the article
+ * @param {string} heading - the heading to print, or '' for none
+ * @returns {Object} a copy
+ */
+function sectionWithHeading(section, heading) {
+  const out = {};
+  let placed = !heading;
+  Object.keys(section).forEach((key) => {
+    if (key === 'heading') {
+      if (heading) { out.heading = heading; placed = true; }
+      return;
+    }
+    if (key === 'content' && !placed) { out.heading = heading; placed = true; }
+    out[key] = section[key];
+  });
+  if (!placed) out.heading = heading;
+  return out;
+}
+
+/** A line of the map that gives the article nothing to print: no text, or only spaces. */
+function isBlankLine(value) {
+  return typeof value !== 'string' || !value.trim();
+}
+
+/**
+ * The stamp (R7; brief 4.7b): the lines the director approved on the map, put on the article
+ * writer's first draft, where the writer was told to print them as the map gives them: the
+ * headline, the deck (the line under the headline), each section's heading, and the top photo.
+ *
+ * A section's heading is stamped by the section's slot, which the article's section carries as
+ * its id (phase 18, run 2f, R40): the map's heading where it has one, and no heading where the
+ * map's is empty, so a heading the writer added over the opening or the closing goes. A section
+ * of the draft with no section of the map behind it is left as the writer wrote it. The writer's
+ * hero caption stays when it captioned the map's top photo; a caption written for another photo
+ * goes with that photo. A map with no top photo, or one the director has left out since, prints
+ * no hero (articleMapOf).
  *
  * Phase 18 (R38): the line above the headline, the headline's kicker, is the theme's
  * (lib/theme-config.js display.kicker), and the stamp puts it on whatever the writer returned,
@@ -1802,26 +1841,41 @@ async function generateContentBundle(state, config) {
  * held (prompt-builder.js carryUnshownFields), so a line the director typed at the desk, or an
  * old thread's writer-made line, stands.
  *
- * Where the director wrote one of them or chose the top photo on the map (a standing edit
- * the map carries, `_outlineHandEdits`), the stamp records it as the director's line at the
- * article stop: the article stop's standing edits, as a send-back records them
- * (standingAfterSendBack), each a field with no writer's text before it. So the fixes'
- * machinery reads it as the director's: an automatic pass that changes it gets it put back
- * (settleEdits), and a judge's finding located in it is a concern (guardDirectorEdits). At
- * the desk the director edits the headline, the deck and the hero's caption. A line the map
- * writer wrote is stamped and stays the writer's.
+ * THE LOCK (R40; the director's decision of 2026-11-24, "lock them once I approve the map"). The
+ * map's headline, its deck and each section's heading are the director's lines at the article,
+ * whoever wrote them: the director approved the map that carries them. The stamp records each one
+ * that is not blank as the director's line at the article stop: the article stop's standing
+ * edits, as a send-back records them (standingAfterSendBack), each a field with no writer's text
+ * before it, at the place an edit of the director's at the desk has (`headline.main`,
+ * `headline.deck`, `sections[#<slot>].heading`). So the fixes' machinery reads each as the
+ * director's, with no rule of its own: an automatic pass that changes one gets it put back
+ * (settleEdits), a judge's finding located in one is a concern for the desk and holds no rework
+ * (guardDirectorEdits), every rework and the article's judge are listed it among the director's
+ * edits, and a send-back's rework may change one where the director's note asks, saying why. A
+ * line the director retypes at the desk takes the stamped one's place at the next send-back, as
+ * any later edit does. Until run 2f only a line the director had written or changed on the map
+ * was recorded, and no heading was stamped or held at all.
  *
- * Brief 4.7d: the stamp records no cut. The director takes the top photo off the map by
- * moving it into a section (the console's movePhoto), which leaves the map with no top photo:
- * the writer was told to print no hero, the draft prints none, and the desk shows any hero a
- * later pass adds. A cut of `heroImage` would be carried by its text wherever the page prints
- * it (lib/hand-edit-diff.js), and T13 prints that photo in its section.
+ * The top photo's rule is its own, as before: it is the director's line only where the director
+ * chose it on the map (a standing edit the map carries, `_outlineHandEdits`). At the desk the
+ * director edits the hero's caption, not the photo.
+ *
+ * The stamp records no cut (brief 4.7d). Where the map prints no heading the stamp takes the
+ * writer's off and records nothing, so nothing holds that place afterwards: a heading a later
+ * pass adds there stays until the director takes it off at the desk. The director takes the top
+ * photo off the map by moving it into a section (the console's movePhoto), which leaves the map
+ * with no top photo: the writer was told to print no hero, the draft prints none, and the desk
+ * shows any hero a later pass adds. A cut of `heroImage` would be carried by its text wherever
+ * the page prints it (lib/hand-edit-diff.js), and T13 prints that photo in its section.
+ *
+ * The stamp runs on a first write only (generateContentBundle). An article stamped before run 2f
+ * keeps the standing edits it has: no later pass adds the map's lines to them.
  *
  * @param {Object} bundle - the writer's first draft
  * @param {Object} state - reads the theme, the map, the director's edits on it and the leave-out
  *   list
  * @returns {{contentBundle: Object, edits: Object|null}} the stamped draft, and the article
- *   stop's standing edits (null when the director wrote none of the three)
+ *   stop's standing edits (null when the thread holds no map, or the map gives no line to record)
  */
 function stampFromMap(bundle, state) {
   const { getThemeConfig } = require('../../theme-config');
@@ -1833,6 +1887,20 @@ function stampFromMap(bundle, state) {
   if (!map) return { contentBundle: stamped, edits: null };
   if (typeof map.headline === 'string') stamped.headline.main = map.headline;
   if (typeof map.deck === 'string') stamped.headline.deck = map.deck;
+  // R40: each section's heading, by its slot. The first section of the map under a slot gives it.
+  const mapSections = new Map();
+  (Array.isArray(map.sections) ? map.sections : []).forEach((section) => {
+    if (section && typeof section.slot === 'string' && !mapSections.has(section.slot)) mapSections.set(section.slot, section);
+  });
+  const mapHeadingOf = (section) => {
+    const behind = section && typeof section === 'object' && !Array.isArray(section) ? mapSections.get(section.id) : undefined;
+    if (!behind) return null;   // no section of the map behind it: the writer's stands
+    return isBlankLine(behind.heading) ? '' : behind.heading;
+  };
+  const headings = Array.isArray(bundle.sections) ? bundle.sections.map(mapHeadingOf) : [];
+  if (Array.isArray(bundle.sections)) {
+    stamped.sections = bundle.sections.map((section, i) => (headings[i] === null ? section : sectionWithHeading(section, headings[i])));
+  }
   const topPhoto = topPhotoOf(map);
   if (topPhoto) {
     const writers = bundle.heroImage && typeof bundle.heroImage === 'object' ? bundle.heroImage : null;
@@ -1842,17 +1910,20 @@ function stampFromMap(bundle, state) {
     delete stamped.heroImage;
   }
 
-  // The director's lines on the map: the map's standing edits at its headline, its deck
-  // and its top photo that the map as left carries. A cut there is no line to stamp.
-  const theirs = new Set(carriedEdits(state._outlineHandEdits, state.outline)
-    .filter((edit) => !isCut(edit) && Array.isArray(edit.at) && edit.at.length === 1)
-    .map((edit) => edit.at[0].key));
-  // The draft with the director's lines taken out: the stamp's diff against it records
-  // each of them as the director's, with no writer's text before it.
+  // The top photo is the director's line only where the director chose it on the map: a standing
+  // edit of the map's at its top photo that the map as left carries. A cut there is no line to stamp.
+  const choseTopPhoto = carriedEdits(state._outlineHandEdits, state.outline)
+    .some((edit) => !isCut(edit) && Array.isArray(edit.at) && edit.at.length === 1 && edit.at[0].key === MAP_TOP_PHOTO);
+  // The draft with the director's lines taken out: the stamp's diff against it records each of
+  // them as the director's, with no writer's text before it. R40: the map's headline, its deck
+  // and each heading it gives, whoever wrote them.
   const without = { ...stamped, headline: { ...stamped.headline } };
-  if (theirs.has('headline')) delete without.headline.main;
-  if (theirs.has('deck')) delete without.headline.deck;
-  if (theirs.has(MAP_TOP_PHOTO) && stamped.heroImage) {
+  if (!isBlankLine(map.headline)) delete without.headline.main;
+  if (!isBlankLine(map.deck)) delete without.headline.deck;
+  if (Array.isArray(stamped.sections)) {
+    without.sections = stamped.sections.map((section, i) => (headings[i] ? sectionWithHeading(section, '') : section));
+  }
+  if (choseTopPhoto && stamped.heroImage) {
     const { filename: _chosen, ...rest } = stamped.heroImage;
     without.heroImage = rest;
   }
