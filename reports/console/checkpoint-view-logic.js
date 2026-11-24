@@ -743,20 +743,24 @@
    * (steeringView, which RevisionDiff prints; brief 4.10c). The map counts no records (fix H4): one
    * action there can make two edits (a card dropped mid-column is a move edit and an order edit; a
    * photo put beside a move in another column is a move and a beside), so it passes
-   * `counted: false` and says only that the edits stand.
+   * `counted: false` and says only that the edits stand. The desk's record passes `lines: true`
+   * (phase 18, run 2g): since the lock its standing lines include the map's headline, the line
+   * under it and its headings, which the director approved and may never have typed.
    *
    * @param {*} report - a stop's handEditReport
    * @param {Object} [options]
    * @param {boolean} [options.counted] - false: more than one edit reads "Your edits stand."
+   * @param {boolean} [options.lines] - true: "line" for "edit", as in "All 4 of your lines stand."
    * @returns {string}
    */
   function editsStandLine(report, options) {
     var read = editReportOf(report);
     if (!read || changedEditsToShow(read).length > 0) return '';
     var n = read.checked.length;
-    if (n === 1) return 'Your edit stands.';
-    if (options && options.counted === false) return 'Your edits stand.';
-    return (n === 2 ? 'Both' : 'All ' + n) + ' of your edits stand.';
+    var noun = options && options.lines === true ? 'line' : 'edit';
+    if (n === 1) return 'Your ' + noun + ' stands.';
+    if (options && options.counted === false) return 'Your ' + noun + 's stand.';
+    return (n === 2 ? 'Both' : 'All ' + n) + ' of your ' + noun + 's stand.';
   }
 
   /** How the standing notes name a note's kind (directorGateNotes' `kind`). */
@@ -805,8 +809,8 @@
    * (changedEditLine), `automatic` marking a change an automatic pass made and
    * `restored` one code put back (FA), each read from the entry's own flags.
    * `kept` is the line RevisionDiff prints when no stop shows a line beside the director's
-   * edits: that they stand, in the words the map and the meeting print (editsStandLine;
-   * brief 4.10c), which the desk's page in the stops log prints too (task 4.12c). `notes`
+   * edits: that they stand, in editsStandLine's words with "line" for "edit" (brief 4.10c; phase
+   * 18, run 2g), which the desk's page in the stops log prints too (task 4.12c). `notes`
    * are standingNoteItems', under `labels`, the console's stop labels. Task 4.10: this is the
    * whole record of the round, which the desk folds below the article; beside an edit a stop
    * shows only changedEditsToShow's entries.
@@ -820,7 +824,7 @@
       changedEdits: changed.map(function (entry, index) {
         return { key: entry.id + '-' + index, id: entry.id, automatic: entry.automatic === true, restored: entry.restored === true, line: changedEditLine(entry) };
       }),
-      kept: editsStandLine(report),
+      kept: editsStandLine(report, { lines: true }),
       notes: notes
     };
   }
@@ -2446,15 +2450,29 @@
   var CONCERN_IDS = /^((?:E\d+)(?:\s*,\s*E\d+)*)\s*:\s*/;
 
   /**
+   * A concern about the director's edit read at its opening: the ids after its prefix (CONCERN_IDS),
+   * and what it says after them. The one reading of a concern's opening: what it says is shown
+   * (concernFindingOf), and the desk places a concern by its ids (deskMarks). Any other text has no
+   * ids and says itself.
+   *
+   * @param {*} text
+   * @returns {{ids: string[], finding: string}}
+   */
+  function concernParts(text) {
+    var finding = asString(text);
+    if (finding.indexOf(DIRECTOR_EDIT_PREFIX) !== 0) return { ids: [], finding: finding };
+    var m = CONCERN_IDS.exec(finding.slice(DIRECTOR_EDIT_PREFIX.length));
+    if (!m) return { ids: [], finding: finding };
+    return { ids: m[1].split(/\s*,\s*/), finding: finding.slice(DIRECTOR_EDIT_PREFIX.length + m[0].length) };
+  }
+
+  /**
    * What a concern about the director's edit says after its prefix and ids (lib/hand-edit-diff.js
    * concernFinding; a test holds the two equal): the line beside the edit names the place, so
    * the ids are not shown. Any other text is shown as it is.
    */
   function concernFindingOf(text) {
-    var finding = asString(text);
-    if (finding.indexOf(DIRECTOR_EDIT_PREFIX) !== 0) return finding;
-    var m = CONCERN_IDS.exec(finding.slice(DIRECTOR_EDIT_PREFIX.length));
-    return m ? finding.slice(DIRECTOR_EDIT_PREFIX.length + m[0].length) : finding;
+    return concernParts(text).finding;
   }
 
   /**
@@ -4647,8 +4665,8 @@
   var DESK_MARK_LABELS = {
     judge: 'The judge could not fix this',
     structural: 'Fact check',
-    concern: 'Concern about your edit',
-    changed: 'Your edit',
+    concern: 'Concern about your line',
+    changed: 'Your line',
     advisory: 'Fact check, advisory'
   };
 
@@ -5118,10 +5136,78 @@
     return out;
   }
 
+  /** A standing line's address that names the headline, a section's heading, or a block of a section (and a field of it). */
+  var HEADLINE_ADDRESS = /^headline(?:\.|$)/;
+  var HEADING_ADDRESS = /^sections\[#([^\]]+)\]\.heading$/;
+  var BLOCK_ADDRESS = /^sections\[#([^\]]+)\]\.content\[(\d+)\]/;
+
+  /**
+   * The piece a standing line is, in the article as the stop opened it, from its address
+   * (data.standingLines, server.js standingLinesOf): the headline for the headline or a line of
+   * it, a section's heading, a block; null for an address of anything else, or one the article
+   * does not hold.
+   */
+  function standingLineAnchor(path, ctx) {
+    var address = asString(path);
+    if (HEADLINE_ADDRESS.test(address)) return { kind: 'headline' };
+    var heading = HEADING_ADDRESS.exec(address);
+    if (heading) {
+      var hs = sectionWithKey(ctx.opened, heading[1]);
+      return hs === -1 ? null : { kind: 'heading', section: hs };
+    }
+    var m = BLOCK_ADDRESS.exec(address);
+    if (!m) return null;
+    var s = sectionWithKey(ctx.opened, m[1]);
+    var b = Number(m[2]);
+    var blocks = s === -1 || !isPlainObject(sectionsIn(ctx.opened)[s]) ? [] : asArray(sectionsIn(ctx.opened)[s].content);
+    return b < blocks.length && isPlainObject(blocks[b]) ? { kind: 'block', section: s, block: b } : null;
+  }
+
+  /**
+   * Where a concern sits by the line its id names (phase 18, run 2g), for a concern no quotation
+   * places: the first of its ids the stop's standing lines name (ctx.standing). Beside the
+   * headline for the headline or the line under it; on its section's heading for a heading, while
+   * the desk holds the section; beside its block while the desk holds the block, where nothing at
+   * or before it in its section changed, or else unchanged anywhere in its section. A line the
+   * desk no longer holds is gone (`{gone}`, where it was when the stop opened): the mark shows
+   * apart and names it. Null when no id names a standing line, so the concern shows apart as before.
+   */
+  function standingLinePlace(text, ctx) {
+    var ids = concernParts(text).ids;
+    for (var i = 0; i < ids.length; i += 1) {
+      if (!hasOwn(ctx.standing, ids[i])) continue;
+      var anchor = standingLineAnchor(ctx.standing[ids[i]], ctx);
+      if (!anchor) continue;
+      if (anchor.kind === 'headline') return { at: anchor };
+      var key = ctx.desk.sectionKey(sectionsIn(ctx.opened)[anchor.section], anchor.section);
+      var cs = sectionWithKey(ctx.current, key);
+      if (anchor.kind === 'heading') return cs === -1 ? { gone: anchor } : { at: { kind: 'heading', section: cs } };
+      if (cs !== -1 && ctx.desk.untouchedThrough(ctx.changes, key, anchor.block)) return { at: { kind: 'block', section: cs, block: anchor.block } };
+      var was = sectionsIn(ctx.opened)[anchor.section].content[anchor.block];
+      var now = firstPiece(ctx.currentPieces, function (piece) {
+        return piece.anchor.kind === 'block' && piece.sectionKey === key && ctx.desk.sameBlock(piece.block, was);
+      }, null);
+      return now ? { at: now.anchor } : { gone: anchor };
+    }
+    return null;
+  }
+
+  /**
+   * The stop's standing lines by their ids (data.standingLines): an empty map for a payload from
+   * before the stop sent them, so every concern is placed as it was then.
+   */
+  function standingLinesById(data) {
+    var out = {};
+    asArray(data.standingLines).forEach(function (line) {
+      if (isPlainObject(line) && typeof line.id === 'string' && typeof line.path === 'string' && !hasOwn(out, line.id)) out[line.id] = line.path;
+    });
+    return out;
+  }
+
   /**
    * The marks in their order (DESK_MARK_ORDER), each beside its piece, folded below as possibly
-   * resolved, or beside no piece; a mark that repeats another of its tone and text at the same
-   * place is shown once.
+   * resolved, or beside no piece (a mark whose line is gone from the desk names the line); a mark
+   * that repeats another of its tone and text at the same place is shown once.
    */
   function placeMarks(found, ctx) {
     var ordered = found.map(function (mark, i) { return { mark: mark, i: i }; }).sort(function (a, b) {
@@ -5145,6 +5231,9 @@
       } else if (place && hasOwn(place, 'was')) {
         mark.where = pieceWords(place.was, ctx.opened);
         put(resolved, mark);
+      } else if (place && hasOwn(place, 'gone')) {
+        mark.where = pieceWords(place.gone, ctx.opened);
+        put(apart, mark);
       } else {
         put(apart, mark);
       }
@@ -5164,15 +5253,16 @@
    *   words: the finding's line for its place (findingLine; brief 4.10b), never the message the
    *   rework reads;
    * - the judge's concerns about the director's edits, each beside the line it quotes (`concern`),
-   *   read past its prefix, its ids and its leading rule ids (judgeMarkText);
+   *   or, when no quotation places it, beside the standing line its id names (standingLinePlace;
+   *   phase 18, run 2g), read past its prefix, its ids and its leading rule ids (judgeMarkText);
    * - the edits a round changed that a stop shows (changedEditsToShow), each beside what the
    *   director's text became (`changed`), an entry about a whole section on its heading (brief
    *   4.10e), with the rework's reason for a send-back's.
    * The judge's score, its notes on the writing and every other advisory of its are not marks.
    *
    * @param {Object} data - the article stop's payload: `contentBundle` (the article as the stop
-   *   opened it), `factCheck`, `lastEvaluation`, `handEditReport`, and `evidenceIndex`, which
-   *   names a card's document
+   *   opened it), `factCheck`, `lastEvaluation`, `handEditReport`, `evidenceIndex`, which names a
+   *   card's document, and `standingLines`, where each of the director's standing lines sits
    * @param {Object} current - the bundle on the desk (Article.js getCurrentBundle)
    * @returns {{at: Object<string, Object[]>, apart: Object[], resolved: Object[]}} the marks by
    *   the key of the piece they sit beside (deskAnchorKey), the marks beside no piece, and the
@@ -5190,7 +5280,8 @@
       changes: desk.deskChanges(opened, onDesk),
       openedPieces: desk.printedPlaces(opened),
       currentPieces: desk.printedPlaces(onDesk),
-      headings: headingsOf(opened)
+      headings: headingsOf(opened),
+      standing: standingLinesById(d)
     };
     var found = [];
     var add = function (tone, text, place) {
@@ -5214,7 +5305,7 @@
 
     if (evaluation) {
       stringList(evaluation.advisoryWarnings).filter(isDirectorEditConcern).forEach(function (text) {
-        add('concern', judgeMarkText(text), quotePlace(text, ctx));
+        add('concern', judgeMarkText(text), quotePlace(text, ctx) || standingLinePlace(text, ctx));
       });
     }
 

@@ -1531,10 +1531,12 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     ),
 
     // The marks with no piece to sit beside, such as a roster gap, one line each beside the
-    // approve button, where its count is (task 4.10).
+    // approve button, where its count is (task 4.10). A concern about one of the director's lines
+    // that is no longer on the desk names the line in brackets (its `where`; phase 18, run 2g);
+    // every other mark here has none.
     desk.apart.any && React.createElement('div', { className: 'desk-apart', role: 'status' },
       React.createElement('p', { className: 'desk-apart__title' }, desk.apart.title),
-      deskMarksList(desk.apart.items)
+      deskMarksList(desk.apart.items, true)
     ),
 
     // Action buttons

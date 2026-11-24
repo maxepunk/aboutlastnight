@@ -207,7 +207,7 @@ describe('0926262\'s shape: the judge flags the director\'s edits after a send-b
     expect(next.values.contentBundle).not.toHaveProperty(CHANGED_EDITS_KEY);
     expect(data.handEditReport).toEqual({ checked: ['E1', 'E2'], changed: [] });
     // Task 4.12c: the folded record says so in RevisionDiff's words (`kept`; keptCount went).
-    expect(steeringView(data.handEditReport, []).kept).toBe('Both of your edits stand.');
+    expect(steeringView(data.handEditReport, []).kept).toBe('Both of your lines stand.');
     // The edits still stand for the next round.
     expect(next.values._articleHandEdits.edits.map((e) => e.id)).toEqual(['E1', 'E2']);
   });

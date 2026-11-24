@@ -396,7 +396,7 @@ describe('steeringView (spec 2026-09-19 §4.4, §5.5; F1)', () => {
 
   // 4.10c: and the line the folded record prints, that the edits stand (editsStandLine).
   test('a report with nothing changed says the edits stand', () => {
-    expect(steeringView({ checked: ['E1', 'E2'], changed: [] }, [])).toEqual({ any: true, changedEdits: [], kept: 'Both of your edits stand.', notes: [] });
+    expect(steeringView({ checked: ['E1', 'E2'], changed: [] }, [])).toEqual({ any: true, changedEdits: [], kept: 'Both of your lines stand.', notes: [] });
   });
 
   test('an empty checked list, or a report from before F1, is treated as no report', () => {

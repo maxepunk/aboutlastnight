@@ -1227,7 +1227,7 @@ describe("4.10b: the map lists a restore out of the director's order, and says w
     expect(viewWith({ checked: ['E1'], changed: [] }).kept).toBe('Your edit stands.');
     expect(viewWith({ checked: ['E1', 'E2'], changed: [] }).kept).toBe('Your edits stand.');
     expect(viewWith(eight).kept).toBe('Your edits stand.');
-    expect(ViewLogic.steeringView(eight, []).kept).toBe('All 8 of your edits stand.');
+    expect(ViewLogic.steeringView(eight, []).kept).toBe('All 8 of your lines stand.');
     expect(ViewLogic.editsStandLine(eight)).toBe('All 8 of your edits stand.');
     expect(ViewLogic.editsStandLine(eight, { counted: false })).toBe('Your edits stand.');
   });

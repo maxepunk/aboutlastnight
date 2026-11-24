@@ -287,7 +287,7 @@ describe("4.10: a concern and a changed edit sit beside the director's edit", ()
     const d = payloadFor(directors, { factCheck: factCheckOf(directors, { directorEdits }) });
     const [mark] = deskMarksAt(deskMarks(d, d.contentBundle), block(1, 2));
     expect(mark.tone).toBe('concern');
-    expect(mark.label).toBe('Concern about your edit');
+    expect(mark.label).toBe('Concern about your line');
     expect(mark.text).toBe("This card's text does not match the document it cites word for word.");
     expect(mark.text).not.toContain(DIRECTOR_EDIT_PREFIX);
   });
@@ -317,7 +317,7 @@ describe("4.10: a concern and a changed edit sit beside the director's edit", ()
     const report = reportAfterPass(null, { edits, before: directors, after: rework, pass: SEND_BACK_PASS, reasons: [{ id: 'E1', reason: 'The note asked the closing to end on the money.' }] });
     const d = payloadFor(rework, { handEditReport: report });
     expect(deskMarksAt(deskMarks(d, d.contentBundle), block(3, 0)).map((m) => [m.tone, m.label, m.text])).toEqual([[
-      'changed', 'Your edit',
+      'changed', 'Your line',
       'Closing, paragraph: your "Whether the verdict costs Alex anything is still open." became "The people with money will decide what the verdict costs Alex." (the rework of your send-back). Why: The note asked the closing to end on the money.'
     ]]);
   });
@@ -908,13 +908,13 @@ describe('4.10c: the folded record says the edits stand, as the map and the meet
     const { report } = settleEdits(null, { edits, before: directors, after: pass, pass: 1 });
     const record = ViewLogic.steeringView(report, []);
     expect(record.changedEdits.map((e) => e.restored)).toEqual([true]);
-    expect(record.kept).toBe('Your edit stands.');
-    expect(record.kept).toBe(ViewLogic.editsStandLine(report));
+    expect(record.kept).toBe('Your line stands.');
+    expect(record.kept).toBe(ViewLogic.editsStandLine(report, { lines: true }));
   });
 
   test('a round that changed none of two edits, or of three; a change still to show, and no report, say nothing of the kind', () => {
-    expect(ViewLogic.steeringView({ checked: ['E1', 'E2'], changed: [] }, []).kept).toBe('Both of your edits stand.');
-    expect(ViewLogic.steeringView({ checked: ['E1', 'E2', 'E3'], changed: [] }, []).kept).toBe('All 3 of your edits stand.');
+    expect(ViewLogic.steeringView({ checked: ['E1', 'E2'], changed: [] }, []).kept).toBe('Both of your lines stand.');
+    expect(ViewLogic.steeringView({ checked: ['E1', 'E2', 'E3'], changed: [] }, []).kept).toBe('All 3 of your lines stand.');
     const sendBack = { id: 'E1', scope: 'section:closing', where: 'section "closing", paragraph', cut: false, removed: false, moved: false, director: 'a', became: 'b', pass: SEND_BACK_PASS, automatic: false, reason: null, restored: false };
     expect(ViewLogic.steeringView({ checked: ['E1'], changed: [sendBack] }, []).kept).toBe('');
     expect(ViewLogic.steeringView(null, []).kept).toBe('');
@@ -998,7 +998,7 @@ describe('4.5g: each stop says what happened to a photo the article cannot print
     expect(changedMarks(output, report)).toEqual({ apart: [], at: [] });
     const record = ViewLogic.steeringView(report, []);
     expect(record.changedEdits.map((e) => e.line)).toEqual([`E1, section "theStory", photo nope.jpg, caption: automatic pass 1 removed your "${CAPTION}". Your text was put back.`]);
-    expect(record.kept).toBe('Your edit stands.');
+    expect(record.kept).toBe('Your line stands.');
   });
 });
 
@@ -1153,7 +1153,7 @@ describe('4.14c: the desk says what each pass did, and only what still holds', (
     const two = settleEdits(one.report, { edits: carriedEdits(standingAfterSendBack(null, writers, cut, 'bundle'), one.output), before: one.output, after: clone(cut), pass: 2 });
     const d = payloadFor(two.output, { handEditReport: two.report });
     expect(changedAt(d)).toEqual([]);
-    expect(ViewLogic.steeringView(two.report, []).kept).toBe('Your edit stands.');
+    expect(ViewLogic.steeringView(two.report, []).kept).toBe('Your line stands.');
   });
 
   test('a Key Evidence entry a rework moved: a send-back\'s move sits beside the entry with its reason, and an automatic pass\'s, which code put back, folds below', () => {
@@ -1210,7 +1210,7 @@ describe('4.14f: the desk says once what came of a deleted Key Evidence entry or
     expect(changedAt(payloadFor(output, { handEditReport: report }))).toEqual([]);
     const record = ViewLogic.steeringView(report, []);
     expect(record.changedEdits.map((e) => e.line)).toEqual(['E1, sidebar card vic001, cut: automatic pass 1 put back the entry you deleted. It was taken out again.']);
-    expect(record.kept).toBe('Your edit stands.');
+    expect(record.kept).toBe('Your line stands.');
   });
 
   test('after a send-back it stays, and its line sits beside it under Key Evidence, with the reason', () => {
@@ -1337,5 +1337,120 @@ describe('brief S: the desk says what a send-back acts on', () => {
     expect(sendBackScopeLine(deskMarks(d, d.contentBundle))).toBe('');
     expect(sendBackScopeLine({ at: { 'block:0:0': [{ ...onCard, tone: 'concern' }] }, apart: [{ ...apart, tone: 'changed' }], resolved: [] })).toBe('');
     expect(sendBackScopeLine(null)).toBe('');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 18, run 2g: the desk after the lock
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Since the lock (run 2f) the map's headline, the line under it and its headings are the
+// director's lines at the article, whether the director typed them or approved them on the map.
+// The judge writes a concern about one with the line's id and the limit, and may quote nothing.
+// The article stop's payload says where each standing line sits (`standingLines`, server.js
+// standingLinesOf), and the desk places a concern by its id when no quotation places it: beside
+// the headline for the headline or the line under it, on the section's heading for a heading,
+// beside the block for a block. A concern whose line is no longer on the desk shows apart and says
+// which line it was about. The desk calls a standing line "your line". Invented text.
+describe('run 2g: a concern sits beside the line it is about, whether or not it quotes it', () => {
+  const STANDING = [
+    { id: 'E1', path: 'headline.main' },
+    { id: 'E2', path: 'headline.deck' },
+    { id: 'E3', path: 'sections[#followTheMoney].heading' },
+    { id: 'E4', path: 'sections[#closing].content[0].text' }
+  ];
+  const concern = (ids, finding) => `${DIRECTOR_EDIT_PREFIX}${ids}: ${finding}`;
+  const withConcerns = (texts, extra = {}) => payloadFor(article(), {
+    factCheck: { findings: [] },
+    standingLines: STANDING,
+    lastEvaluation: { phase: 'article', ready: true, overallScore: 0.9, structuralIssues: [], advisoryWarnings: texts },
+    ...extra
+  });
+  const marksOn = (d, desk = d.contentBundle) => deskMarks(d, desk);
+  const shown = (list) => list.map((m) => [m.tone, m.label, m.where, m.text]);
+
+  test('a concern about the headline or the line under it, with no quotation, sits beside the headline', () => {
+    const d = withConcerns([
+      concern('E1', 'T1: The headline states as fact what the record does not hold.'),
+      concern('E2', 'Verdict: The line under the headline calls the verdict settled.')
+    ]);
+    const marks = marksOn(d);
+    expect(shown(deskMarksAt(marks, { kind: 'headline' }))).toEqual([
+      ['concern', 'Concern about your line', 'The headline', 'The headline states as fact what the record does not hold.'],
+      ['concern', 'Concern about your line', 'The headline', 'Verdict: The line under the headline calls the verdict settled.']
+    ]);
+    expect(marks.apart).toEqual([]);
+  });
+
+  test("a heading's concern sits on its section's heading, and a block's beside the block", () => {
+    const d = withConcerns([
+      concern('E3', 'T9: The heading is a phrase from running the game.'),
+      concern('E4', 'T4: The paragraph states a motive as fact.')
+    ]);
+    const marks = marksOn(d);
+    expect(shown(deskMarksAt(marks, { kind: 'heading', section: 2 }))).toEqual([
+      ['concern', 'Concern about your line', 'Follow the Money, heading', 'The heading is a phrase from running the game.']
+    ]);
+    expect(shown(deskMarksAt(marks, block(3, 0)))).toEqual([
+      ['concern', 'Concern about your line', 'Closing, block 1', 'The paragraph states a motive as fact.']
+    ]);
+    expect(marks.apart).toEqual([]);
+  });
+
+  test("a block's concern follows its block when the director puts a block before it at the desk", () => {
+    const d = withConcerns([concern('E4', 'T4: The paragraph states a motive as fact.')]);
+    const desk = Desk.insertBlock(d.contentBundle, 3, 0, 'paragraph');
+    expect(deskMarksAt(marksOn(d, desk), block(3, 1)).map((m) => m.text)).toEqual(['The paragraph states a motive as fact.']);
+  });
+
+  test('a concern whose line is no longer on the desk shows apart, and says which line it was about', () => {
+    const d = withConcerns([
+      concern('E3', 'T9: The heading is a phrase from running the game.'),
+      concern('E4', 'T4: The paragraph states a motive as fact.')
+    ]);
+    const desk = clone(d.contentBundle);
+    desk.sections.splice(2, 1);
+    desk.sections[2].content = [paragraph('The director wrote the closing again from nothing.')];
+    const marks = marksOn(d, desk);
+    expect(shown(marks.apart)).toEqual([
+      ['concern', 'Concern about your line', 'Follow the Money, heading', 'The heading is a phrase from running the game.'],
+      ['concern', 'Concern about your line', 'Closing, block 1', 'The paragraph states a motive as fact.']
+    ]);
+    expect(marks.resolved).toEqual([]);
+    expect(Object.keys(marks.at).filter((key) => key !== 'headline' && marks.at[key].some((m) => m.tone === 'concern'))).toEqual([]);
+  });
+
+  test('a concern with a quotation is placed by it as before, even when it names a line', () => {
+    const d = withConcerns([concern('E3', `T1: "${MONEY_1.slice(0, 40)}" states a count the ledger does not hold.`)]);
+    const marks = marksOn(d);
+    expect(deskMarksAt(marks, { kind: 'heading', section: 2 })).toEqual([]);
+    expect(deskMarksAt(marks, block(2, 0)).map((m) => m.tone)).toEqual(['concern']);
+  });
+
+  test('a concern about a line the payload does not name, and a payload from before this change, show apart as before', () => {
+    const unknown = withConcerns([concern('E9', 'T9: The heading is a phrase from running the game.')]);
+    expect(shown(marksOn(unknown).apart)).toEqual([['concern', 'Concern about your line', '', 'The heading is a phrase from running the game.']]);
+    const before = withConcerns([concern('E3', 'T9: The heading is a phrase from running the game.')]);
+    delete before.standingLines;
+    const marks = marksOn(before);
+    expect(shown(marks.apart)).toEqual([['concern', 'Concern about your line', '', 'The heading is a phrase from running the game.']]);
+    expect(deskMarksAt(marks, { kind: 'heading', section: 2 })).toEqual([]);
+  });
+
+  test("the desk's words: \"Concern about your line\", \"Your line\", and the round's record counts the lines", () => {
+    const sendBack = { id: 'E4', scope: 'section:closing', where: 'section "closing", paragraph', cut: false, removed: false, moved: false, director: CLOSE_1, became: 'The verdict may cost Alex nothing.', pass: SEND_BACK_PASS, automatic: false, reason: 'The note asked for it.', restored: false };
+    const changed = article();
+    changed.sections[3].content[0].text = 'The verdict may cost Alex nothing.';
+    const record = payloadFor(changed, { factCheck: { findings: [] }, handEditReport: { checked: ['E4'], changed: [sendBack] } });
+    expect(deskMarksAt(marksOn(record), block(3, 0)).map((m) => m.label)).toEqual(['Your line']);
+    expect(ViewLogic.steeringView({ checked: ['E1', 'E2', 'E3', 'E4'], changed: [] }, []).kept).toBe('All 4 of your lines stand.');
+    expect(ViewLogic.steeringView({ checked: ['E1', 'E2'], changed: [] }, []).kept).toBe('Both of your lines stand.');
+    expect(ViewLogic.steeringView({ checked: ['E1'], changed: [] }, []).kept).toBe('Your line stands.');
+    // The map and the story meeting keep their words: there a standing edit is one the director made.
+    expect(ViewLogic.editsStandLine({ checked: ['E1', 'E2', 'E3', 'E4'], changed: [] })).toBe('All 4 of your edits stand.');
+    // The strings about the act of editing at the desk keep theirs.
+    const view = deskView(withConcerns([]), article());
+    expect(view.folds.resolved.title).toBe('Possibly resolved by your edits (0)');
+    expect(ViewLogic.DESK_HAND_EDITS_LINE).toBe('Your hand edits are sent with this note. The writer is told to keep them, so a mark on a piece you have edited is not acted on either. Fix it yourself.');
   });
 });

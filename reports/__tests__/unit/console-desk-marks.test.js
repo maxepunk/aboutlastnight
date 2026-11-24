@@ -151,7 +151,8 @@ describe("brief S: Article.js wires the note's button and the send-back's lines"
     expect(count(src, 'function deskMarksList(')).toBe(1);
     expect(src.indexOf('function deskMarksList(')).toBeGreaterThan(src.indexOf('function Article('));
     expect(body('deskMarksList')).toContain('ViewLogic.deskNoteButton(mark, feedbackText)');
-    expect(src).toContain('deskMarksList(desk.apart.items)');
+    // Run 2g: the list apart prints each mark's where, which names the line of a concern no longer on the desk.
+    expect(src).toContain('deskMarksList(desk.apart.items, true)');
     expect(src).toContain('deskMarksList(desk.folds.resolved.items, true)');
   });
 

@@ -1007,3 +1007,66 @@ describe('4.14e: the map and the desk say a send-back did not run', () => {
     expect((await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, { ...desk, _outlineRework: GAVE_UP })).roundDidNotRun).toBeNull();
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 18, run 2g: the article stop says where each of the director's standing lines sits
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Since the lock (run 2f) the map's headline, the line under it and its headings are the
+// director's lines at the article, and the judge writes a concern about one with the line's id and
+// may quote nothing. The desk places such a concern by the line, so the payload carries each
+// standing line's id and where it sits, in the address form the director's edits use
+// (`standingLines`). A block's address names the block where the article as the stop opens it
+// holds it, since a rework may have moved it within its section. Invented text.
+describe('run 2g: the article payload carries where each standing line sits', () => {
+  const { standingAfterSendBack } = require('../../lib/hand-edit-diff');
+  const paragraph = (text) => ({ type: 'paragraph', text });
+  const writers = () => ({
+    headline: { main: "The Writer's Headline", deck: "The writer's deck." },
+    sections: [
+      { id: 'lede', type: 'narrative', content: [paragraph('Riley opened the ledger at ten.')] },
+      { id: 'theStory', type: 'narrative', heading: "The Writer's Heading", content: [paragraph('Morgan kept the envelope.'), paragraph('Sarah read the paternity result aloud.')] }
+    ]
+  });
+  /** The director's version: the headline, the line under it, a heading and a paragraph theirs. */
+  const directors = () => {
+    const bundle = writers();
+    bundle.headline = { main: 'Six Votes for an Overdose', deck: 'And a sale nobody counted.' };
+    bundle.sections[1].heading = 'The Story';
+    bundle.sections[1].content[1].text = 'Sarah read the result aloud, and nobody spoke.';
+    return bundle;
+  };
+
+  it('sends each standing line by its id and its address', async () => {
+    const bundle = directors();
+    const data = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, {
+      evaluationHistory: [], contentBundle: bundle, _articleHandEdits: standingAfterSendBack(null, writers(), bundle, 'bundle')
+    });
+    expect(data.standingLines).toEqual([
+      { id: 'E1', path: 'headline.main' },
+      { id: 'E2', path: 'headline.deck' },
+      { id: 'E3', path: 'sections[#theStory].heading' },
+      { id: 'E4', path: 'sections[#theStory].content[1].text' }
+    ]);
+  });
+
+  it("a block's address follows the block where the article holds it now", async () => {
+    const shown = directors();
+    const standing = standingAfterSendBack(null, writers(), shown, 'bundle');
+    const reworked = directors();
+    reworked.sections[1].content.unshift(paragraph('Alex asked for the scoreboard.'));
+    const data = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, { evaluationHistory: [], contentBundle: reworked, _articleHandEdits: standing });
+    expect(data.standingLines.find((line) => line.id === 'E4')).toEqual({ id: 'E4', path: 'sections[#theStory].content[2].text' });
+  });
+
+  it('sends no line the article no longer carries, and none for a thread with no standing lines', async () => {
+    const shown = directors();
+    const standing = standingAfterSendBack(null, writers(), shown, 'bundle');
+    const rewritten = directors();
+    rewritten.headline.main = 'A Headline the Director Has Not Seen';
+    const data = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, { evaluationHistory: [], contentBundle: rewritten, _articleHandEdits: standing });
+    expect(data.standingLines.map((line) => line.id)).toEqual(['E2', 'E3', 'E4']);
+    expect((await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, { evaluationHistory: [], contentBundle: writers() })).standingLines).toEqual([]);
+    expect((await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, { evaluationHistory: [], contentBundle: null })).standingLines).toEqual([]);
+  });
+});

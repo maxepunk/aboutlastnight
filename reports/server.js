@@ -34,7 +34,7 @@ const { sanitizePath } = require('./lib/workflow/nodes/input-nodes');
 const { progressEmitter } = require('./lib/observability');
 const { createPromptBuilder } = require('./lib/prompt-builder');
 const { buildRollbackState, rollbackSeedClears, buildFreshStartState, createGraphAndConfig, sendErrorResponse, confineToBase, rollbackNotesUpdate } = require('./lib/api-helpers');
-const { diffOutline, diffBundle, scopeKeys, standingAfterSendBack, handEditReportOf } = require('./lib/hand-edit-diff');
+const { diffOutline, diffBundle, scopeKeys, standingAfterSendBack, handEditReportOf, carriedEdits, editLocator, sectionKey } = require('./lib/hand-edit-diff');
 // FA (requirement 9): the roster's names as the coverage check reads them, which each
 // send-back records a cut's or a rewrite's names against.
 const { rosterNames } = require('./lib/content-bundle-fact-check');
@@ -410,6 +410,38 @@ function buildEvidenceIndex(evidenceBundle) {
     return index;
 }
 
+/** A path that names a block of a section, and what follows it: `sections[#theStory].content[1].text`. */
+const SECTION_BLOCK_ADDRESS = /^(sections\[#([^\]]+)\]\.content\[)(\d+|-)(\].*)$/;
+
+/**
+ * The director's standing lines at the article stop (phase 18, run 2g), each by its id and where
+ * the article as the stop opens it holds it, in the address form the director's edits use
+ * (`headline.main`, `sections[#theStory].heading`, `sections[#theStory].content[2].text`). Since
+ * the lock, a judge writes a concern about one of them with its id and may quote nothing; the desk
+ * places such a concern by the line (console/checkpoint-view-logic.js deskMarks).
+ *
+ * Only the lines the article carries are sent, as the judge is listed them (carriedEdits). A
+ * block's address names the block where the article holds it now, found by the fact check's own
+ * reading of which edit wrote a block (editLocator), since a rework may have put another block
+ * before it; a block it does not find there keeps the address the edit recorded.
+ *
+ * @param {Object} state - `_articleHandEdits` and `contentBundle`
+ * @returns {Array<{id: string, path: string}>}
+ */
+function standingLinesOf(state) {
+    const bundle = state.contentBundle;
+    return carriedEdits(state._articleHandEdits, bundle).map((edit) => {
+        const m = SECTION_BLOCK_ADDRESS.exec(edit.path);
+        if (!m) return { id: edit.id, path: edit.path };
+        const sections = Array.isArray(bundle.sections) ? bundle.sections : [];
+        const s = sections.findIndex((section, i) => sectionKey(section, i) === m[2]);
+        const content = s !== -1 && sections[s] && Array.isArray(sections[s].content) ? sections[s].content : [];
+        const locator = editLocator(bundle, [edit]);
+        const at = content.findIndex((block) => locator.blockEdited(m[2], block) === edit.id);
+        return { id: edit.id, path: at === -1 ? edit.path : m[1] + at + m[4] };
+    });
+}
+
 /**
  * Build response data for a specific checkpoint type (DRY helper)
  * Extracts relevant fields from state based on checkpoint type
@@ -512,6 +544,9 @@ async function getCheckpointData(checkpointType, state) {
                 // payload and the story meeting's carry it (lib/workflow/state.js roundDidNotRunAt).
                 roundDidNotRun: roundDidNotRunAt(CHECKPOINT_TYPES.ARTICLE, state),
                 handEditReport: handEditReportOf(state._articleHandEditReport),   // F1, as at the outline stop
+                // Phase 18, run 2g: where each of the director's standing lines sits, so the desk
+                // places a concern the judge wrote with a line's id and no quotation beside the line.
+                standingLines: standingLinesOf(state),
                 directorGateNotes: state.directorGateNotes || [],
                 // Brief 4.7b: the story the director settled at the meeting, as the map's stop
                 // shows it, in place of the old outline's thesis.

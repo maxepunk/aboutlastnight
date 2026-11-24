@@ -258,7 +258,7 @@ describe('R40: the lines on the approved map, through the article stage', () => 
     // At the desk: no mark beside a line code put back, and the folded record of the round says so.
     expect(marksOf(stop.data)).toEqual([]);
     const record = ViewLogic.steeringView(stop.data.handEditReport, stop.data.directorGateNotes, {});
-    expect(record.kept).toBe('All 4 of your edits stand.');
+    expect(record.kept).toBe('All 4 of your lines stand.');
     expect(record.changedEdits.map((entry) => entry.line)).toEqual([
       `E1, headline, main: automatic pass 1 changed your "${MAP.headline}" to "A Headline the Rework Wrote". Your text was put back.`,
       `E2, headline, deck: automatic pass 1 changed your "${MAP.deck}" to "A line under it that the rework wrote.". Your text was put back.`,
@@ -296,13 +296,15 @@ describe('R40: the lines on the approved map, through the article stage', () => 
     expect(stop.values.contentBundle.headline).toMatchObject({ main: MAP.headline, deck: MAP.deck });
 
     // The desk: each concern that quotes its line sits beside the line, under the desk's label for
-    // a concern about an edit (the desk's headline piece holds the headline and the line under
-    // it); the heading's, which quotes nothing, beside no block. A concern reads past its ids and
+    // a concern about one of the director's lines (the desk's headline piece holds the headline and
+    // the line under it); the heading's, which quotes nothing, on its section's heading, by its id
+    // (run 2g: the payload says where each standing line sits). A concern reads past its ids and
     // its limit's code; a limit written by name stays, as the judge wrote it.
+    expect(stop.data.standingLines).toEqual(LOCKED.map(([id, at]) => ({ id, path: at })));
     expect(marksOf(stop.data)).toEqual([
-      ['Concern about your edit', 'The headline', '"The Ledger Kept Talking" states as fact what the record does not hold.'],
-      ['Concern about your edit', 'The headline', '"the room settled on an accidental overdose" calls the verdict settled.'],
-      ['Concern about your edit', '', 'Nothing from outside the story: the heading is a phrase from running the game.']
+      ['Concern about your line', 'Follow the Money, heading', 'Nothing from outside the story: the heading is a phrase from running the game.'],
+      ['Concern about your line', 'The headline', '"The Ledger Kept Talking" states as fact what the record does not hold.'],
+      ['Concern about your line', 'The headline', '"the room settled on an accidental overdose" calls the verdict settled.']
     ]);
   });
 
@@ -347,7 +349,7 @@ describe('R40: the lines on the approved map, through the article stage', () => 
     ]);
     // The desk shows the change beside the headline, with why.
     expect(marksOf(third.data)).toEqual([
-      ['Your edit', 'The headline', `Headline, main: your "${MAP.headline}" became "${NEW_HEADLINE}" (the rework of your send-back). Why: The note asks for a headline that names the sale.`]
+      ['Your line', 'The headline', `Headline, main: your "${MAP.headline}" became "${NEW_HEADLINE}" (the rework of your send-back). Why: The note asks for a headline that names the sale.`]
     ]);
     // The judge that read the new article was listed the lines it still carries, and not the headline the rework replaced.
     const lastJudge = sdk.calls('judge').pop();

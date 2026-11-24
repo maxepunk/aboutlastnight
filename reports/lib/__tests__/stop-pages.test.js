@@ -589,7 +589,7 @@ describe('4.12c: the desk\'s folded record and money tracker print as the desk p
   it('prints the folded record\'s line that the edits stand, as RevisionDiff prints it (steeringView\'s kept)', () => {
     const data = deskData(article(), { handEditReport: { checked: ['E1', 'E2'], changed: [] } });
     const kept = View.steeringView(data.handEditReport, []).kept;
-    expect(kept).toBe('Both of your edits stand.');
+    expect(kept).toBe('Both of your lines stand.');
     const page = stopPage('article', data);
     expect(textsOf(page, true)).toContain(kept);
     expect(page.lines.map((line) => `${line.label} ${line.text}`).join('\n')).not.toMatch(/kept all/);
