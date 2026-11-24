@@ -10,6 +10,10 @@
  * The judges' own instructions take the rule-text read's part 5e, word for word, and the article
  * judge's line on where Nova was its part 5c, from the session config the mode block is chosen by.
  *
+ * Run 2b (R28): each judge is listed only the limits its criteria score, both judges read the
+ * director's notes under one label with its line on backstory, and the weave's judge reads the
+ * roster block and the money totals the article's judge reads.
+ *
  * Review focus 1: a thread from before the merge holds findings in today's form ("T5: …", and a
  * concern "Director's edit E1: T1: …"). They still match their criteria and still read past their
  * codes at the desk.
@@ -48,8 +52,16 @@ function boldLeadIns(text) {
     .map((m) => m[1]);
 }
 
-/** The judge's own list of the limits, word for word from the rule-text read's part 4. */
-const LIMITS_LINE = 'T1 What can be stated as fact. T2 The verdict. T3 Sold memories. T4 Whose account it is. T5 The money. T6 Who made a memory public. T7 Three stretches of time. T8 Nova takes no side, with the part about this session. T9 Pronouns. T10 How many people. T11 Characters, never the players. T12 Quotes are exact. T13 Photos. T14 Nothing from outside the story. T15 Fixed facts.';
+/**
+ * Each judge's own list of the limits, each entry word for word from the rule-text read's part 4.
+ * Run 2b (R28): a judge is listed only the limits its criteria score. The weave's judge scores no
+ * photos and no words from outside the story, and neither judge scores how many people or the
+ * fixed facts, which stay in the limits' own text.
+ */
+const LIMITS_LINES = {
+  arcs: 'T1 What can be stated as fact. T2 The verdict. T3 Sold memories. T4 Whose account it is. T5 The money. T6 Who made a memory public. T7 Three stretches of time. T8 Nova takes no side, with the part about this session. T9 Pronouns. T11 Characters, never the players. T12 Quotes are exact.',
+  article: 'T1 What can be stated as fact. T2 The verdict. T3 Sold memories. T4 Whose account it is. T5 The money. T6 Who made a memory public. T7 Three stretches of time. T8 Nova takes no side, with the part about this session. T9 Pronouns. T11 Characters, never the players. T12 Quotes are exact. T13 Photos. T14 Nothing from outside the story.'
+};
 
 const RULE = '═══════════════════════════════════════════════════════════════════════════';
 
@@ -83,11 +95,117 @@ describe('R8: the judges\' list of the limits', () => {
     expect(scored).not.toContain('T15');
   });
 
-  it.each(['arcs', 'article'])('the %s judge prints the list once, as one line, right under its heading', (phase) => {
+  it.each(['arcs', 'article'])('the %s judge prints its list once, as one line, right under its heading', (phase) => {
     const system = systemFor(phase, stateFor());
-    expect(count(system, LIMITS_LINE)).toBe(1);
-    expect(system).toContain(`${RULE}\nTHE LIMITS (MUST PASS: a breach is a definite error, so the output goes back for a rework)\n${RULE}\n${LIMITS_LINE}\nEach criterion below scores the limits it names by their codes, against the record and the director's words in the evaluation prompt. One breach fails it: score it below 0.8.\n`);
+    expect(count(system, LIMITS_LINES[phase])).toBe(1);
+    expect(system).toContain(`${RULE}\nTHE LIMITS (MUST PASS: a breach is a definite error, so the output goes back for a rework)\n${RULE}\n${LIMITS_LINES[phase]}\nEach criterion below scores the limits it names by their codes, against the record and the director's words in the evaluation prompt. One breach fails it: score it below 0.8.\n`);
     expect(system).not.toContain('TRUTH RULES');
+  });
+});
+
+// Run 2b (R28; the prompt read's judges' findings 2 and 3): a judge is listed only the limits it
+// scores. The list is derived from the codes its own criteria name, so the two cannot drift; this
+// test reads both, the criteria's `rules` and the codes their questions cite, and holds the printed
+// list to them.
+describe("R28: each judge is listed only the limits its criteria score", () => {
+  /** The codes a judge's criteria name: their `rules`, and every code their questions cite. */
+  const criteriaCodes = (phase) => {
+    const criteria = Object.values(getPhaseCriteria(phase, 'journalist')).filter((c) => c.truth);
+    const ruled = new Set(criteria.flatMap((c) => c.rules));
+    const cited = new Set(criteria.flatMap((c) => c.description.match(/\bT\d{1,2}\b/g) || []));
+    return { ruled, cited };
+  };
+  /** The codes on the line right under the heading THE LIMITS and its closing rule. */
+  const printedCodes = (phase) => {
+    const lines = systemFor(phase, stateFor()).split('\n');
+    const heading = lines.findIndex((line) => line.startsWith('THE LIMITS ('));
+    expect(heading).toBeGreaterThan(-1);
+    return lines[heading + 2].match(/\bT\d{1,2}\b/g) || [];
+  };
+
+  it.each(['arcs', 'article'])('the %s judge lists exactly the codes its criteria name, in the limits\' order', (phase) => {
+    const { ruled, cited } = criteriaCodes(phase);
+    expect([...cited].filter((code) => !ruled.has(code))).toEqual([]);
+    const inOrder = LIMIT_CODES.map((limit) => limit.code).filter((code) => ruled.has(code));
+    expect(printedCodes(phase)).toEqual(inOrder);
+    expect(LIMITS_LINES[phase]).toBe(LIMIT_CODES.filter((limit) => ruled.has(limit.code)).map(({ code, name }) => `${code} ${name}.`).join(' '));
+  });
+
+  it.each([
+    ['arcs', ['T10', 'T13', 'T14', 'T15']],
+    ['article', ['T10', 'T15']]
+  ])('the %s judge is listed no limit it has no question for: %j', (phase, unscored) => {
+    const system = systemFor(phase, stateFor());
+    unscored.forEach((code) => {
+      const { name } = LIMIT_CODES.find((limit) => limit.code === code);
+      expect(`${code}: ${system.includes(`${code} ${name}.`)}`).toBe(`${code}: false`);
+    });
+  });
+
+  it('LIMIT_CODES keeps all fifteen, whatever a judge is listed', () => {
+    expect(LIMIT_CODES).toHaveLength(15);
+  });
+});
+
+// Run 2b (R28; the prompt read's judges' findings 13 and 19): the two judges read the same notes
+// the same way, and the weave's judge reads the roster block and the money totals the article's
+// judge reads, each from the function the other judge calls, so the blocks are byte-equal for one
+// session.
+describe('R28: the two judges read the same notes, roster and totals', () => {
+  const { ARC_NOTES_LABEL } = require('../workflow/nodes/arc-specialist-nodes');
+  const { buildSessionFacts, getPromptBuilder } = require('../workflow/nodes/ai-nodes');
+  const users = (state) => ({
+    arcs: buildEvaluationUserPrompt('arcs', state),
+    article: buildEvaluationUserPrompt('article', state, { factCheck: null })
+  });
+
+  it.each(['arcs', 'article'])('the %s judge prints the notes under the label and the line on backstory, once', (phase) => {
+    const prompt = users(stateFor())[phase];
+    expect(count(prompt, `${ARC_NOTES_LABEL}\n<DIRECTOR_NOTES>`)).toBe(1);
+    expect(count(prompt, 'Backstory in the notes')).toBe(1);
+    expect(prompt).not.toContain("THE DIRECTOR'S NOTES (the director's own account of the investigation");
+  });
+
+  it('the weave\'s judge prints the session roster block the article\'s judge prints, byte for byte, with the roster with pronouns after it', () => {
+    const state = stateFor();
+    const { arcs, article } = users(state);
+    // The block opens on the time-of-day line, as SESSION_FACTS does; the fixture's sale gives one.
+    const facts = buildSessionFacts(state);
+    expect(typeof facts.timeOfDayLine).toBe('string');
+    const block = `${facts.timeOfDayLine}\n\nSESSION ROSTER (${facts.playerCount} players who were present at this session's investigation):\n${facts.roster.join('\n')}\n\n${getPromptBuilder(null, state)._rosterSection()}`;
+    expect(count(arcs, block)).toBe(1);
+    expect(count(article, block)).toBe(1);
+    expect(count(arcs, 'SESSION ROSTER (4 players who were present at this session\'s investigation):')).toBe(1);
+    expect(count(arcs, 'CANONICAL CHARACTER ROSTER:')).toBe(1);
+    expect(count(arcs, facts.timeOfDayLine)).toBe(1);
+  });
+
+  it('a guest reporter\'s line sits once in the weave\'s judge, where the article\'s judge prints it', () => {
+    const state = stateFor('remote');
+    state.sessionConfig = { ...state.sessionConfig, guestReporters: [{ name: 'Taylor Chase', role: 'guest reporter' }] };
+    const facts = buildSessionFacts(state);
+    expect(typeof facts.guestReporterLine).toBe('string');
+    const { arcs, article } = users(state);
+    expect(count(arcs, facts.guestReporterLine)).toBe(1);
+    expect(arcs).toContain(`${facts.roster[facts.roster.length - 1]}\n\n${facts.guestReporterLine}\n\n`);
+    expect(article).toContain(`${facts.roster[facts.roster.length - 1]}\n\n${facts.guestReporterLine}\n\n`);
+  });
+
+  it('the weave\'s judge prints the money totals the article\'s judge prints, once, after the record', () => {
+    const state = stateFor();
+    const { arcs, article } = users(state);
+    const totals = getPromptBuilder(null, state)._buildFinancialSummary(state.shellAccounts).trim();
+    expect(totals.startsWith('<FINANCIAL_SUMMARY>')).toBe(true);
+    for (const prompt of [arcs, article]) {
+      expect(count(prompt, totals)).toBe(1);
+      expect(count(prompt, '<FINANCIAL_SUMMARY>')).toBe(1);
+      expect(prompt.indexOf(totals)).toBeGreaterThan(prompt.indexOf('</RECORD>'));
+    }
+    expect(arcs).toContain(`</RECORD>\n\n${totals}\n\nDoes the weave keep within the limits?`);
+  });
+
+  it('no question\'s words change: the weave\'s money question names no FINANCIAL_SUMMARY', () => {
+    expect(getPhaseCriteria('arcs', 'journalist').moneyTruth.description).not.toContain('FINANCIAL_SUMMARY');
   });
 });
 

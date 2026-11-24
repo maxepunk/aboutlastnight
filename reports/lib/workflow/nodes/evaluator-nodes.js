@@ -39,7 +39,7 @@ const { GraphInterrupt } = require('@langchain/langgraph');
 const { safeParseJson, getSdkClient, formatIssuesForMessage, STRUCTURAL_PASS_SCORE, leadingRuleIds } = require('./node-helpers');
 const { traceNode } = require('../../observability');
 const { getThemeNPCEntries } = require('../../theme-config');
-const { guestReportersOf, guestReporterLine, reportingModeOf } = require('../../prompt-renderers/session-authors');
+const { guestReportersOf, reportingModeOf } = require('../../prompt-renderers/session-authors');
 const { factCheckContentBundle } = require('../../content-bundle-fact-check');
 // Phase 3 (3.4): each judge reads the rule set its writer reads, from the rules folder of its
 // theme (R14), after its theme's identity line (brief 4.13) and the mode block: its system
@@ -48,7 +48,7 @@ const { systemPromptOpening } = require('../../prompt-builder');
 // Phase 2, brief 2.4: the judges read the record and the director's words through
 // the same renderers and builders the writers use, so a judge sees what it judges.
 const { renderRecordView } = require('../../prompt-renderers/record-view');
-const { withSessionClock, timeOfDayLine } = require('../../prompt-renderers/session-clock');
+const { withSessionClock } = require('../../prompt-renderers/session-clock');
 const { renderDirectorEnrichmentBlock } = require('../../prompt-renderers/director-notes-renderer');
 const {
   renderSessionFactsVerdict, renderArcAccusation, renderPhotoListEntry, renderDirectorStopNotes, DIRECTOR_STOP_NOTES_TAG
@@ -60,10 +60,10 @@ const { directorAccusationText } = require('../../accusation-verdict');
 const { DIRECTOR_WORDS_SOURCES, directorWordsTexts } = require('../../director-words');
 // The writers' own builders: the writers' SESSION_FACTS, the article writer's inputs (its
 // photos, 3.9), the PromptBuilder (whose roster method gives the roster section, and
-// whose money summary the article judge prints, 3.9), the one rule for a kept photo (the
+// whose money summary both judges print, 3.9 and run 2b), the one rule for a kept photo (the
 // 4b fix batch), and the whiteboard's filename (task 4c-fix). ARC_NOTES_LABEL is the arc
-// writer's label for the director's notes, which the weave's fact check prints as its
-// notes heading (one source, fix 3.4b).
+// writer's label for the director's notes, which both judges print as their notes heading
+// (one source, fix 3.4b; the article judge since run 2b, R28).
 const { ARC_NOTES_LABEL } = require('./arc-specialist-nodes');
 const {
   buildSessionFacts, articleWriterInputs, getPromptBuilder, isPhotoExcluded, whiteboardFilenameOf
@@ -238,8 +238,9 @@ const TRUTH_GROUPS = [
     rules: ['T5'],
     // Phase 3 (3.9; the integrator's ruling): the article judge reads the
     // FINANCIAL_SUMMARY its writer copies, so a correct code-made total is never taken
-    // for a sum the writer made up. The arc writer has no summary, so its judge has the
-    // timeline alone. The buyer is Nova's suspicion (T5, R11).
+    // for a sum the writer made up. The buyer is Nova's suspicion (T5, R11). Since run 2b
+    // (R25) the weave writer reads the summary too and the weave's judge prints it after the
+    // record, but its question does not name it, so its reads keep the timeline.
     //
     // Final review (judges-factcheck[0]): each source is named by what it gives. The
     // summary's totals are the close of the investigation's, and the director's notes record
@@ -255,8 +256,8 @@ const TRUTH_GROUPS = [
     // payments, at whatever time of day it ran, and a ledger line a note at a stop explains
     // (such as a ruling on its logged time) is as the note gives it, at either judge.
     //
-    // Phase 18 (the rule-text read's part 4): in the limit's words. The weave's judge keeps its
-    // own sources and, as before, neither the totals nor the question at the meeting.
+    // Phase 18 (the rule-text read's part 4): in the limit's words. The weave's question keeps
+    // its own sources and, as before, names neither the totals nor the question at the meeting.
     reads: (phase) => (phase === 'arcs' ? ['timeline', 'notes', 'answers', 'stopNotes'] : ['timeline', 'financialSummary', ...DIRECTOR_WORDS_MATERIAL, 'weave']),
     describe: (s, phase) => `Does the money in ${s} go from the buyer to the account the seller named, with NeurAI and its board written as Nova's suspicion of who the buyer is and never as fact, and the ledger's money taken as what was paid during the investigation for memories to be erased (T5)? Each figure is as its source gives it: each sale, the first-burial bonus and each transfer as the ledger gives it;${phase === 'arcs' ? '' : ' each total at the close of the investigation as FINANCIAL_SUMMARY gives it;'} ${phase === 'arcs' ? "a balance the director's notes or the notes at the stops record as said or shown in the warehouse as that moment's figure; and a ledger line the director's answer at the story meeting or a note at a stop explains as that answer or note gives it (T1)." : `a balance the director's words ${ARTICLE_DIRECTOR_WORDS} record as said or shown in the warehouse as that moment's figure, and a ledger line they explain as they give it (T1); and a figure raised as a question at the story meeting as the director's answer gives it, and out of the article when the question has no answer (T5).`}`
   },
@@ -362,9 +363,10 @@ const TRUTH_GROUPS = [
  * with (phase 18, R8; the brief-and-the-limits spec, section 7). The limits file carries no codes;
  * code reads the code to tell which criterion a finding belongs to (leadingRuleIds,
  * criteriaRules), and stored sessions hold findings in that form, so the judges keep them and
- * their own instructions list each limit by code and name (truthCriteriaSection), in the rule-text
- * read's words. lib/__tests__/judge-limits.test.js holds each name equal to its limit's bold
- * lead-in; T8's adds the part about this session, which holds the rest of that limit.
+ * their own instructions list each limit they score by code and name (truthCriteriaSection,
+ * through judgeLimits; run 2b, R28), in the rule-text read's words. The constant keeps all
+ * fifteen. lib/__tests__/judge-limits.test.js holds each name equal to its limit's bold lead-in;
+ * T8's adds the part about this session, which holds the rest of that limit.
  */
 const LIMIT_CODES = Object.freeze([
   'What can be stated as fact',
@@ -384,8 +386,26 @@ const LIMIT_CODES = Object.freeze([
   'Fixed facts'
 ].map((name, i) => Object.freeze({ code: `T${i + 1}`, name })));
 
-/** The judges' list of the limits as one line: "T1 What can be stated as fact. T2 The verdict. …" */
-const LIMITS_LINE = LIMIT_CODES.map(({ code, name }) => `${code} ${name}.`).join(' ');
+/**
+ * The limits a judge scores, in the limits' order: each limit whose code one of its truth
+ * criteria names in its `rules` (run 2b, R28). The other limits stay in the limits' own text in
+ * the system prompt, so a judge is listed no limit it has no question for. Derived from the
+ * criteria the judge is given, so its list and its criteria cannot drift.
+ *
+ * @param {Object} criteria - the judge's criteria (getPhaseCriteria)
+ * @returns {Array<{code: string, name: string}>}
+ */
+function judgeLimits(criteria) {
+  const scored = new Set(Object.values(criteria || {})
+    .filter((criterion) => criterion && criterion.truth)
+    .flatMap((criterion) => criterion.rules || []));
+  return LIMIT_CODES.filter(({ code }) => scored.has(code));
+}
+
+/** A judge's list of the limits it scores as one line: "T1 What can be stated as fact. T2 The verdict. …" */
+function limitsLine(criteria) {
+  return judgeLimits(criteria).map(({ code, name }) => `${code} ${name}.`).join(' ');
+}
 
 /**
  * The truth criteria one journalist judge scores, each worded for that judge.
@@ -1103,8 +1123,9 @@ const TRUTH_ONLY_EVALUATION_RULES = `EVALUATION RULES:
 /**
  * The truth criteria and how to write a breach, or '' when the criteria carry none. Phase 18
  * (R8; the rule-text read's parts 4 and 5e): under its heading, the list of the limits by code
- * and name (LIMITS_LINE), once, then each criterion with the codes it scores, and a finding opens
- * with those codes, as code reads them (leadingRuleIds).
+ * and name, once, then each criterion with the codes it scores, and a finding opens with those
+ * codes, as code reads them (leadingRuleIds). Run 2b (R28): the list holds only the limits these
+ * criteria score (limitsLine).
  *
  * @param {'arcs'|'article'} phase
  * @param {Object} criteria
@@ -1116,7 +1137,7 @@ function truthCriteriaSection(phase, criteria) {
     .map(([key, { rules, description }]) => `- ${key} (${rules.join(', ')}; must pass): ${description}`);
   if (lines.length === 0) return '';
   return `${boxedHeading('THE LIMITS (MUST PASS: a breach is a definite error, so the output goes back for a rework)')}
-${LIMITS_LINE}
+${limitsLine(criteria)}
 Each criterion below scores the limits it names by their codes, against the record and the director's words in the evaluation prompt. One breach fails it: score it below ${STRUCTURAL_PASS_SCORE}.
 ${lines.join('\n')}
 
@@ -1219,6 +1240,7 @@ ${entries.join('\n\n')}`;
  * the same input (PromptBuilder#_buildFinancialSummary over state.shellAccounts), so
  * moneyTruth checks a writer's figures against the figures it was given. At the gate
  * five of eight verdicts took the correct code-made total for a sum the writer made.
+ * Run 2b (R25): the weave writer reads the same block, so the weave's judge prints it too.
  *
  * @param {Object} state
  * @returns {string} the block, or '' when no account has a positive total
@@ -1228,7 +1250,7 @@ function renderJudgeFinancialSummary(state) {
 }
 
 /**
- * The session roster for the article judge: the players present, by
+ * The session roster for both judges (the weave's since run 2b, R28): the players present, by
  * the full names the writers' SESSION_FACTS lists (ai-nodes.js buildSessionFacts), then,
  * with a guest reporter, their line as SESSION_FACTS prints it (phases 14 and 15, R5). The
  * time-of-day line opens it, as it opens SESSION_FACTS (brief E, R7).
@@ -1258,20 +1280,38 @@ function renderJudgeRosterSection(state) {
 }
 
 /**
+ * The roster block both judges print (run 2b, R28): the session roster (renderJudgeSessionRoster,
+ * with the time-of-day line before it and a guest reporter's line after it) and then the roster
+ * with pronouns, so the weave's judge is told who played as the article's judge is, and the two
+ * blocks are byte-equal for one session.
+ *
+ * @param {Object} state
+ * @param {Object|null} sessionFacts - buildSessionFacts(state)
+ * @returns {string}
+ */
+function renderJudgeRosterBlock(state, sessionFacts) {
+  return `${renderJudgeSessionRoster(sessionFacts)}
+
+${renderJudgeRosterSection(state)}`;
+}
+
+/**
  * The director's notes and input-review corrections, for every judge, through
  * the renderer every writer uses (director-notes-renderer.js, which appends
  * renderDirectorCorrectionsBlock). The corrections follow the notes, which are
  * never rewritten.
  *
+ * Both judges print them under the arc writer's own label (ARC_NOTES_LABEL), with its line on
+ * backstory, so the weave's writer and both judges read the notes under one text (run 2b, R28:
+ * the article judge's own heading, which carried no line on backstory, went).
+ *
  * @param {Object} state
- * @param {string} [heading] - the notes' heading; the weave's fact check gives the arc
- *   writer's own label (ARC_NOTES_LABEL), so the two read the notes under one text
  * @returns {string}
  */
-function renderJudgeDirectorNotes(state, heading = "THE DIRECTOR'S NOTES (the director's own account of the investigation, with any input-review corrections after it):") {
+function renderJudgeDirectorNotes(state) {
   const notes = state.directorNotes || {};
   const listOf = (value) => (Array.isArray(value) ? value : []);
-  return `${heading}
+  return `${ARC_NOTES_LABEL}
 ${renderDirectorEnrichmentBlock({
   rawProse: notes.rawProse || '',
   quotes: listOf(notes.quotes),
@@ -1295,9 +1335,7 @@ ${renderDirectorEnrichmentBlock({
 function renderJudgeSessionContext(state) {
   const sessionFacts = buildSessionFacts(state);
   const verdictSection = sessionFacts ? `\n\n${renderSessionFactsVerdict(sessionFacts)}` : '';
-  return `${renderJudgeSessionRoster(sessionFacts)}
-
-${renderJudgeRosterSection(state)}${verdictSection}
+  return `${renderJudgeRosterBlock(state, sessionFacts)}${verdictSection}
 
 ${renderJudgeDirectorNotes(state)}`;
 }
@@ -1512,12 +1550,18 @@ function buildEvaluationUserPrompt(phase, state, options = {}) {
       // Phases 14 and 15, brief B (R2): every note the director has sent at a stop so far,
       // right after the answers, in its own block, which holds "None." when there is none.
       //
-      // Phases 14 and 15, brief E (R5): with a guest reporter, their line before the roster.
-      // Brief E (R7): when the investigation ran, before them both, since this judge reads no
+      // Phases 14 and 15, brief E (R5): with a guest reporter, their line beside the roster.
+      // Brief E (R7): when the investigation ran, before the roster, since this judge reads no
       // SESSION_FACTS; with no sale and no exposure, none.
+      //
+      // Run 2b (R25, R28): the roster block the article judge reads (renderJudgeRosterBlock: the
+      // time-of-day line, the session roster, a guest reporter's line, then the roster with
+      // pronouns), so this judge is told who played; the notes under the one label both judges
+      // print; and after the record the money totals the weave writer now reads, from the same
+      // builder (renderJudgeFinancialSummary). No question names the totals: they are material a
+      // figure can be checked against.
       const answers = renderDirectorAnswers(state.weave && state.weave.questions);
-      const guestLine = guestReporterLine(state.sessionConfig, state.theme || 'journalist');
-      const whenLine = timeOfDayLine(state.sessionConfig, state.evidenceBundle);
+      const weaveMoney = renderJudgeFinancialSummary(state);
       return `Check this weave against the record and the director's words. It pitches two or three angles, each a story told through the threads it names, and the director may pick any of them, so check every angle: each line of its pitch against the evidence of its threads. Each thread and each connection carries its evidence: the pieces of the record it rests on, each with its sources, what it shows, and whether it supports the line or cuts against it. Read each line against its evidence, and each piece against the record.
 
 WEAVE:
@@ -1526,13 +1570,13 @@ ${JSON.stringify(weaveForJudge(state.weave) || null, null, 2)}
 ${afterJudged}THE ACCUSATION (the parsed verdict, then the director's account word for word):
 ${renderArcAccusation(state.playerFocus?.accusation, directorAccusationText(state), "Players' Reasoning")}
 
-${whenLine ? `${whenLine}\n\n` : ''}${guestLine ? `${guestLine}\n\n` : ''}${renderJudgeRosterSection(state)}
+${renderJudgeRosterBlock(state, buildSessionFacts(state))}
 
-${renderJudgeDirectorNotes(state, ARC_NOTES_LABEL)}${answers ? `\n\n${answers}` : ''}
+${renderJudgeDirectorNotes(state)}${answers ? `\n\n${answers}` : ''}
 
 ${renderDirectorStopNotes(state)}
 
-${renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig })}
+${renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig })}${weaveMoney ? `\n\n${weaveMoney}` : ''}
 
 Does the weave keep within the limits?`;
     }

@@ -1911,14 +1911,15 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
     // Fix 3.4b item 6: one source for the notes label. The arc judge's directorNotes line
     // prints ARC_NOTES_LABEL, which arc-specialist-nodes.js exports for the arc writer.
     // Phase 4 (brief 4.4): the fact check prints it as the heading of the notes it reads.
-    it('the arc judge\'s director-notes line prints the label arc-specialist-nodes.js exports', () => {
+    // Run 2b (R28): the article judge prints the same one, with its line on backstory.
+    it.each(['arcs', 'article'])('the %s judge\'s director-notes line prints the label arc-specialist-nodes.js exports', (phase) => {
       const ARC_NODES = '../../../lib/workflow/nodes/arc-specialist-nodes';
       try {
         jest.isolateModules(() => {
           const actual = jest.requireActual(ARC_NODES);
           jest.doMock(ARC_NODES, () => ({ ...actual, ARC_NOTES_LABEL: 'SENTINEL NOTES LABEL' }));
           const isolated = require('../../../lib/workflow/nodes/evaluator-nodes')._testing;
-          const prompt = isolated.buildEvaluationUserPrompt('arcs', stateFor(), { factCheck: null });
+          const prompt = isolated.buildEvaluationUserPrompt(phase, stateFor(), { factCheck: null });
           expect(prompt).toContain('SENTINEL NOTES LABEL\n<DIRECTOR_NOTES>');
         });
       } finally {
@@ -2065,7 +2066,8 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
     // At the gate five of eight outline and article verdicts flagged the code-made
     // $7,495,000 as a figure the writer computed, and the writers asked the director to
     // confirm it at two stops: no judge saw the summary the writers were given.
-    it.each(['article'])('the %s judge reads the writers\' FINANCIAL_SUMMARY, from the same builder and input, once, after the record', (phase) => {
+    // Run 2b (R25, R28): the weave's judge reads it too, since the weave writer now reads it.
+    it.each(['arcs', 'article'])('the %s judge reads the writers\' FINANCIAL_SUMMARY, from the same builder and input, once, after the record', (phase) => {
       const state = stateFor();
       const prompt = userFor(phase, state);
       const block = getPromptBuilder(null, state)._buildFinancialSummary(state.shellAccounts).trim();
@@ -2076,15 +2078,17 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
     });
 
     // Brief 4.7a (R1): the detective's article judge, which read no summary, went; a
-    // detective session gets the one article judge.
-    it('the arc judge, whose writer is given no summary, reads none', () => {
-      expect(userFor('arcs', stateFor())).not.toContain('FINANCIAL_SUMMARY');
-      expect(userFor('arcs', stateFor('detective'))).not.toContain('FINANCIAL_SUMMARY');
+    // detective session gets the one article judge. Run 2b (R25): the weave writer reads the
+    // totals, so the weave's judge does too; no question names the block.
+    it('the arc judge reads the summary as material, and its money question does not name it', () => {
+      const state = stateFor();
+      expect(count(userFor('arcs', state), '<FINANCIAL_SUMMARY>')).toBe(1);
+      expect(getPhaseCriteria('arcs', 'journalist').moneyTruth.description).not.toContain('FINANCIAL_SUMMARY');
     });
 
     it('a session with no account above zero gives the judges no summary, as it gives the writers none', () => {
       const state = stateFor('journalist', { shellAccounts: [{ name: 'Melanie', total: 0, tokenCount: 0 }] });
-      for (const phase of ['article']) expect(userFor(phase, state)).not.toContain('FINANCIAL_SUMMARY');
+      for (const phase of ['arcs', 'article']) expect(userFor(phase, state)).not.toContain('FINANCIAL_SUMMARY');
     });
 
     // Phase 18 (the rule-text read's part 4): the money question in the limit's words.

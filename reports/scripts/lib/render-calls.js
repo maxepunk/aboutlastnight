@@ -65,6 +65,10 @@ function loadCallModules(req) {
  * director left it from the state (render-prompts.js plants the fixed ones when a thread
  * holds none), and its fact check takes the players the map places and the director's
  * answers through buildFactCheckArgs, so the argument lists here are unchanged.
+ *
+ * Run 2b (R28): the arcs judge reads the article judge's roster block and money totals, and
+ * both read the notes under one label, all built from the state inside the builders, so
+ * createEvaluator's argument lists, and these, are unchanged.
  * @param {string} phase - one of JUDGE_PHASES
  * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
  */
