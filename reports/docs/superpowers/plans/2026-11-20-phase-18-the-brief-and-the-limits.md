@@ -388,3 +388,155 @@ The gates prove the pipeline works. The director's next new session shows whethe
 **Done.** The skill's agents read the eight files by the calls' lists, no doc describes the old rule set as current, and the scan passes.
 
 **Out of scope.** Any pipeline prompt.
+
+---
+
+## Run 2b: what the writers are handed (added 2026-11-24)
+
+The prompt read (gate 4) found that the brief is sound and that the rest of each prompt still pulls the draft the old way: the same quotation reaches the article writer five or six times, the evidence under a beat is handed over as finished quotes, leftover fields set a form, and the reworks and judges still speak in scores. The director's answer on 2026-11-24 was to fix this now, before the skill and the docs. The findings in full are in the phase workspace, `surveys/prompt-read.md`.
+
+The work is three waves on the phase branch, between run 2 and run 3:
+
+- **Run 2b (this section):** things taken away or moved. No sentence a model reads is new.
+- **Run 2c:** the new lines, about twenty, once the director has approved each one.
+- **Then** run 3 (brief G) and the gates, as planned.
+
+### Rulings for run 2b
+
+- **R18. No new wording.** Run 2b removes and moves. Where a clause is cut from a sentence, the brief gives the sentence that remains, word for word. A line that needs new words waits for run 2c; a seat that finds one returns NEEDS_CONTEXT naming it.
+- **R19. The article writer is handed the settled angle without the evidence under its threads.** The map holds the evidence the map writer chose for each beat, so the threads' evidence is the same material a second time, plus pieces the map writer left off. The map writer, the map's rework and the article's judge still read it. One renderer, one option. *If wrong:* the article writer cannot see a piece the map left off; the record still holds its source.
+- **R20. The article writer is shown the map without each beat's `kind`, and each left-out beat by its id and title alone.** The stored map, the stamp, the fact check, the judge and the page read the map whole. One function makes the map as shown, and the render script calls it. *If wrong:* a struck beat's material is one step further away, which is the point.
+- **R21. The map writer is no longer asked for a beat's `kind`.** It leaves the writer's schema, which is the one schema printed and given to the SDK. A stored map that holds it stays valid at the gate and on the page, so an old thread and a map in flight are untouched, and no reader of it is left. A map printed into a rework's prompt is printed without it, by R20's function.
+- **R22. The character digest leaves the article writer's system prompt**, and its rework's. The article writer has the documents themselves, and the digest carries the documents' pronouns, which the roster overrides. The weave writer keeps its own copy this run. *If wrong:* the article writer has one fewer place to read a person's job title; the record's documents give it.
+- **R23. One shape for the article writer (replaces R13).** The schema the SDK is given for the article call is the trimmed schema the writer is shown. On a send-back with standing edits both carry the changed-edits field, so the printed copy and the tool always agree. The trim grows to every field the instruction's six items do not name. The previous article a rework reads is shown in the same trimmed shape. Code carries each field the writer is not shown from the previous article into the reworked one. The validator, the template, the desk and the stored bundle keep the full schema. *If wrong:* the article call's structured output breaks in a live session; the director allowed one live probe to prove it (2026-11-24), which the integrator runs after this slice merges.
+- **R24. The article writer reads its own part before the brief.** `job-article` says the map already did the work on the steps, so the writer reads the brief knowing which of its work is left. The weave and the map calls keep the brief first: their own texts open on "The brief above", and changing those words is run 2c's. *This narrows what was proposed to the director ("each writer"); the integrator tells them.*
+- **R25. The weave writer's prompt.** The block that prints the charge a third time is gone. The money totals the other two writers read are added after the record, and the weave's judge reads them too. The list of the game's own characters shows Blake once.
+- **R26. The derived blocks.** The quote bank prints each quoted line once, with its speaker and any correction, without the notes' sentence under it. The transaction links are left out when they pair nothing. The whiteboard is left out of the weave writer's prompt when the board holds nothing. This holds in every prompt that prints them.
+- **R27. A rework is shown findings, not scores.** No summary of confidence and readiness, no scores, no criterion names, no second and third copy of a fix. Each finding prints once. On a director's send-back the director's note comes first and the check's suggestions are left out, since the note is the task. The labels over the note keep today's words until run 2c.
+- **R28. A judge is listed only the limits it scores.** The other limits stay in the limits' own text. The article's judge reads the director's notes under the label and the line on backstory the weave's judge already reads, and the weave's judge reads the roster block the article's judge already reads.
+
+### Review focus for run 2b
+
+- An old thread: a stored map with `kind` on its beats, a stored article with fields the writer is no longer shown, a stored evaluation with scores and three copies of a fix. Each still opens, reworks and publishes.
+- A director's edit at the desk to a field the writer is not shown (a sidebar entry's owner) survives an automatic pass and a send-back.
+- A rework whose evaluation failed a criterion and listed no issue still tells the rework what to fix.
+- Every prompt a seat changes is rendered for 111326 and 101826 and read in place, top to bottom, as its model meets it.
+- The print and the tool: wherever a schema is printed, it is the schema the SDK is given.
+
+### Brief H: what the article writer is handed
+
+**Intent.** The article writer reads each thing once, in the shape it can use, and writes into one shape.
+
+**Layers.**
+- `lib/prompt-renderers/settled-weave.js`: an option on the one renderer that leaves out the evidence under the threads (R19). In that form the intro's fourth sentence reads, in full: "The threads in the story come in the order the angle tells them." Every other sentence of the intro stays byte for byte. The article writer and its rework call it that way; every other caller is unchanged.
+- `lib/prompt-builder.js`, where `<STORY_MAP>` is printed: the map as shown (R20), one exported function. `scripts/render-prompts.js` and `scripts/lib/render-calls.js` follow.
+- `lib/prompt-builder.js`, `buildArticleSystemPrompt`: the roster without the character digest (R22). `rosterWithPronounsSection` already prints that form.
+- `lib/prompt-builder.js` and `lib/workflow/nodes/ai-nodes.js`: R23. The trimmed schema is one derivation with one list; the SDK call, the rework call, the printed `<SCHEMA>` and the shown previous article read it. The carry is one pure function, driven by the same list, that matches a sidebar entry by its document id, a photo block and the top photo by filename, and copies a field only where the reworked article lacks it.
+- `lib/rule-set.js`: `RULE_SET_CALLS.article` is `job-article` then `brief` (R24).
+- Left from run 2: the tags named in `ARTICLE_TASK` take backticks, as `mapTask`'s do; the three lists of fields the writer is not shown are one.
+
+**Tests.** The option on the settled weave, with and without evidence; the map as shown (no `kind`, a left-out beat as id and title, the stored map unchanged); the system prompt holds no digest; the SDK call's schema equals the printed schema on a first write, on an automatic rework and on a send-back with standing edits; the carry on a bundle whose sidebar entry holds a desk-written owner, through an automatic pass and a send-back; a stored bundle with every untrimmed field still validates; the order of the article call's rule files.
+
+**Invariants.** The director's edits are final: nothing here changes what `settleEdits` puts back. The judge reads what it read. No check's logic changes. `config.configurable.contentBundleSchema` still overrides the call's schema in tests.
+
+**Verification.** Render 111326 and 101826. In the article writer's prompt: count the lines of evidence under the weave's threads (none), the quotations under `leftOut` (none), `"kind"` among the beats (none), the digest's heading in the system prompt (absent), and the order of the brief and the writer's part at the end. Compare the printed schema with the call's schema by a script. Read the whole prompt once, top to bottom.
+
+**Done.** The counts above hold on both sessions, the schema is one, the suite is green and `article-journalist` is re-pinned with its reason.
+
+**Out of scope.** The Blake block and the quote bank's label, the block types offered, a section's `type`, the line above the headline: each needs the director.
+
+### Brief I: what the weave writer is handed, and the derived blocks
+
+**Intent.** The weave writer is not told the verdict a third time, has the totals the limits say the record gives, and every prompt carries each quoted line once.
+
+**Layers.**
+- `lib/workflow/nodes/arc-specialist-nodes.js`: the heading "Primary Investigation Focus" and its line go (R25). The money totals print after the record, through the builder the map writer's prompt uses, so the block is byte-equal to the map writer's for the same session. `buildCharacterCategoriesBlock` lists the game's own characters without aliases, as `generateRosterSection` does. The whiteboard is left out when the board holds nothing, by the renderer's own option.
+- `lib/prompt-renderers/director-notes-renderer.js`: `quoteEntry` prints the line with its speaker and addressee, and the correction when one applies; the "In the notes" line goes (R26). The transaction links are left out when no link pairs a sale.
+- `lib/prompt-renderers/record-view.js`: a logged turn-in name that says "anon" prints as "no name given" (the ledger's ruling after run 2).
+- The weave's rework: where the rework is told to list changed edits, its printed format shows the field, in the words the call's schema already gives it.
+- Left from run 2: the "(C9)" strip in `lib/__tests__/arc-specialist-prompts.test.js`.
+
+**Tests.** The weave prompt holds the charge under the accusation alone; the money block equals the map writer's; Blake once; a quote entry's lines; links with and without a pairing; the turn-in name; the rework's format. The grounding of a quote's speaker (`groundQuote`) is unchanged and its tests stay.
+
+**Invariants.** No label's words change. The record's order and the notes block are untouched. A quote's speaker is decided as today.
+
+**Verification.** Render 111326 and 101826: the weave writer's prompt, the map writer's and the article writer's, and both judges'. Count how many times one quoted line of the notes stands in each prompt, before and after. Read the weave writer's prompt once, top to bottom.
+
+**Done.** The weave prompt holds no third copy of the charge and holds the totals; the quote bank holds each line once in every prompt; the suite is green; the moved pins carry their reasons.
+
+**Out of scope.** What the Blake block and the quote bank are for (their labels), the page arithmetic in the weave task, the capital-letter line on group memberships, the parsed reasoning.
+
+### Brief J: the map writer is not asked for a beat's kind
+
+**Intent.** The retired "a scene, then the evidence" no longer survives as a field the map writer fills.
+
+**Layers.**
+- `lib/schemas/outline.schema.json` and `lib/map.js`: `kind` leaves the writer's schema (R21), in a section's beats and in the left-out beats. The director-side schema, the payload gate and `console/outline-edit-logic.js` still accept a stored map that holds it, and the corpus tests that hold the gate and the console equal still pass.
+- The map's top-level description in the schema is cut to its first sentence: "The story map: the settled weave laid across the article's sections."
+- The map's rework reads the previous map without `kind`, by brief H's function when it has merged; until then, by a local helper the integrator folds into it.
+- Left from run 2: the stale bound comments and the test of a stored map.
+
+**Tests.** The writer's schema holds no `kind`; a stored map with `kind` passes the gate and the console's validator; a rework of such a map returns and settles with the director's edits put back.
+
+**Invariants.** A stop's gate and the console decide alike. The map's page is unchanged.
+
+**Verification.** Render the map writer's prompt and the map's rework for 111326 and 101826: no `"kind"` in the schema or the previous map. Open a stored map of the old shape through the gate on the database copy's data, with no model call.
+
+**Done.** The above holds, the suite is green, `outline-journalist` is re-pinned with its reason.
+
+**Out of scope.** The slots' usual order and headings, the connection requirement, the players field's description, the shape of a left-out beat: each needs the director.
+
+### Brief K: what a rework is shown
+
+**Intent.** A rework reads what to change, once, and the director's note first when the director sent it back.
+
+**Layers.** `lib/workflow/nodes/node-helpers.js`, the revision context:
+- The evaluation prints as its findings alone (R27): the must-fix lines under today's heading, and the suggestions under theirs on an automatic pass. The summary, the scores line, the criteria's scores and the judge's guidance text no longer print. A code check's lines print as today.
+- When an evaluation failed a criterion and lists no must-fix line, the failed criteria's fixes print as the must-fix lines, without a score or a criterion's name.
+- A judge's finding prints the limit's name where the stored finding holds its code (from `LIMIT_CODES`). The stored finding and its parsing are untouched.
+- On a director's send-back the note's block comes first, then the findings, the director's edits and the scope. The suggestions are left out of a director's round.
+- The scope's sentences keep their words. Clauses that name a list no longer printed drop out by their own conditions, and "unless an issue to address needs it changed" prints only when a must-fix line prints.
+- Constants no line reads any longer are removed.
+
+**Tests.** An automatic pass after a failed evaluation; one after a code check; a send-back after a passed evaluation; a send-back with open findings; the story meeting's two rounds and the map's, which print as today apart from the above; a stored evaluation of the old shape.
+
+**Invariants.** The director's edits block and its rules are untouched. What the judges are asked for is untouched. Each scope sentence that still prints is byte for byte.
+
+**Verification.** Render every rework for 111326 and 101826 and read each revision context top to bottom. No score, no criterion's name, no "Ready", and each finding once.
+
+**Done.** The above holds and the suite is green.
+
+**Out of scope.** The words of the note's label and the banners (run 2c), what the judge is asked to write as a fix (run 2c), the first-write task a rework also reads.
+
+### Brief L: the judges read what they score
+
+**Intent.** Neither judge is listed a limit it has no question for, and the two read the same notes the same way.
+
+**Layers.** `lib/workflow/nodes/evaluator-nodes.js`:
+- Each judge's list of limits holds the codes its own criteria name, in the limits' order (R28). `LIMIT_CODES` and its export stay whole.
+- The article's judge reads the director's notes under the label and the backstory line the weave's judge reads, from one constant.
+- The weave's judge reads the roster block the article's judge reads, and the money totals the weave writer now reads (R25), each from the function the other judge calls.
+- `scripts/lib/render-calls.js` follows in the same commit.
+- Left from run 2: the two lines of `docs/architecture/judges.md`.
+
+**Tests.** Each judge's list against its criteria's codes, held by a test that derives both; the notes' label in both judges; the roster and the totals in the weave's judge.
+
+**Invariants.** The questions' words, the pass mark, the output's shape and the parsing of findings are untouched.
+
+**Verification.** Render both judges for 111326 and 101826 and read each top to bottom.
+
+**Done.** The above holds and the suite is green.
+
+**Out of scope.** What a weave is to its judge, what a fix may hold, what doubt means, the settled lines, one statement of the director's words: all run 2c.
+
+### Seats for run 2b
+
+| Slice | Builder | Reviewer | Why |
+|---|---|---|---|
+| H | Opus 5.5, high | Fable 5.2, high | R23 changes the shape of a live call and adds a carry on the rework path; a mistake reaches a session |
+| I | Opus 5.5, medium | Opus 5.5, medium | several renderers, each change small and checked by a render |
+| J | Opus 5.5, medium | Opus 5.5, medium | a schema, a gate and the console held equal by corpus tests |
+| K | Opus 5.5, high | Opus 5.5, high | one function with many branches, each a different kind of rework |
+| L | Opus 5.5, medium | Opus 5.5, medium | lists and blocks moved between two prompts |
+
+The verifier is Sonnet 5.5 at medium, a fixer runs one step above the attempt that failed, and a re-review is Opus 5.5 at medium, as in run 2.
