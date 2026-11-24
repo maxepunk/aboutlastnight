@@ -102,6 +102,24 @@ describe('R8: the judges\' list of the limits', () => {
     });
   });
 
+  // Run 2f (left from run 2c, whose shorter lists took the assertion with them): a question names a
+  // limit by its code in brackets, and a finding is matched to its criterion by that code, so every
+  // code a judge's questions cite is one its criteria score. Derived from the criteria themselves,
+  // so a question that gains a code no criterion scores fails here. The money question cites T1 for
+  // a figure the director's words give, which the first question scores.
+  it.each(['arcs', 'article'])("the %s judge: every code its questions cite is a code its criteria score", (phase) => {
+    const criteria = Object.values(getPhaseCriteria(phase, 'journalist'));
+    const scored = new Set(criteria.flatMap((criterion) => criterion.rules));
+    const cited = new Set(criteria.flatMap((criterion) => criterion.description.match(/\bT\d{1,2}\b/g) || []));
+    expect(cited.size).toBeGreaterThan(0);
+    expect([...cited].filter((code) => !scored.has(code))).toEqual([]);
+    // Each criterion's own codes are all cited in its own question.
+    criteria.forEach((criterion) => {
+      const own = criterion.description.match(/\bT\d{1,2}\b/g) || [];
+      expect(criterion.rules.filter((code) => !own.includes(code))).toEqual([]);
+    });
+  });
+
   it.each(['arcs', 'article'])('the %s judge prints its list once, as one line, right under its heading', (phase) => {
     const system = systemFor(phase, stateFor());
     expect(count(system, LIMITS_LINE)).toBe(1);
