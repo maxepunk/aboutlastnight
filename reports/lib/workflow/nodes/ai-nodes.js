@@ -1022,9 +1022,8 @@ function outlineWriterInputs(state) {
 
 /**
  * The map writer (phase 4, brief 4.6; spec 5.1 and 5.2): lays the settled weave across the
- * article's sections, a page of at most 450 words that aims for 300 (lib/map.js
- * MAP_WORD_BOUND, MAP_WORD_AIM; phase 4b). Skips when the thread already holds a map (a
- * replay).
+ * article's sections, a page held to lib/map.js MAP_WORD_BOUND that aims for MAP_WORD_AIM
+ * (phase 4b; phase 18, R10). Skips when the thread already holds a map (a replay).
  *
  * It reads the settled weave first, as its task, then what the outline writer read: the
  * record and the investigation's timeline, the director's notes and accusation, the photos with the
@@ -1425,10 +1424,41 @@ async function reviseOutline(state, config) {
 }
 
 /**
+ * The map the map's rework is shown (phase 18, run 2b; R21): `map` with no beat's kind, in a
+ * section or in leftOut, since the writer's schema no longer asks for one and a map stored
+ * before the change may hold it. Everything else is as `map` holds it, and `map` itself is
+ * untouched: the edits, the settle and the state read it whole. A value that is no map passes
+ * through as it is.
+ *
+ * Until brief H's function for the map as a writer is shown it is merged, this is the map's
+ * own; the integrator folds it into that one.
+ *
+ * @param {*} map
+ * @returns {*}
+ */
+function mapWithoutBeatKinds(map) {
+  if (!map || typeof map !== 'object' || Array.isArray(map)) return map;
+  const withoutKind = (beat) => {
+    if (!beat || typeof beat !== 'object' || Array.isArray(beat) || !('kind' in beat)) return beat;
+    const { kind: _kind, ...rest } = beat;
+    return rest;
+  };
+  const shown = { ...map };
+  if (Array.isArray(map.sections)) {
+    shown.sections = map.sections.map((section) => (section && typeof section === 'object' && Array.isArray(section.beats)
+      ? { ...section, beats: section.beats.map(withoutKind) }
+      : section));
+  }
+  if (Array.isArray(map.leftOut)) shown.leftOut = map.leftOut.map(withoutKind);
+  return shown;
+}
+
+/**
  * The map's rework call, the one place it is built (phase 4, brief 4.6), as the arc rework's
  * is (arc-specialist-nodes.js arcReworkCall): reviseOutline sends it, and
  * scripts/render-prompts.js renders it. From the map the rework starts from
- * (`_previousOutline`), the director's standing edits it carries, the map checks' lines or
+ * (`_previousOutline`, printed without a beat's kind: mapWithoutBeatKinds), the director's
+ * standing edits it carries, the map checks' lines or
  * the director's note, the round, and the standing notes without the note being acted on.
  * A director's round, the send-back, reads no check failure from before the round, as the
  * meeting's does (task 4.14b): those lines were found on the map the stop showed, the
@@ -1455,7 +1485,8 @@ async function mapReworkCall(state, promptBuilder, theme = state.theme || 'journ
     // 4.12c: the stop's round, the one rule).
     round: stopRoundOf(CHECKPOINT_TYPES.OUTLINE, state),
     validationResults: sendBack ? null : state.validationResults,
-    previousOutput: before,
+    // Phase 18, run 2b (R21): the map it starts from, printed without a beat's kind.
+    previousOutput: mapWithoutBeatKinds(before),
     humanFeedback: state._outlineFeedback || null,
     handEdits: edits
   });

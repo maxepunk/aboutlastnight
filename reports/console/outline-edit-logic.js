@@ -647,13 +647,14 @@
   // are the theme's.
   var MAP_ROOT_KEYS = ['headline', 'deck', 'topPhoto', 'gapNote', 'sections', 'dropped', 'leftOut', 'expectedLength', 'weaveChanges'];
   var MAP_REQUIRED_KEYS = ['headline', 'deck', 'sections', 'dropped', 'leftOut', 'expectedLength', 'weaveChanges'];
-  // A beat's kind, one of the schema's four (lib/map.js MAP_BEAT_KINDS; a test holds the
-  // two lists equal).
+  // A beat's kind, one of the director-side schema's four (lib/map.js MAP_BEAT_KINDS; a test
+  // holds the two lists equal). The writer no longer writes it (phase 18, run 2b; R21); a map
+  // stored before then holds it, and the page never prints it.
   var BEAT_KINDS = ['scene', 'receipt', 'line', 'figure'];
   var SECTION_KEYS = ['slot', 'heading', 'job', 'beats', 'photos'];
   // A beat (phase 4b, brief 1D; R1): a move with its people, its summary (its synopsis; piece 4),
-  // the threads it carries, the connection that lands in it, its card marker, its kind and its
-  // evidence, in the schema's key order (a test holds the two equal).
+  // the threads it carries, the connection that lands in it, its card marker, its kind (a stored
+  // map's) and its evidence, in the director-side schema's key order (a test holds the two equal).
   var BEAT_KEYS = ['id', 'move', 'players', 'synopsis', 'threads', 'connection', 'card', 'kind', 'evidence'];
   // A beat the director added or brought back needs only these (R12).
   var BEAT_REQUIRED_KEYS = ['id', 'move'];

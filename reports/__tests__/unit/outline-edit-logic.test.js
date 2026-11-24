@@ -374,7 +374,13 @@ describe("4.6: the map's client gate, held to the director-side schema", () => {
     'a headline at its longest, counted in code points': () => edited((m) => { m.headline = `${'x'.repeat(HEADLINE_LIMITS.main.max - 1)}\u{1F600}`; }),
     'a headline at its shortest, counted in code points': () => edited((m) => { m.headline = '\u{1F600}'.repeat(HEADLINE_LIMITS.main.min); }),
     'a deck at its longest': () => edited((m) => { m.deck = 'd'.repeat(HEADLINE_LIMITS.deck.max); }),
-    'a weave change with its source': () => edited((m) => { m.weaveChanges = [{ source: 'E2', change: 'The envelope lands in the lede.' }]; })
+    'a weave change with its source': () => edited((m) => { m.weaveChanges = [{ source: 'E2', change: 'The envelope lands in the lede.' }]; }),
+    // Phase 18, run 2b (brief J; R21): the writer no longer writes a beat's kind, and a map stored
+    // before then holds one on its beats, as the fixture map does.
+    "a kind on a stored map's beats, in a section and in left out": () => edited((m) => { m.sections[1].beats[0].kind = 'receipt'; m.leftOut[0].kind = 'scene'; }),
+    'no kind on any beat, as the writer now writes the map': () => edited((m) => {
+      [...m.sections.flatMap((s) => s.beats), ...m.leftOut].forEach((b) => { delete b.kind; });
+    })
   };
   const REFUSED = {
     'no headline': () => edited((m) => { delete m.headline; }),

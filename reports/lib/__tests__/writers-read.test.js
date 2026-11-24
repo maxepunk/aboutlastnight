@@ -196,10 +196,11 @@ describe('R3: the identity line and the map schema say what the read says', () =
     );
   });
 
-  it("the map schema's description: the evidence it can be told from, and its only prose the deck and the headings", () => {
-    expect(OUTLINE_SCHEMA.description).toBe(
-      "The story map: the settled weave laid across the article's sections. Each beat is a move of the story in a few plain words, with the evidence it can be told from underneath; its only prose is the deck and the section headings the article prints, under the settled angle's headline."
-    );
+  // Phase 18, run 2b (brief J): the description is cut to its first sentence; the rest said the
+  // map's only prose was the deck and the headings, where a section's step and a beat's synopsis
+  // are now sentences too.
+  it("the map schema's description: its first sentence alone", () => {
+    expect(OUTLINE_SCHEMA.description).toBe("The story map: the settled weave laid across the article's sections.");
   });
 
   it("the evidence field's description, in a section's beat and in leftOut's", () => {

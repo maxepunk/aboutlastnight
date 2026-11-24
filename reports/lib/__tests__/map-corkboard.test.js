@@ -48,7 +48,7 @@ describe('4B: a beat carries its synopsis, required of the writer and never of t
 
   it("the writer's schema requires synopsis, a string, after players, in both copies of the beat", () => {
     copies(writer).forEach((beat) => {
-      expect(Object.keys(beat.properties)).toEqual(['id', 'move', 'players', 'synopsis', 'threads', 'connection', 'card', 'kind', 'evidence']);
+      expect(Object.keys(beat.properties)).toEqual(['id', 'move', 'players', 'synopsis', 'threads', 'connection', 'card', 'evidence']);
       expect(beat.properties.synopsis.type).toBe('string');
       expect(beat.required).toContain('synopsis');
     });

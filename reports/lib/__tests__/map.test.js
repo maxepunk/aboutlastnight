@@ -647,9 +647,12 @@ describe("4.6: the map's schemas", () => {
     expect(mapSchemaFor('journalist')).toBe(schema);
   });
 
-  it("a beat's kinds are MAP_BEAT_KINDS, and a left-out item has the beat's shape, so one brought back is whole", () => {
+  // Phase 18, run 2b (brief J; R21): the writer is no longer asked for a beat's kind; the
+  // director-side schema still takes the kinds a stored map holds.
+  it("a beat's kinds are MAP_BEAT_KINDS on the director's side alone, and a left-out item has the beat's shape, so one brought back is whole", () => {
     const beat = outlineSchema.properties.sections.items.properties.beats.items;
-    expect(beat.properties.kind.enum).toEqual([...MAP_BEAT_KINDS]);
+    expect(beat.properties).not.toHaveProperty('kind');
+    expect(directorMapSchemaFor('journalist').properties.sections.items.properties.beats.items.properties.kind.enum).toEqual([...MAP_BEAT_KINDS]);
     expect(outlineSchema.properties.leftOut.items).toEqual(beat);
   });
 
@@ -660,7 +663,7 @@ describe("4.6: the map's schemas", () => {
     expect(text).not.toContain('writerQuestions');
   });
 
-  it("the director-side schema is the writer's, derived in code, with a beat needing only its id and its move", () => {
+  it("the director-side schema is the writer's, derived in code, with a beat needing only its id and its move and taking a stored map's kind", () => {
     const writer = mapSchemaFor('journalist');
     const director = directorMapSchemaFor('journalist');
     // Piece 4 (brief 4B; R1): the writer's beat requires its synopsis, and the director's does not.
@@ -671,17 +674,24 @@ describe("4.6: the map's schemas", () => {
       const copy = clone(schema);
       delete copy.properties.sections.items.properties.beats.items.required;
       delete copy.properties.leftOut.items.required;
+      delete copy.properties.sections.items.properties.beats.items.properties.kind;
+      delete copy.properties.leftOut.items.properties.kind;
       return copy;
     };
     expect(withoutBeatRules(director)).toEqual(withoutBeatRules(writer));
     expect(directorMapSchemaFor('journalist')).toBe(director);
   });
 
-  it("a map the writer's schema takes, the director's takes; a beat the director added with only its id and move, only the director's", () => {
+  it("a map the writer's schema takes, the director's takes; a beat the director added with only its id and move, or a stored beat's kind, only the director's", () => {
     const writerTakes = new Ajv({ allErrors: true, strict: true }).compile(mapSchemaFor('journalist'));
-    expect(writerTakes(clone(MAP))).toBe(true);
+    const written = clone(MAP);
+    [...written.sections.flatMap((s) => s.beats), ...written.leftOut].forEach((b) => { delete b.kind; });
+    expect(writerTakes(written)).toBe(true);
+    expect(directorMapProblems(written, { theme: 'journalist' })).toBeNull();
+    // MAP is stored with a kind on its beats, as a map from before phase 18's run 2b.
+    expect(writerTakes(clone(MAP))).toBe(false);
     expect(directorMapProblems(clone(MAP), { theme: 'journalist' })).toBeNull();
-    const added = clone(MAP);
+    const added = clone(written);
     added.sections[0].beats.push({ id: 'b11', move: 'Alex at the window' });
     expect(writerTakes(added)).toBe(false);
     expect(directorMapProblems(added, { theme: 'journalist' })).toBeNull();

@@ -25,10 +25,11 @@
  *   synopsis, one sentence in plain words saying what the article tells there (phase 4b, piece 4;
  *   spec 2026-10-07 section 3), which the writer's schema requires and the director's does not, so
  *   a map from before piece 4 still reads; the ids of the settled weave's threads it
- *   carries, the id of the weave's connection that lands in it, its card marker, its kind
- *   (MAP_BEAT_KINDS, a hint to the article writer the page never prints) and its evidence, the
- *   pieces of the record that tell it (lib/evidence.js). On a beat marked as a card, one piece
- *   is flagged as the card's document (R4; console/outline-edit-logic.js beatCardOf);
+ *   carries, the id of the weave's connection that lands in it, its card marker and its evidence,
+ *   the pieces of the record that tell it (lib/evidence.js). On a beat marked as a card, one piece
+ *   is flagged as the card's document (R4; console/outline-edit-logic.js beatCardOf). A map
+ *   stored before phase 18's run 2b may also hold a beat's kind (MAP_BEAT_KINDS), which the
+ *   writer is no longer asked for (R21) and the director-side schema still takes;
  * - each photo `{filename, beat?}`, beside the beat it belongs with, or by itself in the
  *   section where its people appear;
  * - `dropped`: `{slot, reason}` for each slot the story does not use;
@@ -92,7 +93,12 @@ const { wordCount, pageLengthOf } = require('./word-count');
 // Phase 4b, piece 3 (brief 3B): the one reading of the settled story, the angle the director picked.
 const { settledAngleOf, weaveIdOf } = require('./weave');
 
-/** A beat's kind: what its move puts on the page, kept underneath as a hint to the article writer and never printed (R1). */
+/**
+ * A beat's kind: what its move put on the page, the four a map stored before phase 18's run 2b
+ * may hold. The map writer is no longer asked for it (R21): it is in the director-side schema
+ * alone (directorMapSchemaFor), so a stored map that holds it still opens, and the page never
+ * prints it.
+ */
 const MAP_BEAT_KINDS = Object.freeze(['scene', 'receipt', 'line', 'figure']);
 
 /** How many inline cards the article carries, which the map's cards are held to. */
@@ -1303,7 +1309,8 @@ const directorValidators = new Map();
  * for a change's source ends on where the prompt holds the meeting's approval note
  * (MEETING_NOTE_POINTER), the pointer the map writer's task prints too (brief 4.6e). Each
  * piece of a beat's evidence, in a section and in left out, is lib/evidence.js
- * EVIDENCE_PIECE_SCHEMA, the shape the weave's evidence has too (phase 4b, brief 1D; R10).
+ * EVIDENCE_PIECE_SCHEMA, the shape the weave's evidence has too (phase 4b, brief 1D; R10). It
+ * holds no beat's kind (phase 18, run 2b; R21).
  *
  * @param {string} theme
  * @returns {Object}
@@ -1331,9 +1338,11 @@ function mapSchemaFor(theme) {
  * The map as the director leaves it (R12): the writer's schema for the theme, derived in
  * code, with a beat the director added or brought back allowed whole: a beat needs only its
  * id and its move, in a section and in leftOut (phase 4b, brief 1D), since the article writer
- * finds the evidence for a move the director adds (spec 5.3). The payload gate validates against it
- * and the console's validator is held to it (console/outline-edit-logic.js
- * validateMapShape); it is never sent to the SDK, so no model writes to it.
+ * finds the evidence for a move the director adds (spec 5.3), and a beat may hold its kind, one of
+ * MAP_BEAT_KINDS, before its evidence, as a map stored before phase 18's run 2b does (R21). The
+ * payload gate validates against it and the console's validator is held to it
+ * (console/outline-edit-logic.js validateMapShape); it is never sent to the SDK, so no model
+ * writes to it.
  *
  * @param {string} theme
  * @returns {Object}
@@ -1342,7 +1351,11 @@ function directorMapSchemaFor(theme) {
   if (!directorSchemas.has(theme)) {
     const schema = structuredClone(mapSchemaFor(theme));
     [schema.properties.sections.items.properties.beats.items, schema.properties.leftOut.items]
-      .forEach((beat) => { beat.required = ['id', 'move']; });
+      .forEach((beat) => {
+        beat.required = ['id', 'move'];
+        const { evidence, ...rest } = beat.properties;
+        beat.properties = { ...rest, kind: { type: 'string', enum: [...MAP_BEAT_KINDS] }, evidence };
+      });
     directorSchemas.set(theme, schema);
   }
   return directorSchemas.get(theme);
@@ -1674,10 +1687,10 @@ function mapCheckpointData(state, { keptPhotos = [], evidenceIndex = {}, maxRevi
 module.exports = {
   MAP_BEAT_KINDS,
   MAP_CARDS,
-  // Phase 4b (brief 1D; R5): the map's page at most 450 words as it opens, aiming for 300
+  // Phase 4b (brief 1D; R5) and phase 18 (R10): the map's page at most MAP_WORD_BOUND words as it opens, aiming for MAP_WORD_AIM
   MAP_WORD_BOUND,
   MAP_WORD_AIM,
-  // Phase 4b, piece 4 (R6): the page with every synopsis open at most 750 words, the synopses about 250
+  // Phase 4b, piece 4 (R6) and phase 18 (R10): the page with every synopsis open at most MAP_OPEN_WORD_BOUND words, the synopses about MAP_SYNOPSIS_AIM
   MAP_OPEN_WORD_BOUND,
   MAP_SYNOPSIS_AIM,
   MAP_CHECKS_SOURCE,

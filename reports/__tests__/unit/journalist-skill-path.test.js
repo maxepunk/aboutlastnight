@@ -145,7 +145,7 @@ describe('the stages (phase 4)', () => {
 describe('the story level, with the evidence underneath (phase 4b, piece 1)', () => {
   const { WEAVE_SCHEMA } = require('../../lib/sdk-client/subagents');
   const { MEETING_WORD_BOUND, PICKED_KEY } = require('../../lib/weave');
-  const { MAP_WORD_BOUND, MAP_WORD_AIM, MAP_BEAT_KINDS } = require('../../lib/map');
+  const { MAP_WORD_BOUND, MAP_WORD_AIM, MAP_BEAT_KINDS, directorMapSchemaFor } = require('../../lib/map');
   const { EVIDENCE_PIECE_SCHEMA, EVIDENCE_SOURCES, EVIDENCE_STANCES } = require('../../lib/evidence');
   const { WEAVE_ANSWER_KEY } = require('../../lib/writer-questions');
   const outlineSchema = require('../../lib/schemas/outline.schema.json');
@@ -195,7 +195,11 @@ describe('the story level, with the evidence underneath (phase 4b, piece 1)', ()
   }
   const atMost = (words) => new RegExp(`\\bat most ${words} words\\b`);
   const aimingFor = new RegExp(`\\baim(?:ing)? for ${MAP_WORD_AIM}\\b`);
-  const BEAT = outlineSchema.properties.sections.items.properties.beats.items.properties;
+  // Phase 18, run 2b (brief J; R21): the writer's schema no longer holds a beat's kind, and the
+  // skill's schemas.md still lists it until slice G rewrites the skill, so the skill's beat is held
+  // to the director-side schema's, the writer's plus the kind a stored map may hold. Slice G drops
+  // the kind from schemas.md and holds the beat to outlineSchema's again.
+  const BEAT = directorMapSchemaFor('journalist').properties.sections.items.properties.beats.items.properties;
   const PIECE = EVIDENCE_PIECE_SCHEMA.properties;
   const SOURCES = ['<document id>', ...Object.values(EVIDENCE_SOURCES)];
 

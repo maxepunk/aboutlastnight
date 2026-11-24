@@ -319,6 +319,8 @@ describe('phase 18, C: the step, 25 words a section, fits the higher bounds', ()
     expect(edited.sections[1].job).toBe(step);
     expect(directorMapProblems(edited, { theme: 'journalist', shown: boardMap() })).toBeNull();
     expect(mapNodes.checkMap(boardMapState({ outline: today }))._mapCheck).toMatchObject({ passed: true, failures: [] });
+    // Phase 18, run 2b (brief J): the edited map passes the check node too, not only the gate.
+    expect(mapNodes.checkMap(boardMapState({ outline: edited }))._mapCheck).toMatchObject({ passed: true, failures: [] });
   });
 
   test('the over-length message names the bounds the constants hold, on each page', () => {

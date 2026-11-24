@@ -2,8 +2,9 @@
  * The map at the level of the story, with the evidence underneath (phase 4b, piece 1, brief 1D;
  * spec 2026-10-05 sections 4.2, 5, 6 and 9; rulings R1, R3 to R6).
  *
- * A beat is a move of the story: `{id, move, players, threads, connection?, card?, kind?,
- * evidence}`. Its `card` is a marker, and the card's document is the piece flagged `card`; every
+ * A beat is a move of the story: `{id, move, players, threads, connection?, card?, evidence}`
+ * (a stored map's beat may also hold its kind, which the writer is no longer asked for since
+ * phase 18's run 2b). Its `card` is a marker, and the card's document is the piece flagged `card`; every
  * reader of a beat's card reads it through beatCardOf. The checks hold every thread in the story
  * to a beat, each of the writer's beats to its evidence, each of the writer's lines to story
  * terms, and the writer's own words on the page to its allowance under MAP_WORD_BOUND, and each failure carries the place the map
@@ -48,9 +49,10 @@ describe("1D: a beat is a move, with its threads, its people and its evidence", 
   const beat = writer.properties.sections.items.properties.beats.items;
 
   // Phase 4b, piece 4 (brief 4B; R1): the beat gains its summary, synopsis, after players, which
-  // the writer's schema requires.
-  it("the writer's beat is {id, move, players, synopsis, threads, connection?, card?, kind?, evidence}, its material gone", () => {
-    expect(Object.keys(beat.properties)).toEqual(['id', 'move', 'players', 'synopsis', 'threads', 'connection', 'card', 'kind', 'evidence']);
+  // the writer's schema requires. Phase 18, run 2b (brief J; R21): its kind leaves the writer's
+  // schema.
+  it("the writer's beat is {id, move, players, synopsis, threads, connection?, card?, evidence}, its material and its kind gone", () => {
+    expect(Object.keys(beat.properties)).toEqual(['id', 'move', 'players', 'synopsis', 'threads', 'connection', 'card', 'evidence']);
     expect(beat.required).toEqual(['id', 'move', 'players', 'synopsis', 'threads', 'evidence']);
     expect(beat.properties.card.type).toBe('boolean');
     expect(beat.properties.threads).toMatchObject({ type: 'array', items: { type: 'string' } });

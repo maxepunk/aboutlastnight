@@ -525,9 +525,14 @@ const REPO = path.join(__dirname, '..', '..');
  *   arcs-journalist 12201 -> 12633 (+432). The fixture's quote has no context and its notes pair no
  *   sale, so the quote bank and the transaction links change no byte here; outline-journalist and
  *   article-journalist do not move.
+ * - Phase 18, run 2b, slice J (R21), the map writer is not asked for a beat's kind. The schema it
+ *   prints in <SCHEMA> loses a beat's `kind` in a section's beats (-353) and in the left-out beats
+ *   (-293), and its top description is cut to its first sentence (-213): outline-journalist
+ *   24945 -> 24086 (-859). The article and arc pins do not move.
+
  */
 const PINNED = {
-  'outline-journalist': ['ce13061c77ace390949d44fa7a3605d9effe61bd52ac2388841f78fee7f45b95', 24945],
+  'outline-journalist': ['41cac07053d52d3e84c2e154e824cf1bf4851d30fc66816f66e74d7ee1249dc3', 24086],
   'article-journalist': ['9d8b249b785b8a12ae3e9086f33f79b5be5cb83c4214ae1ced4cb2385281cbae', 29870],
   'arcs-journalist': ['f4a41d22d34070ebfc5006510a8e87e6fb8be18f669cb79df50badf1c017dc5c', 12633]
 };

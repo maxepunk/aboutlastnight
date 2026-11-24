@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "outline",
   "title": "StoryMap",
-  "description": "The story map: the settled weave laid across the article's sections. Each beat is a move of the story in a few plain words, with the evidence it can be told from underneath; its only prose is the deck and the section headings the article prints, under the settled angle's headline.",
+  "description": "The story map: the settled weave laid across the article's sections.",
   "type": "object",
   "additionalProperties": false,
   "required": ["headline", "deck", "sections", "dropped", "leftOut", "expectedLength", "weaveChanges"],
@@ -70,7 +70,6 @@
                 },
                 "connection": { "type": "string", "description": "The id of the settled weave's connection that lands in this beat; each live connection lands in one beat" },
                 "card": { "type": "boolean", "description": "True when the move's evidence prints as a card; one of its pieces is then flagged as the card's document" },
-                "kind": { "type": "string", "enum": ["scene", "receipt", "line", "figure"], "description": "What the move puts on the page: a scene, a receipt, a line or a figure" },
                 "evidence": {
                   "type": "array",
                   "description": "The pieces of the record the article writer can tell the move from",
@@ -131,7 +130,6 @@
           },
           "connection": { "type": "string", "description": "The id of the settled weave's connection that lands in this beat; each live connection lands in one beat" },
           "card": { "type": "boolean", "description": "True when the move's evidence prints as a card; one of its pieces is then flagged as the card's document" },
-          "kind": { "type": "string", "enum": ["scene", "receipt", "line", "figure"], "description": "What the move puts on the page: a scene, a receipt, a line or a figure" },
           "evidence": {
             "type": "array",
             "description": "The pieces of the record the article writer can tell the move from",
