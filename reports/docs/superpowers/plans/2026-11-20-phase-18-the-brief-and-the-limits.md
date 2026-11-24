@@ -639,3 +639,63 @@ The verifier is Sonnet 5.5 at medium, a fixer is Opus 5.5 at high, and a re-revi
 ### After run 2c
 
 A second prompt read, by fresh readers on Fable 5.2 at high, of the prompts as built. This time the integrator walks each finding through the whole pipeline before it becomes a proposal. Then run 3 and the gates.
+
+---
+
+## Run 2d: the line above the headline, and the desk's flags (added 2026-11-24)
+
+Two decisions of the director's on 2026-11-24, each a small slice.
+
+### Rulings for run 2d
+
+- **R38. The line above the headline is the theme's, and code prints it.** The director's words for it are "NovaNews Investigates". It lives in the theme's config. The article writer is no longer asked for it: the generation instruction's fourth item loses the field, and the field joins the ones the writer is not shown. A first write is stamped with the theme's line. A rework carries the line the previous article held, as it carries every field the writer is not shown, so a line the director typed at the desk stands and an old thread's line stays until the director changes it. The desk still edits it and the template still prints it.
+- **R39. The desk says what a send-back acts on, and a suggestion can be added to the note with one press.** Since run 2b a director's send-back shows the rework the director's note and the must-fix findings, and not the fact check's suggestions. The director's requirement: "if the person running the report pipeline needs to copy paste the fact check suggestions that they want to include in the rework in their note, that needs to be made explicitly clear in how the suggestions are presented to the user", and, shown a mock-up, "yes, build it with the button".
+
+### Brief R: the line above the headline
+
+**Intent.** Every article carries the same line above its headline, and no model writes it.
+
+**Layers.**
+- `lib/theme-config.js`: the journalist's line, "NovaNews Investigates".
+- `lib/prompt-builder.js`: the generation instruction's fourth item reads `4. "headline": {"main": "...", "deck": "..."}: the headline and the deck as the task above gives them.` The field joins the list of fields the writer is not shown, so the writer's schema, the previous article a rework reads and the carry all follow from the one list.
+- `lib/workflow/nodes/ai-nodes.js`: the stamp that puts the map's headline, deck and top photo on a first write also puts the theme's line above the headline.
+
+**Tests.** A first write carries the theme's line whatever the writer returned; a rework keeps the previous article's line; a line the director typed at the desk survives an automatic pass and a send-back; the printed schema equals the call's schema on all three kinds of call; a stored article with a line of its own validates and prints.
+
+**Invariants.** The director's edits are final. The desk's editor for the headline is unchanged. No other field of the headline changes hands.
+
+**Verification.** Render the article writer's prompt and its rework for 111326 and 101826: the word for the field stands nowhere in the instruction or the printed schema.
+
+**Done.** The above holds, the suite is green, `article-journalist` is re-pinned with its reason.
+
+### Brief S: the desk says what a send-back acts on
+
+**Intent.** At the desk the director can tell which marks a send-back acts on, and can ask the writer for a suggestion without copying it by hand.
+
+**What the director sees.**
+- Each mark labelled "Fact check, advisory" has a button, "Add to note". Pressing it adds one line to the note box: the mark's words as the desk shows them, then the piece it sits beside, in the words the desk already uses to name a piece. The director can edit the line. While the note holds that line, the button reads "In the note" and does nothing. No other kind of mark has the button.
+- Under the note box's existing line, when the desk holds at least one such mark, this line: `Send back acts on this note, and on any mark labelled "Fact check" or "The judge could not fix this". It leaves a "Fact check, advisory" mark alone. Fix that one yourself here, or press its "Add to note" button to ask the writer for it.`
+
+**Layers.**
+- The logic in a dual-export module, pure and node-tested: the note line for a mark, the note with that line added, whether the note holds it, and whether the scope line shows.
+- `console/components/checkpoints/Article.js`: the button in a mark's row and the line under the note box, as a thin consumer. A press changes the note box as typing does, so it disarms an armed send-back.
+- `console/console.css`: the button, in the desk's existing manner.
+
+**Before building, check the line is true.** Trace what a director's send-back at the article shows its rework (`lib/workflow/nodes/node-helpers.js`, and where `ai-nodes.js` builds the article's rework): the must-fix findings of the last evaluation, and no suggestion. Then check that every mark the desk labels "Fact check" or "The judge could not fix this" is among those findings, in each case the desk can show them. If one is not, stop and return NEEDS_CONTEXT with the case: the line must not promise what the rework is not shown.
+
+**Tests.** The pure functions: a mark beside a paragraph, one beside a card, one beside no piece; a line added once and not twice; an edited note; a desk with no advisory mark shows no line.
+
+**Invariants.** No control drops what the director typed: the button only adds to the note. The marks themselves, their labels, their order and their places are unchanged. The payload the desk sends is unchanged: the note is the note.
+
+**Verification.** The node tests. The wiring is the integrator's click-through, since the console has no DOM harness: say in your return exactly what to click and what should happen.
+
+**Done.** The above holds and the suite is green.
+
+### Seats for run 2d
+
+| Slice | Builder | Reviewer | Why |
+|---|---|---|---|
+| R | Opus 5.5, medium | Opus 5.5, medium | one field through a derivation run 2b built and tested |
+| S | Opus 5.5, medium | Opus 5.5, medium | a small page change with one claim that must be traced before it is printed |
+
+S runs beside run 2c, since it touches only the console. R runs after slice O merges, since both touch the generation instruction and the writer's schema.
