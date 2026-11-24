@@ -26,6 +26,7 @@ const { mocks } = require('../../lib/workflow/nodes');
 const { getCheckpointData, buildResumePayload } = require('../../server.js');
 const { CHECKPOINT_TYPES } = require('../../lib/workflow/checkpoint-helpers');
 const { DIRECTOR_EDIT_PREFIX, CHANGED_EDITS_KEY } = require('../../lib/hand-edit-diff');
+const { withLimitNames } = require('../../lib/workflow/nodes/node-helpers');
 const { deskView, steeringView } = require('../../console/checkpoint-view-logic');
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
@@ -263,9 +264,11 @@ describe('0926262\'s shape: the judge flags the director\'s edits after a send-b
     expect(next.next).toEqual(['checkpointArticle']);
 
     const automaticPass = sdk.sent[3].prompt;
-    const evaluation = automaticPass.slice(automaticPass.indexOf('EVALUATION SUMMARY'), automaticPass.indexOf('<HAND_EDITS>'));
-    expect(evaluation).toContain(WRITER_FINDING);
-    expect(evaluation).toContain('fix: Cut the line.');
+    // Phase 18, run 2b (brief K): the evaluation is its findings alone, the must-fix line read
+    // with the limit's name for its code, and no criterion's fix restating it.
+    const evaluation = automaticPass.slice(automaticPass.indexOf('ISSUES TO ADDRESS'), automaticPass.indexOf('<HAND_EDITS>'));
+    expect(evaluation).toContain(withLimitNames(WRITER_FINDING));
+    expect(evaluation).not.toContain('Cut the line.');
     expect(evaluation).not.toContain(DIRECTORS_CLOSING);
     expect(evaluation).not.toContain('closing');
     // The pass is told the director's closing stands.
@@ -415,8 +418,8 @@ describe('0926262\'s real shape: findings that quote the director\'s text beside
 
     expect(sdk.calls).toEqual(['evaluation', 'Article revision 0', 'evaluation', 'Article revision 1', 'evaluation']);
     const automaticPass = sdk.sent[3].prompt;
-    const evaluation = automaticPass.slice(automaticPass.indexOf('EVALUATION SUMMARY'), automaticPass.indexOf('<HAND_EDITS>'));
-    expect(evaluation).toContain(WRITER_ISSUE);
+    const evaluation = automaticPass.slice(automaticPass.indexOf('ISSUES TO ADDRESS'), automaticPass.indexOf('<HAND_EDITS>'));
+    expect(evaluation).toContain(withLimitNames(WRITER_ISSUE));
     expect(evaluation).not.toContain('Rewrite the closing sentence');
     expect(evaluation).not.toContain(CLOSING);
     expect(evaluation).not.toContain('Kowalski');

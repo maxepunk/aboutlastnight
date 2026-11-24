@@ -38,11 +38,16 @@ describe('buildRevisionContext — evaluator criteria reach the prompt (B4)', ()
     ...overrides
   }).contextSection;
 
-  it('renders each criterion score, its notes and its fix', () => {
+  // Phase 18, run 2b (brief K; R27): the rework reads the findings, not the scores. An
+  // evaluation that lists its own must-fix lines prints them, and no criterion's name, score,
+  // notes or fix beside them.
+  it('renders the must-fix lines, and no criterion score, notes or fix beside them', () => {
     const section = build();
-    expect(section).toContain('rosterCoverage: 0.50');
-    expect(section).toContain('Quinn missing');
-    expect(section).toContain('add Quinn');
+    expect(section).toContain('  - Missing roster members: Quinn');
+    expect(section).not.toContain('rosterCoverage');
+    expect(section).not.toContain('0.50');
+    expect(section).not.toContain('Quinn missing');
+    expect(section).not.toContain('add Quinn');
   });
 
   it('lists structural issues as must-fix and advisory warnings as should-consider', () => {
@@ -71,19 +76,24 @@ describe('buildRevisionContext — evaluator criteria reach the prompt (B4)', ()
     expect(section).not.toContain('(no specific issues listed)');
   });
 
-  // Phase 3 (3.10): the judge's guidance reaches a send back only. On an automatic pass
-  // its must-fix steps repeat ISSUES TO ADDRESS and its optional steps read as
-  // instructions (the integrator's ruling), so it is left out there.
-  it('carries the evaluator revision guidance on a send back, and leaves it out of an automatic pass', () => {
+  // Phase 3 (3.10): the judge's guidance left the automatic pass, since its must-fix steps
+  // repeat ISSUES TO ADDRESS and its optional steps read as instructions (the integrator's
+  // ruling). Brief K (R27): it leaves the send back too, where it was the third copy of a fix.
+  it('leaves the evaluator revision guidance out of a send back and an automatic pass alike', () => {
     const guided = { ...ARC_EVALUATION, revisionGuidance: 'Step 1: place Quinn.' };
-    expect(build({ validationResults: guided, humanFeedback: 'Rethink it.' })).toContain('EVALUATOR FEEDBACK:\nStep 1: place Quinn.');
-    expect(build({ validationResults: guided })).not.toContain('Step 1: place Quinn.');
+    for (const humanFeedback of [null, 'Rethink it.']) {
+      const section = build({ validationResults: guided, humanFeedback });
+      expect(section).not.toContain('Step 1: place Quinn.');
+      expect(section).not.toContain('EVALUATOR FEEDBACK');
+    }
   });
 
-  it('prints a string confidence verbatim instead of NaN%', () => {
-    const section = build();
-    expect(section).toContain('high');
-    expect(section).not.toContain('NaN');
+  it('prints no confidence, as a word or as a number', () => {
+    for (const confidence of ['high', 0.9]) {
+      const section = build({ validationResults: { ...ARC_EVALUATION, confidence } });
+      expect(section).not.toContain('Confidence');
+      expect(section).not.toMatch(/\bhigh\b|90%|NaN/);
+    }
   });
 
   it('still handles the legacy numeric criteriaScores shape', () => {
@@ -95,14 +105,13 @@ describe('buildRevisionContext — evaluator criteria reach the prompt (B4)', ()
       confidence: 0.9
     };
     const section = build({ validationResults: legacy });
-    expect(section).toContain('rosterCoverage: 0.50');
-    expect(section).toContain('coherence: 0.95');
     expect(section).toContain('legacy issue string');
+    expect(section).not.toMatch(/rosterCoverage|coherence|0\.50|0\.95/);
     expect(section).not.toContain('[object Object]');
-    // Phase 3 (3.10): the legacy feedback is the EVALUATOR FEEDBACK block, which only a
-    // send back carries.
+    // Brief K (R27): the legacy feedback is a judge's guidance, which no rework reads.
     expect(section).not.toContain('legacy feedback');
-    expect(build({ validationResults: legacy, humanFeedback: 'Rethink it.' })).toContain('legacy feedback');
+    expect(build({ validationResults: legacy, humanFeedback: 'Rethink it.' })).not.toContain('legacy feedback');
+    expect(build({ validationResults: legacy, humanFeedback: 'Rethink it.' })).toContain('  - legacy issue string');
   });
 
   it('formats an object in the must-fix list by its message', () => {
@@ -140,35 +149,34 @@ describe('buildRevisionContext — phase-stamped feedback (shared-channel bug)',
       previousOutput: []
     });
     expect(contextSection).not.toContain('(no evaluator feedback for this phase)');
-    expect(contextSection).toContain('rosterCoverage');
+    expect(contextSection).toContain('Missing roster members: Quinn');
   });
 
   it('keeps an UNSTAMPED block (legacy writers) for whichever phase is revising', () => {
-    const unstamped = { criteriaScores: { arcCoverage: 0.4 }, feedback: 'thread the arcs' };
+    const unstamped = { criteriaScores: { arcCoverage: 0.4 }, structuralIssues: ['Thread the arcs.'], feedback: 'thread the arcs' };
     const { contextSection } = buildRevisionContext({
       phase: 'outline',
       revisionCount: 1,
       validationResults: unstamped,
       previousOutput: {}
     });
-    expect(contextSection).toContain('arcCoverage: 0.40');
-    // Phase 3 (3.10): its feedback is EVALUATOR FEEDBACK, which only a send back carries.
+    expect(contextSection).toContain('ISSUES TO ADDRESS:\n  - Thread the arcs.');
+    // Brief K (R27): a send back reads the same must-fix line, and no guidance.
     const sentBack = buildRevisionContext({
       phase: 'outline', revisionCount: 0, validationResults: unstamped, previousOutput: {}, humanFeedback: 'x'
     }).contextSection;
-    expect(sentBack).toContain('arcCoverage: 0.40');
-    expect(sentBack).toContain('thread the arcs');
+    expect(sentBack).toContain('ISSUES TO ADDRESS:\n  - Thread the arcs.');
+    expect(sentBack).not.toContain('thread the arcs');
   });
 
-  it('says so plainly when there is no evaluator feedback at all', () => {
-    const { contextSection } = buildRevisionContext({
-      phase: 'article',
-      revisionCount: 1,
-      validationResults: null,
-      previousOutput: {},
-      humanFeedback: 'tighten the closing'
-    });
-    expect(contextSection).toContain('(no evaluator feedback for this phase)');
+  // Brief K (R27): an automatic pass, whose scope names the must-fix list, says so plainly. A
+  // send back opens on the director's note, the one task, and prints no line about the evaluation.
+  it('says so plainly when there is no evaluator feedback at all on an automatic pass; a send back prints the note alone', () => {
+    const options = { phase: 'article', validationResults: null, previousOutput: {} };
+    expect(buildRevisionContext({ ...options, revisionCount: 1, humanFeedback: null }).contextSection)
+      .toContain('(no evaluator feedback for this phase)');
+    const { contextSection } = buildRevisionContext({ ...options, revisionCount: 0, humanFeedback: 'tighten the closing' });
+    expect(contextSection).not.toContain('(no evaluator feedback for this phase)');
     // Human feedback is a separate channel and must survive.
     expect(contextSection).toContain('tighten the closing');
   });
@@ -202,24 +210,28 @@ describe('buildRevisionContext — the evaluation state it reports (brief 1.3)',
     ...overrides
   }).contextSection;
 
-  it('reads `passed`, the field the evaluator writes, not the `ready` nobody writes', () => {
-    expect(build()).toContain('Ready: YES');
-    expect(build()).not.toContain('Ready: NO');
+  // Brief K (R27): no readiness line prints. A stale "Ready: NO" was the bug brief 1.3 fixed; the
+  // prompt read found the true one noise beside the findings, which say what to change.
+  it('prints no readiness line after a pass, and nothing to fix', () => {
+    expect(build()).not.toMatch(/Ready|must address/);
+    expect(build()).toMatch(/ISSUES TO ADDRESS:\n {2}\(none reported\)/);
   });
 
-  it('still says NO when the evaluation failed', () => {
+  it('prints no readiness line after a failure, only its must-fix line', () => {
     const section = build({
       validationResults: { ...PASSED, passed: false, structuralIssues: ['card "T-1" misquotes its source'] }
     });
-    expect(section).toContain('Ready: NO (must address issues)');
+    expect(section).not.toMatch(/Ready|must address/);
+    expect(section).toContain('ISSUES TO ADDRESS:\n  - card "T-1" misquotes its source');
   });
 
-  it('names the send-back as the reason for a rework the evaluation passed', () => {
+  // Brief 1.3 said why a send-back followed a pass. Brief K: the note comes first and is the task
+  // (WHAT THIS REWORK DOES says so), so no line about the pass stands between it and the edits.
+  it('opens a send-back after a pass on the director\'s note, with no line about the pass', () => {
     const section = build({ humanFeedback: 'Rethink the closing.' });
-    expect(section).toContain('Ready: YES');
-    // The line wraps, so compare reflowed (as the <HAND_EDITS> cases below do).
-    expect(section.replace(/\s+/g, ' '))
-      .toContain('This evaluation passed. The director sent the work back anyway; their note below is the reason for this rework.');
+    expect(section).not.toMatch(/Ready|This evaluation passed|reason for this rework/);
+    expect(section.indexOf('HUMAN FEEDBACK (HIGHEST PRIORITY):\nRethink the closing.')).toBeGreaterThan(-1);
+    expect(section).not.toContain('ISSUES TO ADDRESS');
   });
 
   it('says nothing about a send-back on an automated rework', () => {
@@ -235,15 +247,15 @@ describe('buildRevisionContext — the evaluation state it reports (brief 1.3)',
     expect(section).toContain('SHOULD CONSIDER:\nThese came from the evaluation that ran before this pass.\n\n  - the lede');
   });
 
-  it('still reports the pass when the evaluation had nothing else to say', () => {
-    // A clean evaluation writes empty lists and no guidance. That is an answer, not
-    // an absence — and it is exactly the state a send-back after a pass lands in.
+  it('prints nothing about a clean evaluation on a send-back: no readiness, no absence line, no empty list', () => {
+    // A clean evaluation writes empty lists and no guidance, the state a send-back after a pass
+    // lands in. Brief K: the rework reads the note, the edits and the scope.
     const section = build({
       validationResults: { phase: 'article', passed: true, structuralIssues: [], advisoryWarnings: [] },
       humanFeedback: 'Rethink the closing.'
     });
-    expect(section).toContain('Ready: YES');
-    expect(section).not.toContain('(no evaluator feedback for this phase)');
+    expect(section).not.toMatch(/Ready|no evaluator feedback for this phase|ISSUES TO ADDRESS|none reported/);
+    expect(section).toContain('What the note leaves alone stays as it was.');
   });
 
   it('omits the should-consider list entirely when the evaluation raised none', () => {
@@ -433,6 +445,9 @@ describe('<HAND_EDITS> block (spec 2026-09-19 §4.3; F1)', () => {
       return a;
     };
     const issue = `T12: "${LINE}" is not in the record. Cut the line.`;
+    // Brief K: the rework reads the limit's name where the stored finding holds its code.
+    const { LIMIT_CODES } = require('../workflow/nodes/evaluator-nodes');
+    const shown = issue.replace('T12', LIMIT_CODES[11].name);
     for (const humanFeedback of [null, 'Move the photos apart.']) {
       const { contextSection } = buildRevisionContext({
         phase: 'article', revisionCount: 1, previousOutput: article(1), humanFeedback,
@@ -442,7 +457,7 @@ describe('<HAND_EDITS> block (spec 2026-09-19 §4.3; F1)', () => {
       const block = contextSection.slice(contextSection.indexOf('<HAND_EDITS>'), contextSection.indexOf('</HAND_EDITS>'));
       expect(block).toContain('E1 (section "closing", paragraph, moved from section "the-story"): begins "Riley watched the ledger all morning and said…"');
       expect(block).toContain('A line marked moved names a block the director moved to that place without changing it: the place is the director\'s, and the block\'s text is still the writer\'s.');
-      expect(contextSection.slice(0, contextSection.indexOf('<HAND_EDITS>'))).toContain(issue);
+      expect(contextSection.slice(0, contextSection.indexOf('<HAND_EDITS>'))).toContain(shown);
     }
   });
 
@@ -511,24 +526,27 @@ describe('buildRevisionContext: the director governs the rework, advisories are 
     const { contextSection } = build({ humanFeedback: null });
     const instructions = contextSection.slice(contextSection.indexOf('WHAT THIS REWORK DOES'));
     expect(contextSection).toContain('WHAT THIS REWORK DOES');
-    // Phase 3 (3.10; R23): the must-fix items, then the suggestions by name.
-    expect(instructions).toMatch(/fixes the must-fix items: the ISSUES TO ADDRESS/);
-    expect(instructions).toMatch(/a SHOULD CONSIDER item or a suggestion in CRITERIA SCORES/);
+    // Phase 3 (3.10; R23): the must-fix items, then the suggestions by name. Brief K: the
+    // suggestions are SHOULD CONSIDER's alone, since CRITERIA SCORES no longer prints.
+    expect(instructions).toMatch(/fixes the must-fix items: the ISSUES TO ADDRESS\./);
+    expect(instructions).toMatch(/Take up a SHOULD CONSIDER item only where/);
   });
 
-  it('gives an advisory criterion that scored low as a suggestion, never as a fix or as needing improvement', () => {
+  // Brief K (R27): an advisory criterion fails nothing, so its fix is neither a must-fix line nor
+  // a suggestion; the judge's suggestions are its advisoryWarnings, under SHOULD CONSIDER.
+  it('gives an advisory criterion that scored low no line at all, neither as a fix nor as a suggestion', () => {
     const { contextSection } = build();
     expect(contextSection).not.toMatch(/need(s)? improvement/i);
-    expect(contextSection).toMatch(/- lede: 0\.50 \[advisory\]\n {6}notes: flat opening\n {6}suggestion: open on a moment/);
-    expect(contextSection).not.toContain('fix: open on a moment');
-    // A structural criterion keeps its fix.
-    expect(contextSection).toMatch(/- sectionFlow: 0\.40 \[structural\]\n {6}notes: the money section is missing\n {6}fix: add it/);
+    expect(contextSection).not.toMatch(/flat opening|open on a moment|lede: |\[advisory\]/);
+    // The structural criterion's finding is the must-fix line the evaluation lists.
+    expect(contextSection).toContain('ISSUES TO ADDRESS:\n  - The money section is missing.');
+    expect(contextSection).not.toMatch(/sectionFlow|add it/);
   });
 
-  it('tells the reworker the scores are uncalibrated', () => {
+  // Brief K (R27): the scores and the line on who computed them went whole.
+  it('prints no score and no line about the scores', () => {
     const { contextSection } = build();
-    expect(contextSection).toMatch(/uncalibrated/i);
-    expect(contextSection.indexOf('uncalibrated')).toBeLessThan(contextSection.indexOf('CRITERIA SCORES:'));
+    expect(contextSection).not.toMatch(/uncalibrated|evaluating model|CRITERIA SCORES|0\.40|0\.50|0\.95/);
   });
 
   // Post-merge fix (3.3 review, finding 1): only a model evaluation's scores are the
@@ -554,19 +572,25 @@ describe('buildRevisionContext: the director governs the rework, advisories are 
     }
   });
 
-  it('says nothing about scores when the findings carry none (the fact check before the model)', () => {
+  // Brief K (R27): the fact check's short-circuit writes its lines twice, as its must-fix list
+  // and as its feedback; the rework reads each once, on either kind of pass.
+  it('prints each of the fact check\'s lines once, and nothing about scores (the fact check before the model)', () => {
+    const LINE = 'Evidence card "ale003" quotes text its document does not hold.';
     const FACT_CHECK = {
       phase: 'article',
       passed: false,
-      structuralIssues: ['Evidence card "ale003" quotes text its document does not hold.'],
+      structuralIssues: [LINE],
       advisoryWarnings: [],
-      feedback: 'Evidence card "ale003" quotes text its document does not hold.'
+      feedback: LINE
     };
-    const { contextSection } = buildRevisionContext({
-      phase: 'article', revisionCount: 1, validationResults: FACT_CHECK, previousOutput: {}
-    });
-    expect(contextSection).not.toMatch(/uncalibrated|evaluating model|scores below/i);
-    expect(contextSection).toMatch(/Ready: NO \(must address issues\)\n\nCRITERIA SCORES:\n {2}\(no criteria scores available\)/);
+    for (const humanFeedback of [null, 'Tighten the closing.']) {
+      const { contextSection } = buildRevisionContext({
+        phase: 'article', revisionCount: humanFeedback ? 0 : 1, validationResults: FACT_CHECK, previousOutput: {}, humanFeedback
+      });
+      expect(contextSection).not.toMatch(/uncalibrated|evaluating model|scores below|Ready|CRITERIA SCORES|no criteria scores/i);
+      expect(contextSection.split(LINE).length - 1).toBe(1);
+      expect(contextSection).toContain(`ISSUES TO ADDRESS:\n  - ${LINE}`);
+    }
   });
 
   // Post-merge fix (3.3 review, finding 2): each rule once. The scores' line said "Only
@@ -578,7 +602,7 @@ describe('buildRevisionContext: the director governs the rework, advisories are 
     const instructions = contextSection.slice(contextSection.indexOf('WHAT THIS REWORK DOES'));
     expect(contextSection.slice(0, contextSection.indexOf('WHAT THIS REWORK DOES'))).not.toMatch(/must-fix|suggestions? (is|are)\b/);
     expect(instructions.match(/fixes the must-fix items/g)).toHaveLength(1);
-    expect(instructions.match(/Take up a SHOULD CONSIDER item or a suggestion in CRITERIA SCORES/g)).toHaveLength(1);
+    expect(instructions.match(/Take up a SHOULD CONSIDER item only where/g)).toHaveLength(1);
   });
 
   it("keeps the fixture's anchors: the send-back NOTE line, the previous version's header and its end", () => {
@@ -637,13 +661,9 @@ describe('buildRevisionContext: an automatic rework fixes the must-fix items (ph
     phase: 'arcs', validationResults: EVALUATION, previousOutput: [{ id: 'arc-1' }], ...AUTOMATIC, ...overrides
   }).contextSection;
   const count = (haystack, needle) => haystack.split(needle).length - 1;
-  /** One criterion's lines in CRITERIA SCORES: its score line and any lines under it. */
-  const criterionLines = (section, name) => {
-    const scores = section.slice(section.indexOf('CRITERIA SCORES:'), section.indexOf('ISSUES TO ADDRESS:'));
-    const at = scores.indexOf(`  - ${name}: `);
-    const next = scores.indexOf('\n  - ', at + 1);
-    return scores.slice(at, next < 0 ? scores.length : next).trimEnd();
-  };
+  /** Brief K: the limits' names, which a rework reads in place of the codes a finding opens with. */
+  const { LIMIT_CODES } = require('../workflow/nodes/evaluator-nodes');
+  const nameOf = (code) => LIMIT_CODES.find((limit) => limit.code === code).name;
   const SCOPE = 'only where it touches a line this rework is already changing for a must-fix item';
   /** R23's reason (the 4b fix batch), as WHAT THIS REWORK DOES gives it on an automatic pass. */
   const SCOPE_REASON = 'Those lines passed the check or evaluation that ran before this pass, and in past reworks the new errors that reached the director were in lines rewritten with no finding behind them.';
@@ -654,22 +674,23 @@ describe('buildRevisionContext: an automatic rework fixes the must-fix items (ph
     const evaluator = fs.readFileSync(path.join(__dirname, '..', 'workflow', 'nodes', 'evaluator-nodes.js'), 'utf8');
     expect(evaluator).not.toMatch(/const STRUCTURAL_PASS_SCORE\s*=/);
     expect(evaluator).toMatch(/\bSTRUCTURAL_PASS_SCORE\b[^}]*\}\s*=\s*require\('\.\/node-helpers'\)/);
-    // The context reads the same bar: a criterion at the bar passes, one just under it fails.
+    // The context reads the same bar: with no must-fix line listed (brief K), a criterion at the
+    // bar passes, and one just under it fails and gives its fix as the must-fix line.
     const atBar = (score) => build({
       validationResults: { phase: 'arcs', passed: false, structuralIssues: [], criteriaScores: { verdictTruth: { score, type: 'structural', fix: 'BAR-FIX' } } }
     });
     expect(atBar(STRUCTURAL_PASS_SCORE)).not.toContain('BAR-FIX');
-    expect(atBar(STRUCTURAL_PASS_SCORE - 0.01)).toContain('      fix: BAR-FIX');
+    expect(atBar(STRUCTURAL_PASS_SCORE - 0.01)).toContain('ISSUES TO ADDRESS:\n  - BAR-FIX');
   });
 
-  it("a passing structural criterion's fix is absent from the automatic and the send-back context: it prints its score alone", () => {
+  // Brief K (R27): no criterion prints, passing or failing; a passing one's fix never reaches a
+  // rework, by either path.
+  it("a passing structural criterion prints nothing in the automatic and the send-back context: no fix, no notes, no score", () => {
     for (const kind of [AUTOMATIC, SEND_BACK]) {
       const section = build(kind);
       expect(section).not.toContain('PASSING-FIX');
       expect(section).not.toContain('PASSING-NOTES');
-      expect(criterionLines(section, 'verdictTruth')).toBe('  - verdictTruth: 0.88 [structural]');
-      expect(criterionLines(section, 'playersTruth')).toBe('  - playersTruth: 0.92 [structural]');
-      expect(criterionLines(section, 'rosterCoverage')).toBe('  - rosterCoverage: 1.00 [structural]');
+      expect(section).not.toMatch(/verdictTruth|playersTruth|rosterCoverage|0\.88|0\.92|1\.00/);
     }
   });
 
@@ -679,26 +700,31 @@ describe('buildRevisionContext: an automatic rework fixes the must-fix items (ph
   // coherence) read as failing whenever an issue used the word. A judge that scores a
   // criterion as passing but lists its breach has the breach in ISSUES TO ADDRESS, with
   // its own fix, so nothing is lost.
-  it("a failing criterion's fix is present as must-fix: scored below the bar; a criterion an issue names but scored at or above the bar prints its score alone", () => {
+  // Brief K (R27): an evaluation that lists its own must-fix lines prints them, each once, and a
+  // failing criterion's fix, which states the same finding again, does not print. A criterion an
+  // issue names but scored at or above the bar adds nothing either: the issue is in ISSUES TO
+  // ADDRESS, with its own fix.
+  it("a failing criterion's fix is the must-fix line's second copy and does not print; an issue that names a passing criterion prints as listed", () => {
     for (const kind of [AUTOMATIC, SEND_BACK]) {
       const section = build(kind);
-      expect(criterionLines(section, 'wordsTruth')).toBe('  - wordsTruth: 0.50 [structural]\n      notes: A misquote.\n      fix: FAILING-FIX give the text to its speaker.');
-      // Scored above the bar: it passed, whatever the issues say. The issue that names
-      // it is in ISSUES TO ADDRESS.
-      expect(criterionLines(section, 'accusationArcPresent')).toBe('  - accusationArcPresent: 0.90 [structural]');
+      expect(section).toContain(`  - ${nameOf('T12')}: the text is given to the wrong speaker.`);
+      expect(section).not.toContain('FAILING-FIX');
       expect(section).not.toContain('NAMED-FIX');
       expect(section).toContain('  - accusationArcPresent: the verdict arc is labelled "observation".');
+      expect(section).not.toMatch(/wordsTruth|0\.50|0\.90|\[structural\]/);
     }
-    // The automatic pass names its fix lines among the must-fix items.
+    // The automatic pass names the one must-fix list.
     const instructions = build().slice(build().indexOf('WHAT THIS REWORK DOES'));
-    expect(instructions).toMatch(/fixes the must-fix items: the ISSUES TO ADDRESS and the fixes in CRITERIA SCORES\./);
+    expect(instructions).toMatch(/fixes the must-fix items: the ISSUES TO ADDRESS\./);
+    expect(instructions).not.toContain('CRITERIA SCORES');
   });
 
   // The judge names a truth criterion's breach by its rule ids, and an issue can cite a
   // second rule a passing criterion holds: at the gate (092026, the fifth arc
   // evaluation) "T7, T1: ..." sat beside evidenceTruth 0.9, whose fix was the judge's
-  // own "Step 3 (optional)" about another line. A criterion is named by its key.
-  it('a rule id in an issue names no criterion: a passing criterion it shares a rule with prints its score alone', () => {
+  // own "Step 3 (optional)" about another line. Brief K: the issue reads both limits' names, and
+  // neither criterion's fix prints beside it.
+  it('a finding that opens with two codes reads both limits\' names; no criterion it shares a rule with adds a line', () => {
     const section = build({
       validationResults: {
         phase: 'arcs', passed: false,
@@ -709,15 +735,17 @@ describe('buildRevisionContext: an automatic rework fixes the must-fix items (ph
         }
       }
     });
-    expect(section).toContain('fix: FAILING-FIX keep to the epilogue.');
+    expect(section).toContain(`ISSUES TO ADDRESS:\n  - ${nameOf('T7')}, ${nameOf('T1')}: the bridge adds an offer the epilogue does not give.`);
+    expect(section).not.toContain('FAILING-FIX');
     expect(section).not.toContain('PASSING-FIX');
-    expect(criterionLines(section, 'evidenceTruth')).toBe('  - evidenceTruth: 0.90 [structural]');
+    expect(section).not.toMatch(/stagesTruth|evidenceTruth/);
   });
 
   // The 4b fix batch (3.10 review minor 1): at the outline, "convergence" is a common
   // word in findings (C16), and the passing convergence advisory's notes and suggestion
   // reached the rework whenever an issue used it.
-  it('a passing convergence criterion beside an issue that uses the word "convergence" prints its score alone', () => {
+  // Brief K: no criterion prints, so the issue is the one line.
+  it('a passing convergence criterion beside an issue that uses the word "convergence" prints nothing; the issue prints once', () => {
     for (const kind of [AUTOMATIC, SEND_BACK]) {
       const section = build({
         ...kind,
@@ -731,28 +759,32 @@ describe('buildRevisionContext: an automatic rework fixes the must-fix items (ph
           }
         }
       });
-      expect(criterionLines(section, 'convergence')).toBe('  - convergence: 0.95 [advisory]');
+      expect(section).not.toMatch(/convergence: |\[advisory\]|evidenceTruth/);
       expect(section).not.toMatch(/PASSING-(NOTES|FIX)/);
-      expect(section).toContain("      fix: FAILING-FIX write it as Nova's suspicion.");
+      expect(section).not.toContain('FAILING-FIX');
+      expect(count(section, 'the convergence paragraph states the buyer as fact.')).toBe(1);
+      expect(section).toContain(`  - ${nameOf('T1')}: the convergence paragraph states the buyer as fact.`);
     }
   });
 
-  it("an advisory criterion's line is a suggestion; a passing one prints its score alone", () => {
+  // Brief K (R27): an advisory criterion fails nothing, so no line of it prints, and the
+  // suggestions a rework may take up are SHOULD CONSIDER's alone, on an automatic pass.
+  it("an advisory criterion prints no line; the suggestions are SHOULD CONSIDER's, on an automatic pass only", () => {
     for (const kind of [AUTOMATIC, SEND_BACK]) {
       const section = build(kind);
-      expect(criterionLines(section, 'coherence')).toBe('  - coherence: 0.70 [advisory]\n      notes: Bridges disagree.\n      suggestion: ADVISORY-FIX align the bridges.');
-      expect(section).not.toContain('fix: ADVISORY-FIX');
-      expect(criterionLines(section, 'evidenceConfidenceBalance')).toBe('  - evidenceConfidenceBalance: 1.00 [advisory]');
+      expect(section).not.toMatch(/ADVISORY-FIX|Bridges disagree|coherence|evidenceConfidenceBalance|suggestion:/);
     }
     const instructions = build().slice(build().indexOf('WHAT THIS REWORK DOES'));
-    expect(instructions).toContain(`Take up a SHOULD CONSIDER item or a suggestion in CRITERIA SCORES ${SCOPE}.`);
+    expect(instructions).toContain(`Take up a SHOULD CONSIDER item ${SCOPE}.`);
+    expect(build(SEND_BACK)).not.toContain('SHOULD CONSIDER');
   });
 
-  it('EVALUATOR FEEDBACK is absent on an automatic pass, and the send back keeps it', () => {
-    const automatic = build();
-    expect(automatic).not.toContain('EVALUATOR FEEDBACK');
-    expect(automatic).not.toContain('JUDGE-GUIDANCE');
-    expect(build(SEND_BACK)).toContain(`EVALUATOR FEEDBACK:\n${EVALUATION.revisionGuidance}`);
+  it('EVALUATOR FEEDBACK is absent on an automatic pass and on a send back', () => {
+    for (const kind of [AUTOMATIC, SEND_BACK]) {
+      const section = build(kind);
+      expect(section).not.toContain('EVALUATOR FEEDBACK');
+      expect(section).not.toContain('JUDGE-GUIDANCE');
+    }
   });
 
   it('the scope sentence appears once, and no other line gives a suggestion a scope of its own', () => {
@@ -760,7 +792,7 @@ describe('buildRevisionContext: an automatic rework fixes the must-fix items (ph
     expect(count(section, SCOPE)).toBe(1);
     expect(count(section, 'Everything else in the previous arcs stays word for word.')).toBe(1);
     expect(section).not.toMatch(/truer to the record|serve the piece|was not questioned|not requirements/);
-    expect(section).toContain('SHOULD CONSIDER:\nThese came from the evaluation that ran before this pass.\n\n  - T2: relabel');
+    expect(section).toContain(`SHOULD CONSIDER:\nThese came from the evaluation that ran before this pass.\n\n  - ${nameOf('T2')}: relabel`);
     // Each part names only lists the context carries. The 4b fix batch: the scope's
     // reason follows it (R23 carries its reason).
     const plain = build({
@@ -961,9 +993,18 @@ describe('a rework never reads a finding located in the director\'s text (FA)', 
     },
     revisionGuidance: 'Step 1: write the closing as the room\'s suspicion. Step 2: cut the line about Sarah.'
   };
-  const evaluationOf = (contextSection) => contextSection.slice(contextSection.indexOf('EVALUATION SUMMARY'), contextSection.indexOf('HUMAN FEEDBACK'));
+  // Brief K (R27): on a send-back the findings follow the note and come before the director's
+  // edits, which quote the director's text; the evaluation is that span.
+  const evaluationOf = (contextSection) => {
+    const end = contextSection.indexOf('<HAND_EDITS>') >= 0 ? contextSection.indexOf('<HAND_EDITS>') : contextSection.indexOf('WHAT THIS REWORK DOES');
+    return contextSection.slice(contextSection.indexOf('NOTE: The human reviewer'), end);
+  };
+  const { LIMIT_CODES } = require('../workflow/nodes/evaluator-nodes');
+  const nameOf = (code) => LIMIT_CODES.find((limit) => limit.code === code).name;
 
   // Brief 4.7c (R1): one context for every theme, so the detective's case went with its branch.
+  // Brief K (R27): what is left prints as the must-fix lines alone, each once and named by its
+  // limit; a send-back reads no suggestion, no criterion and no guidance.
   it('at a send-back, the stored verdict\'s findings that quote the newly standing edits are left out', () => {
     const standing = standingAfterSendBack(null, shown, sentBack, 'bundle');
     const { contextSection } = buildRevisionContext({
@@ -971,22 +1012,25 @@ describe('a rework never reads a finding located in the director\'s text (FA)', 
       humanFeedback: 'Move the photos.', handEdits: standing
     });
     const evaluation = evaluationOf(contextSection);
-    expect(evaluation).toContain(`T12: "${WRITERS}" puts the line in Sarah's mouth.`);
-    expect(evaluation).toContain('fix: Cut the line.');
-    expect(evaluation).toContain('C10: the lede runs long.');
+    expect(evaluation).toContain(`ISSUES TO ADDRESS:\n  - ${nameOf('T12')}: "${WRITERS}" puts the line in Sarah's mouth.`);
+    expect(evaluation).not.toContain('Cut the line.');
+    expect(evaluation).not.toContain('the lede runs long.');
     expect(evaluation).not.toContain(CLAIM);
     expect(evaluation).not.toContain('Rewrite the closing');
     expect(evaluation).not.toContain('Step 1');
-    expect(evaluation).toContain('evidenceTruth: 0.50 [structural]');
+    expect(evaluation).not.toContain('evidenceTruth');
   });
 
   // FA, requirement 5 at the send-back: a criterion under the rule ids of an issue left
   // out keeps its notes and fix from the rework, quoted or not. Finding 3's case: the
   // stop showed "T1: ... states Alex's motive as fact", the director rewrote the closing
-  // and kept the claim, and evidenceTruth's fix said to rewrite the closing.
-  it('a criterion under the rule ids of an issue left out keeps its notes and fix from the send-back rework', () => {
+  // and kept the claim, and evidenceTruth's fix said to rewrite the closing. Brief K: when every
+  // must-fix line was left out, the failed criteria's fixes are the must-fix lines, and the
+  // covered criterion's fix is still not among them.
+  it('a criterion under the rule ids of an issue left out keeps its fix from the send-back rework, also as a must-fix line', () => {
     const covered = {
       ...stored,
+      structuralIssues: [`T1: "${CLAIM}" states a motive as fact.`],
       criteriaScores: {
         evidenceTruth: { score: 0.5, type: 'structural', notes: 'The closing states a motive as fact.', fix: 'Rewrite the closing as the room\'s suspicion.' },
         wordsTruth: { score: 0.4, type: 'structural', notes: 'A line no document holds.', fix: 'Cut the line.' }
@@ -1000,16 +1044,17 @@ describe('a rework never reads a finding located in the director\'s text (FA)', 
     });
     const evaluation = evaluationOf(contextSection);
     expect(evaluation).not.toContain('Rewrite the closing');
-    expect(evaluation).toContain('evidenceTruth: 0.50 [structural]');
-    expect(evaluation).toContain('fix: Cut the line.');
+    expect(evaluation).not.toContain(CLAIM);
+    expect(evaluation).toContain('ISSUES TO ADDRESS:\n  - Cut the line.');
   });
 
-  it('with no standing edits the stored verdict reaches the rework as it is', () => {
+  it('with no standing edits the stored verdict reaches the rework as its must-fix lines', () => {
     const { contextSection } = buildRevisionContext({
       phase: 'article', revisionCount: 0, validationResults: stored, previousOutput: shown, humanFeedback: 'Move the photos.', handEdits: null
     });
-    expect(evaluationOf(contextSection)).toContain(`T1: "${CLAIM}" states a motive as fact.`);
-    expect(evaluationOf(contextSection)).toContain('Step 1');
+    expect(evaluationOf(contextSection)).toContain(`  - ${nameOf('T1')}: "${CLAIM}" states a motive as fact.`);
+    expect(evaluationOf(contextSection)).toContain(`  - ${nameOf('T12')}: "${WRITERS}" puts the line in Sarah's mouth.`);
+    expect(evaluationOf(contextSection)).not.toContain('Step 1');
   });
 });
 
@@ -1365,13 +1410,14 @@ describe("4.6b: the map's rework context names no evaluator", () => {
     expect(instructionText(text)).toContain(`HUMAN FEEDBACK (HIGHEST PRIORITY):\n\n${END}`);
   });
 
-  it("a send-back after a map check that still fails prints the check's lines under its own label, and no evaluator line", () => {
+  // Brief K (R27): the director's note comes first, then the check's lines, then the edits.
+  it("a send-back after a map check that still fails prints the check's lines under its own label, after the note, and no evaluator line", () => {
     const { failing, validationResults } = failingChecks();
     expect(validationResults).toMatchObject({ phase: 'outline', source: 'map-checks', passed: false });
     const text = context({ previousOutput: failing, handEdits: standingOnMap(null, MAP, failing), humanFeedback: NOTE, validationResults });
     expect(text).not.toMatch(/evaluator/i);
     const lines = validationResults.structuralIssues.map((line) => `  - ${line}`).join('\n');
-    expect(text).toContain(`MAP CHECK FAILURES:\n${lines}\n\nHUMAN FEEDBACK (HIGHEST PRIORITY):\n${NOTE}\n\n${END}\n\n<HAND_EDITS>`);
+    expect(text).toContain(`HUMAN FEEDBACK (HIGHEST PRIORITY):\n${NOTE}\n\n${END}\n\nMAP CHECK FAILURES:\n${lines}\n\n<HAND_EDITS>`);
   });
 
   it('the automatic pass after a failed check prints no evaluator line either', () => {
@@ -1587,5 +1633,159 @@ describe('4.14b fix round 1: a send-back that empties a section, then an automat
     expect(approved.error).toBeNull();
     expect(approved.stateUpdates.outline.sections.map((s) => s.slot)).toEqual(['lede', 'theStory', 'closing']);
     expect(approved.stateUpdates._outlineHandEdits.edits.map((e) => e.id)).toEqual(['E1', 'E2', 'E3']);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 18, run 2b, brief K (R27): a rework is shown findings, not scores
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The prompt read found the article's send-back stating one finding three times (a criterion's
+// fix, the must-fix line, the judge's guidance) in about 400 words, ahead of the director's
+// one-line note, beside nine scores, camel-case criterion names and a "Ready: NO" line. A rework
+// now reads each finding once: the must-fix lines under ISSUES TO ADDRESS, and on an automatic
+// pass the suggestions under SHOULD CONSIDER. A judge's finding reads the limit's name where the
+// stored finding holds its code. A director's send-back opens on the note, then the findings, the
+// edits and the scope, and leaves the suggestions out. A code check's lines print as before.
+describe('brief K: a rework is shown findings, not scores (R27)', () => {
+  const { LIMIT_CODES } = require('../workflow/nodes/evaluator-nodes');
+  const nameOf = (code) => LIMIT_CODES.find((limit) => limit.code === code).name;
+  const count = (haystack, needle) => haystack.split(needle).length - 1;
+  const MISQUOTE = 'In whatsMissing, "the office called it preposterous and said Mx. Iyer is recovering" gives Nova\'s own line to the office.';
+  const FIX = 'Remove the quotation marks around the recovery line and give it in Nova\'s own voice.';
+  /** A stored verdict in the shape the prompt read met: one finding stated three times. */
+  const FAILED = {
+    phase: 'article',
+    passed: false,
+    confidence: 'high',
+    criteriaScores: {
+      evidenceTruth: { score: 0.92, type: 'structural', notes: 'PASSING-NOTES fine.', fix: 'PASSING-FIX nothing.' },
+      wordsTruth: { score: 0.7, type: 'structural', notes: 'A line given to the wrong speaker.', fix: FIX }
+    },
+    criteriaRules: { evidenceTruth: ['T1', 'T3', 'T4', 'T6'], wordsTruth: ['T12'] },
+    structuralIssues: [`T12: ${MISQUOTE}`],
+    advisoryWarnings: ['Over length: the narrator\'s prose runs 1,859 words.'],
+    revisionGuidance: `Step 1: ${FIX}`
+  };
+  const SCORE_WORDS = ['EVALUATION SUMMARY', 'Confidence', 'Ready:', 'CRITERIA SCORES', 'uncalibrated', 'EVALUATOR FEEDBACK',
+    'This evaluation passed', 'evidenceTruth', 'wordsTruth', '[structural]', '0.92', '0.70', 'no criteria scores'];
+  const noScores = (text) => SCORE_WORDS.filter((word) => text.includes(word));
+  const context = (options) => buildRevisionContext({ phase: 'article', previousOutput: { headline: { main: 'h' } }, ...options }).contextSection;
+  const afterBanner = (text) => text.slice(text.indexOf('═\n\n', text.indexOf('REVISION CONTEXT:')) + 3);
+
+  it('an automatic pass after a failed evaluation reads its must-fix lines and its suggestions, each once, and no score', () => {
+    const text = context({ revisionCount: 1, validationResults: FAILED, humanFeedback: null });
+    expect(noScores(text)).toEqual([]);
+    expect(afterBanner(text)).toMatch(new RegExp(`^ISSUES TO ADDRESS:\\n  - ${nameOf('T12')}: In whatsMissing`));
+    expect(count(text, MISQUOTE)).toBe(1);
+    expect(text).not.toContain(FIX);
+    expect(text).not.toContain('PASSING-');
+    expect(text).toContain(`ISSUES TO ADDRESS:\n  - ${nameOf('T12')}: ${MISQUOTE}\n\nSHOULD CONSIDER:\nThese came from the evaluation that ran before this pass.\n\n  - Over length: the narrator's prose runs 1,859 words.\n\n═`);
+    const scope = text.slice(text.indexOf('WHAT THIS REWORK DOES:'));
+    expect(scope).toContain('This rework fixes the must-fix items: the ISSUES TO ADDRESS. Take up a SHOULD CONSIDER item only where it touches a line this rework is already changing for a must-fix item.');
+  });
+
+  it('a finding reads the limit\'s name in place of each code it opens with; the stored finding keeps its codes', () => {
+    const stored = { phase: 'article', passed: false, structuralIssues: ['T4, T6: the account is named as the exposer\'s.', 'T8: Nova votes.', 'The card misquotes T3 in its text.'] };
+    const before = JSON.stringify(stored);
+    const text = context({ revisionCount: 1, validationResults: stored, humanFeedback: null });
+    expect(text).toContain(`  - ${nameOf('T4')}, ${nameOf('T6')}: the account is named as the exposer's.`);
+    expect(text).toContain(`  - ${nameOf('T8')}: Nova votes.`);
+    expect(text).toContain('  - The card misquotes T3 in its text.');
+    expect(text).not.toMatch(/^ {2}- T\d/m);
+    expect(JSON.stringify(stored)).toBe(before);
+  });
+
+  it('an evaluation that failed a criterion and lists no must-fix line has the failed criteria\'s fixes as its must-fix lines', () => {
+    const stored = {
+      phase: 'article', passed: false,
+      criteriaScores: {
+        antiPatterns: { score: 0.5, type: 'structural', notes: 'NOTES the lede leans on a stock line.', fix: 'Cut the stock line from the lede.' },
+        voice: { score: 0.5, type: 'advisory', notes: 'flat', fix: 'ADVISORY-FIX open on a moment.' },
+        playersTruth: { score: 0.95, type: 'structural', notes: 'fine', fix: 'PASSING-FIX none.' }
+      },
+      structuralIssues: [], advisoryWarnings: []
+    };
+    for (const humanFeedback of [null, 'Tighten the closing.']) {
+      const text = context({ revisionCount: humanFeedback ? 0 : 1, validationResults: stored, humanFeedback });
+      expect(text).toContain('ISSUES TO ADDRESS:\n  - Cut the stock line from the lede.\n\n');
+      expect(noScores(text)).toEqual([]);
+      expect(text).not.toMatch(/antiPatterns|voice|playersTruth|0\.50|NOTES|ADVISORY-FIX|PASSING-FIX/);
+    }
+    expect(context({ revisionCount: 0, validationResults: stored, humanFeedback: 'Tighten the closing.' }))
+      .toContain('What the note leaves alone stays as it was, unless an issue to address needs it changed.');
+  });
+
+  it("an automatic pass after a code check prints the check's lines as before", () => {
+    const checks = { phase: 'arcs', source: 'weave-checks', passed: false, ready: false, structuralPassed: false, structuralIssues: ['Thread "t2" gives the receipt "zzz".'] };
+    const text = buildRevisionContext({ phase: 'arcs', outputName: 'weave', revisionCount: 1, validationResults: checks, previousOutput: {}, humanFeedback: null, meetingRound: null }).contextSection;
+    expect(afterBanner(text)).toMatch(/^WEAVE CHECK FAILURES:\n {2}- Thread "t2" gives the receipt "zzz"\.\n\n═/);
+    expect(text).toContain('This rework fixes the must-fix items: the WEAVE CHECK FAILURES. Everything else in the previous weave stays word for word.');
+  });
+
+  it("a send-back after a passed evaluation opens on the director's note and prints no finding", () => {
+    const passed = { phase: 'article', passed: true, confidence: 'high', structuralIssues: [], advisoryWarnings: ['A suggestion from the judge.'],
+      criteriaScores: { wordsTruth: { score: 0.95, type: 'structural', notes: 'fine', fix: '' } }, revisionGuidance: 'GUIDANCE none.' };
+    const text = context({ revisionCount: 0, round: 2, validationResults: passed, humanFeedback: 'Tighten the closing.' });
+    expect(afterBanner(text)).toMatch(/^HUMAN FEEDBACK \(HIGHEST PRIORITY\):\nTighten the closing\.\n/);
+    expect(noScores(text)).toEqual([]);
+    expect(text).not.toMatch(/ISSUES TO ADDRESS|SHOULD CONSIDER|A suggestion from the judge|GUIDANCE|none reported|no evaluator feedback/);
+    expect(text).toContain('What the note leaves alone stays as it was.');
+    expect(text).not.toContain('unless an issue to address needs it changed');
+  });
+
+  it("a send-back with open findings opens on the note, then the findings, the director's edits and the scope, with no suggestion", () => {
+    const { standingAfterSendBack } = require('../hand-edit-diff');
+    const shown = { headline: { main: 'The Room Voted' }, sections: [] };
+    const left = { headline: { main: 'The Room Voted Twice' }, sections: [] };
+    const text = context({
+      revisionCount: 0, round: 2, validationResults: FAILED, previousOutput: left, humanFeedback: 'Tighten the closing.',
+      handEdits: standingAfterSendBack(null, shown, left, 'bundle')
+    });
+    const at = (needle) => text.indexOf(needle);
+    expect(afterBanner(text)).toMatch(/^HUMAN FEEDBACK \(HIGHEST PRIORITY\):\nTighten the closing\.\n\nNOTE: The human reviewer has explicitly requested these changes\.\nAddress human feedback FIRST, then address any remaining evaluator issues\.\n\nISSUES TO ADDRESS:\n/);
+    expect(at('ISSUES TO ADDRESS:')).toBeLessThan(at('<HAND_EDITS>'));
+    expect(at('</HAND_EDITS>')).toBeLessThan(at('WHAT THIS REWORK DOES:'));
+    expect(text).toContain(`ISSUES TO ADDRESS:\n  - ${nameOf('T12')}: ${MISQUOTE}\n\n<HAND_EDITS>`);
+    expect(count(text, MISQUOTE)).toBe(1);
+    expect(text).not.toContain(FIX);
+    expect(text).not.toMatch(/SHOULD CONSIDER|Over length/);
+    expect(noScores(text)).toEqual([]);
+    expect(text).toContain('What the note leaves alone stays as it was, unless an issue to address needs it changed.');
+  });
+
+  it('a stored evaluation of the old shape reaches the rework as its findings alone', () => {
+    const legacy = {
+      phase: 'arcs',
+      criteriaScores: { rosterCoverage: 0.5, coherence: 0.95, accusationArcPresent: { score: 0.4, type: 'structural', notes: 'n', fix: 'Label the verdict arc.' } },
+      structuralIssues: ['legacy issue string', { type: 'no-accusation-arc', message: 'No accusation arc present', severity: 'structural' }],
+      advisoryWarnings: ['T2: relabel the two candidates.'],
+      feedback: 'legacy feedback',
+      confidence: 0.9
+    };
+    for (const humanFeedback of [null, 'Rethink it.']) {
+      const text = buildRevisionContext({ phase: 'arcs', revisionCount: 1, validationResults: legacy, previousOutput: [], humanFeedback }).contextSection;
+      expect(text).toContain('ISSUES TO ADDRESS:\n  - legacy issue string\n  - No accusation arc present (structural)');
+      expect(text).not.toMatch(/legacy feedback|rosterCoverage|coherence|accusationArcPresent|Label the verdict arc|0\.50|90%|\[object Object\]/);
+      expect(noScores(text)).toEqual([]);
+      if (humanFeedback) expect(text).not.toContain('relabel the two candidates');
+      else expect(text).toContain(`  - ${nameOf('T2')}: relabel the two candidates.`);
+    }
+  });
+
+  it("the story meeting's two rounds and the map's send-back print no evaluation, as before", () => {
+    const { WEAVE, MAP } = require('./fixtures/rework-state');
+    const clone = (v) => JSON.parse(JSON.stringify(v));
+    for (const meetingRound of ['reweave', 'send-back']) {
+      const text = buildRevisionContext({
+        phase: 'arcs', outputName: 'weave', revisionCount: 0, round: 2, validationResults: null, previousOutput: clone(WEAVE),
+        handEdits: null, humanFeedback: meetingRound === 'send-back' ? 'Rethink it.' : null, meetingRound
+      }).contextSection;
+      expect(afterBanner(text)).toMatch(meetingRound === 'send-back' ? /^HUMAN FEEDBACK \(HIGHEST PRIORITY\):\nRethink it\.\n\nNOTE: The human reviewer has explicitly requested these changes\.\n\n═/ : /^═/);
+    }
+    const map = buildRevisionContext({
+      phase: 'outline', outputName: 'map', revisionCount: 0, round: 2, validationResults: null, previousOutput: clone(MAP), humanFeedback: 'Lead with the envelope.'
+    }).contextSection;
+    expect(afterBanner(map)).toMatch(/^HUMAN FEEDBACK \(HIGHEST PRIORITY\):\nLead with the envelope\.\n\nNOTE: The human reviewer has explicitly requested these changes\.\n\n═/);
   });
 });

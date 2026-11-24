@@ -25,7 +25,7 @@ const { RULE_SET_CALLS } = ruleSet;
 const loadRuleSet = (call) => ruleSet.loadRuleSet(call, { theme: 'journalist' });
 const loadModeBlock = (mode) => ruleSet.loadModeBlock(mode, { theme: 'journalist' });
 const { standingOnMap, standingAfterSendBack, DIRECTOR_EDIT_PREFIX } = require('../hand-edit-diff');
-const { buildRevisionContext } = require('../workflow/nodes/node-helpers');
+const { buildRevisionContext, withLimitNames } = require('../workflow/nodes/node-helpers');
 const { settledWeaveOf, renderDirectorAnswers } = require('../prompt-renderers/settled-weave');
 const { REVISION_CAPS } = require('../workflow/state');
 const { reworkFixtureState, PREVIOUS_BUNDLE, MAP } = require('./fixtures/rework-state');
@@ -293,7 +293,8 @@ describe("4.7c: the judge's verdict carries only its contract", () => {
     const { contextSection } = buildRevisionContext({
       phase: 'article', revisionCount: 1, validationResults: result.validationResults, previousOutput: clone(PREVIOUS_BUNDLE)
     });
-    expect(contextSection).toContain(`ISSUES TO ADDRESS:\n  - ${breach}`);
+    // Phase 18, run 2b (brief K): the rework reads the limit's name where the finding holds its code.
+    expect(contextSection).toContain(`ISSUES TO ADDRESS:\n  - ${withLimitNames(breach)}`);
     expect(contextSection).not.toContain(OUTSIDE);
   });
 

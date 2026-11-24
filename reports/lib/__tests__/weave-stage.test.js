@@ -15,7 +15,7 @@ const { buildEvaluationSystemPrompt, buildEvaluationUserPrompt, getPhaseCriteria
 const { DIRECTOR_EDIT_PREFIX } = require('../hand-edit-diff');
 const { _testing: graphTesting } = require('../workflow/graph');
 const { routeArcValidation, routeArcEvaluation, incrementArcRevision } = graphTesting;
-const { buildRevisionContext, STRUCTURAL_PASS_SCORE } = require('../workflow/nodes/node-helpers');
+const { buildRevisionContext, STRUCTURAL_PASS_SCORE, withLimitNames } = require('../workflow/nodes/node-helpers');
 const { WEAVE_SCHEMA, WEAVE_SYSTEM_PROMPT } = require('../sdk-client/subagents');
 const subagents = require('../sdk-client/subagents');
 const ruleSet = require('../rule-set');
@@ -691,12 +691,15 @@ describe('the fact check writes to the truth-only contract (fix round 1)', () =>
       wordsTruth: { ...verdict.criteriaScores.wordsTruth, type: 'structural' }
     });
 
-    // The fix reads the breaches and the fixes alone.
+    // The fix reads the breaches alone. Phase 18, run 2b (brief K): the breach the judge wrote no
+    // issue for is the must-fix line the judge's node writes under its codes, read with the
+    // limit's name, and no criterion's name or score prints.
     const sdk = recordingSdk(reworkFixtureState('journalist').weave);
     await reviseArcs({ ...state, weave: update.weave, validationResults: update.validationResults, arcRevisionCount: 1 }, { configurable: { sdkClient: sdk } });
     const { prompt } = sdk.calls[0];
-    expect(prompt).toContain('  - wordsTruth: 0.50 [structural]\n      notes: Thread t1 quotes words the notes do not hold.\n      fix: Quote the notes word for word.');
-    expect(prompt).toContain('This rework fixes the must-fix items: the ISSUES TO ADDRESS and the fixes in CRITERIA SCORES. Everything else in the previous weave stays word for word.');
+    expect(prompt).toContain(`  - ${withLimitNames('T12: Thread t1 quotes words the notes do not hold. Quote the notes word for word.')}`);
+    expect(prompt).not.toMatch(/wordsTruth|0\.50 \[structural\]/);
+    expect(prompt).toContain('This rework fixes the must-fix items: the ISSUES TO ADDRESS. Everything else in the previous weave stays word for word.');
     expect(prompt).not.toContain('SHOULD CONSIDER');
     expect(prompt).not.toMatch(/^ {6}suggestion:/m);
     ['pacing', 'Tighten the story.', 'the working headline could be sharper'].forEach((note) => expect(prompt).not.toContain(note));
@@ -762,7 +765,9 @@ describe('the automatic passes run through reviseArcs with the weave\'s schema',
     const update = await reviseArcs(state, { configurable: { sdkClient: sdk } });
     expect(update.weave._factCheck).toEqual({ at: 't', ready: false, fixes: 1 });
     expect(sdk.calls[0].prompt).not.toContain('_factCheck');
-    expect(sdk.calls[0].prompt).toMatch(/ISSUES TO ADDRESS:\n {2}- T3:/);
+    // Phase 18, run 2b (brief K): the breach reads the limit's name in place of its code.
+    expect(sdk.calls[0].prompt).toContain(`ISSUES TO ADDRESS:\n  - ${withLimitNames(BREACH.structuralIssues[0])}`);
+    expect(sdk.calls[0].prompt).not.toMatch(/ISSUES TO ADDRESS:\n {2}- T3:/);
   });
 
   it("a director's send back clears the mark: the reworked weave is checked and judged again", async () => {

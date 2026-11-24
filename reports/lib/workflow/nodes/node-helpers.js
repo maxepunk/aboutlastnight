@@ -617,8 +617,8 @@ function buildValidEvidenceIds(evidenceBundle) {
  * The bar a structural criterion must reach, as every judge prompt states it: a
  * criterion scored below it failed. One constant for the judges (evaluator-nodes.js
  * imports it from here, since it already requires this file) and for the revision
- * context, which prints a criterion's notes and fix only when the criterion failed
- * (phase 3, 3.10).
+ * context, whose must-fix lines are a failed criterion's fix when the evaluation lists
+ * no must-fix line of its own (phase 18, run 2b, brief K).
  */
 const STRUCTURAL_PASS_SCORE = 0.8;
 
@@ -630,12 +630,6 @@ const STRUCTURAL_PASS_SCORE = 0.8;
  * the parked detective's branch (phase 4, brief 4.7c; R1).
  */
 const REWORK_SHOULD_CONSIDER_LINE = 'These came from the evaluation that ran before this pass.';
-
-/**
- * The revision context's line above CRITERIA SCORES: who computed the scores. A model
- * evaluation's scores are the judge's own and uncalibrated (phase 7 calibrates them).
- */
-const MODEL_SCORES_LINE = "The scores below are the evaluating model's own and uncalibrated: no one has yet checked them against the director's approvals and send-backs.";
 
 /**
  * The code checks that write validationResults, keyed by the `source` each stamps on
@@ -650,7 +644,8 @@ const MODEL_SCORES_LINE = "The scores below are the evaluating model's own and u
  * The weave checks (lib/weave.js checkWeave, the arc stage's check node) are the first;
  * they replace the arc check, whose roster coverage left the arc stage. The map checks
  * (lib/map.js mapFindings, the map's check node; brief 4.6) are the second. A code check
- * scores nothing, so every scores' line the context prints is a judge's.
+ * scores nothing. Phase 18, run 2b (brief K): a check's lines print as they always have, and
+ * only a judge's findings read a limit's name in place of its code.
  */
 const CODE_CHECKS = {
   [WEAVE_CHECKS_SOURCE]: {
@@ -667,6 +662,9 @@ function codeCheckOf(validationResults) {
   return typeof source === 'string' && Object.prototype.hasOwnProperty.call(CODE_CHECKS, source) ? CODE_CHECKS[source] : null;
 }
 
+/** The codes a judge's finding opens with, as one group: the one pattern leadingRuleIds and withLimitNames read. */
+const LEADING_RULE_IDS = /^\s*((?:T\d{1,2}(?:\s*(?:,|&|\/|and)\s*)?)+)/;
+
 /**
  * The rule ids a finding opens with ("T3: ...", "T4, T6: ..."), or none: the one reading,
  * which the verdict guard (evaluator-nodes.js) and the rework's filter below both use.
@@ -675,8 +673,33 @@ function codeCheckOf(validationResults) {
  * @returns {string[]}
  */
 function leadingRuleIds(finding) {
-  const lead = String(finding == null ? '' : finding).match(/^\s*((?:T\d{1,2}(?:\s*(?:,|&|\/|and)\s*)?)+)/);
+  const lead = String(finding == null ? '' : finding).match(LEADING_RULE_IDS);
   return lead ? lead[1].match(/T\d{1,2}/g) : [];
+}
+
+/**
+ * A judge's finding as a rework reads it (phase 18, run 2b, brief K; R27): each code it opens
+ * with replaced by the limit's name (evaluator-nodes.js LIMIT_CODES), the separators between
+ * them and the rest of the finding as stored. Nothing a writer or a rework reads names a rule
+ * by number; the stored finding, the console and the judges' parsing still read the code
+ * (leadingRuleIds). A code it does not hold stays as it is.
+ *
+ * LIMIT_CODES is read when a finding is named, not when this file loads: evaluator-nodes.js
+ * requires this file at its top, so a require here at load would read it half built.
+ *
+ * @param {string} finding
+ * @returns {string}
+ */
+function withLimitNames(finding) {
+  const text = String(finding);
+  const lead = text.match(LEADING_RULE_IDS);
+  if (!lead) return text;
+  const { LIMIT_CODES } = require('./evaluator-nodes');
+  const named = lead[0].replace(/T\d{1,2}/g, (code) => {
+    const limit = LIMIT_CODES.find((each) => each.code === code);
+    return limit ? limit.name : code;
+  });
+  return `${named}${text.slice(lead[0].length)}`;
 }
 
 /**
@@ -746,19 +769,24 @@ function withoutDirectorsFindings(validationResults, edits, output) {
  *
  * This solves the "whack-a-mole" revision problem by providing:
  * 1. The FULL previous output that was evaluated (not just a summary)
- * 2. Specific feedback on what needs to change
- * 3. Criteria scores to understand what's working vs needs work
+ * 2. What needs to change, each finding once
  *
  * The context (phase 3, brief 3.3; TH7) has no fixed "preserve" text: the director's note
- * sets how much a send back keeps, an advisory criterion is a suggestion, and a model
- * evaluation's scores are said to be uncalibrated (a code check's are named as the
- * check's). Phase 3 (3.10; R23): an automatic pass fixes the must-fix items and takes up a
- * suggestion only where it touches a line it is already changing for one; everything else
- * stays word for word, for the reason the context gives with it (the 4b fix batch). Only a
- * criterion that failed (scored below STRUCTURAL_PASS_SCORE) prints its notes and fix, on
- * either kind of rework. An automatic pass carries no EVALUATOR FEEDBACK, the judge's
- * guidance. A code check's lines print under the check's own label (CODE_CHECKS) in place
- * of ISSUES TO ADDRESS, on either kind (phase 4, brief 4.4).
+ * sets how much a send back keeps. Phase 3 (3.10; R23): an automatic pass fixes the must-fix
+ * items and takes up a suggestion only where it touches a line it is already changing for
+ * one; everything else stays word for word, for the reason the context gives with it (the 4b
+ * fix batch). A code check's lines print under the check's own label (CODE_CHECKS) in place
+ * of ISSUES TO ADDRESS (phase 4, brief 4.4).
+ *
+ * Phase 18, run 2b (brief K; R27): a rework is shown findings, not scores. The evaluation is
+ * its must-fix lines under their heading and, on an automatic pass, its suggestions under
+ * SHOULD CONSIDER, each finding once. No summary, confidence, readiness line, score,
+ * criterion's name or judge's guidance prints: the prompt read found one finding stated three
+ * times (a criterion's fix, the must-fix line, the guidance) ahead of the director's note. An
+ * evaluation that failed a criterion and lists no must-fix line has the failed criteria's
+ * fixes as its must-fix lines. A judge's finding reads the limit's name in place of its code
+ * (withLimitNames). On a director's round the note comes first, then the findings, the
+ * director's edits and the scope, and the suggestions stay out, since the note is the task.
  *
  * One context for every theme (phase 4, brief 4.7c; R1): the parked detective's branch,
  * its PRESERVE lists, its four numbered instructions, its SHOULD CONSIDER preamble and its
@@ -770,7 +798,8 @@ function withoutDirectorsFindings(validationResults, edits, output) {
  * @param {number} options.revisionCount - Current revision attempt number
  * @param {Object} options.validationResults - The evaluation's own record of what it
  *   found: `phase`, `passed`, `criteriaScores`, `structuralIssues` (must fix),
- *   `advisoryWarnings` (should consider), `revisionGuidance`. All three of
+ *   `advisoryWarnings` (should consider), `revisionGuidance`. The rework reads the two lists,
+ *   and a failed criterion's fix only when the must-fix list is empty. All three of
  *   evaluatePhase's post-SDK returns write one — pass, fail under the cap, fail
  *   at the cap — as does the fact-check short-circuit, so a rework that follows
  *   an evaluation never reads a stale verdict. (Its error branch and its two
@@ -875,7 +904,7 @@ function buildRevisionContext(options) {
   const validationResults = withoutDirectorsFindings(options.validationResults, standingEdits, previousOutput);
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Build context section (feedback, issues, criteria)
+  // Build context section (the findings a rework acts on)
   // ─────────────────────────────────────────────────────────────────────────────
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -910,157 +939,90 @@ function buildRevisionContext(options) {
 
   const advisories = phaseMismatch ? [] : (validationResults?.advisoryWarnings || []);
 
+  // A code check's guidance text, which prints under the check's label. A judge's guidance
+  // (revisionGuidance, or a legacy record's feedback) never reaches a rework (brief K): its
+  // steps restate the must-fix lines, and the prompt read found it the third copy of one fix.
   const feedback = phaseMismatch
     ? ''
     : (validationResults?.revisionGuidance || validationResults?.feedback || '');
 
-  const confidence = phaseMismatch ? null : validationResults?.confidence;
-  // Brief 1.3: `passed` is the field every evaluator branch writes. This read was
-  // `.ready`, which nothing writes, so the line below said "NO (must address issues)"
-  // on every rework prompt ever sent — including the ones that followed a pass.
+  // Brief 1.3: `passed` is the field every evaluator branch writes; a send-back after a pass
+  // lands with a record that found nothing to say, which is still an evaluation in hand.
   const passed = phaseMismatch ? false : validationResults?.passed === true;
-
-  // `passed === true` counts on its own: a clean evaluation that found nothing to
-  // say is still the answer to "what did the evaluation think", and it is exactly
-  // the case a send-back after a pass lands in.
   const hasEvaluation = !phaseMismatch && (
     passed || Object.keys(criteria).length > 0 || rawIssues.length > 0 ||
     advisories.length > 0 || !!feedback
   );
 
+  // The 4b fix batch (the integrator's ruling): a code check's findings are not a judge's.
+  // They print on every pass under the check's own label (CODE_CHECKS). Phase 4 (brief 4.4):
+  // the label heads the check's lines in place of ISSUES TO ADDRESS, each line the defect and
+  // its fix, and a guidance text a check writes follows its lines under the same label.
+  const codeCheck = codeCheckOf(validationResults);
+  const issuesHeading = codeCheck ? codeCheck.label : 'ISSUES TO ADDRESS';
+
+  // The 4b fix batch (the integrator's ruling): a criterion failed only when it scored below
+  // the bar, whatever an issue's words say of it.
+  const failed = (score) => score !== null && score < STRUCTURAL_PASS_SCORE;
+
+  // Brief K (R27): the must-fix lines are the evaluation's own. When it failed a criterion and
+  // lists none (two stored evaluations of the old shape, in June, did), the failed criteria's
+  // fixes are the must-fix lines, without a score or a criterion's name. An advisory criterion
+  // fails nothing, so its fix is no must-fix line; a passing criterion's fix (a stored verdict
+  // carries one) never prints. Since phase 3 (3.4) a judge writes a must-fix line under the
+  // codes of each failed criterion it wrote none for (evaluator-nodes.js truthIssueLines), so
+  // this reads only a record from before that.
+  const failedFixes = Object.values(criteria)
+    .filter((value) => value && typeof value === 'object' && value.type !== 'advisory' && failed(scoreOf(value))
+      && value.fix && String(value.fix).trim())
+    .map((value) => String(value.fix));
+  const mustFix = rawIssues.length > 0 ? rawIssues : failedFixes;
+  // Brief K (R27): on a director's round the note is the task, so the suggestions stay out.
+  const suggestions = directorsRound ? [] : advisories;
+
+  // A judge's finding reads the limit's name in place of its code (withLimitNames); a code
+  // check's line prints as the check wrote it.
+  const findingText = (text) => (codeCheck ? text : withLimitNames(text));
   const formatIssue = (i) => {
-    if (typeof i === 'string') return `  - ${i}`;
-    if (i && i.message) return `  - ${i.message}${i.severity ? ` (${i.severity})` : ''}`;
+    if (typeof i === 'string') return `  - ${findingText(i)}`;
+    if (i && i.message) return `  - ${findingText(i.message)}${i.severity ? ` (${i.severity})` : ''}`;
     return `  - ${JSON.stringify(i)}`;
   };
 
-  const issuesList = rawIssues.length > 0
-    ? rawIssues.map(formatIssue).join('\n')
+  const issuesList = mustFix.length > 0
+    ? mustFix.map(formatIssue).join('\n')
     : '  (none reported)';
 
   // Brief 1.3: the suggestions, under their own heading. Omitted entirely when there
   // are none. The line under it says only where they came from (phase 3, 3.10), since
   // WHAT THIS REWORK DOES states what a rework does with a suggestion.
-  const shouldConsiderBlock = advisories.length > 0
+  const shouldConsiderBlock = suggestions.length > 0
     ? `
 
 SHOULD CONSIDER:
 ${REWORK_SHOULD_CONSIDER_LINE}
 
-${advisories.map(formatIssue).join('\n')}`
+${suggestions.map(formatIssue).join('\n')}`
     : '';
 
-  // Phase 3 (3.10; R23, final review rules-writers[0]): which criteria failed. A stored
-  // verdict carries a fix on a passing criterion too (the gate's first arc rework had
-  // four, "Optionally ..." among them), and a "fix:" line reads as must-fix, so only a
-  // failed criterion's notes and fix reach a rework; a passing criterion prints its score
-  // alone, whatever the judge wrote.
-  //
-  // The 4b fix batch (the integrator's ruling): a criterion failed only when it scored
-  // below the bar. Counting a criterion as failed when a must-fix issue named its key
-  // matched the key as a whole word anywhere, so a plain-English key (convergence,
-  // coherence) read as failing whenever an issue used the word. A breach the judge lists
-  // under a criterion it scored as passing is in ISSUES TO ADDRESS, with its own fix.
-  const failed = (score) => score !== null && score < STRUCTURAL_PASS_SCORE;
+  const feedbackBlock = codeCheck && feedback ? `\n${feedback}` : '';
 
-  // Per-criterion: score, structural/advisory label, and the evaluator's own
-  // notes + concrete fix. The notes and fix are the actionable part. Phase 3 (3.3):
-  // an advisory criterion's fix is a suggestion, and its line says so.
-  let hasFixLines = false;
-  let hasSuggestionLines = false;
-  const criteriaList = Object.keys(criteria).length > 0
-    ? Object.entries(criteria)
-        .map(([name, value]) => {
-          const score = scoreOf(value);
-          const scoreText = score === null ? 'unscored' : score.toFixed(2);
-          const kind = (value && typeof value === 'object' && value.type) ? ` [${value.type}]` : '';
-          const lines = [`  - ${name}: ${scoreText}${kind}`];
-          if (value && typeof value === 'object' && failed(score)) {
-            const fixLabel = value.type === 'advisory' ? 'suggestion' : 'fix';
-            if (value.notes && String(value.notes).trim()) lines.push(`      notes: ${value.notes}`);
-            if (value.fix && String(value.fix).trim()) {
-              lines.push(`      ${fixLabel}: ${value.fix}`);
-              if (fixLabel === 'fix') hasFixLines = true; else hasSuggestionLines = true;
-            }
-          }
-          return lines.join('\n');
-        })
-        .join('\n')
-    : '  (no criteria scores available)';
-
-  const scored = Object.entries(criteria)
-    .map(([name, value]) => [name, scoreOf(value)])
-    .filter(([, score]) => score !== null);
-
-  // How to read the scores (phase 3, 3.3). The lists went: "PRESERVE THESE" listed every
-  // criterion at 0.8 or more, which after a pass is every criterion, so it outranked the
-  // director's note (TH7); and "need improvement" listed every criterion under 0.7, an
-  // advisory one included, as a defect. The parked detective's copy of them went with its
-  // branch (phase 4, brief 4.7c; R1).
-  //
-  // The line says only who computed the scores (post-merge fix, 3.3 review findings 1
-  // and 2). A model evaluation's are the judge's own, uncalibrated. The weave checks
-  // (validateArcStructure, phase 4) and the fact check that runs before the article judge
-  // score nothing, so a record with no scores gets no line. What to do with each kind of
-  // finding is WHAT THIS REWORK DOES's to say, once.
-  const scoresGuideBlock = scored.length > 0 ? `${MODEL_SCORES_LINE}\n\n` : '';
-
-  // Confidence is a string ('high'|'medium'|'low') in the current schema and a
-  // number in the legacy one; the old code multiplied both by 100 -> "NaN%".
-  const confidenceText = typeof confidence === 'number'
-    ? `${(confidence * 100).toFixed(0)}%`
-    : (confidence || 'unknown');
-
-  // Brief 1.3: when the evaluation passed and the director sent the work back
-  // anyway, say so. Without this line a "Ready: YES" summary sitting above a list
-  // of demands reads as a contradiction the writer has to guess its way out of.
-  const sendBackLine = (passed && humanFeedback)
-    ? '\n\nThis evaluation passed. The director sent the work back anyway; their note below\nis the reason for this rework.'
-    : '';
-
-  // Phase 3 (3.10; the integrator's ruling): an automatic pass carries no EVALUATOR
-  // FEEDBACK. The judge's guidance repeats ISSUES TO ADDRESS in its must-fix steps, and
-  // its optional steps read as instructions; a stored verdict keeps its old guidance, so
-  // it is left out whole rather than filtered by its wording. A send back keeps it.
-  //
-  // The 4b fix batch (the integrator's ruling): a code check's findings are not a
-  // judge's. They print on every pass under the check's own label (CODE_CHECKS). Phase 4
-  // (brief 4.4): the label heads the check's lines in place of ISSUES TO ADDRESS, each line
-  // the defect and its fix, and a guidance text a check writes follows its lines under the
-  // same label.
-  const codeCheck = codeCheckOf(validationResults);
-  const issuesHeading = codeCheck ? codeCheck.label : 'ISSUES TO ADDRESS';
-  let feedbackBlock = '';
-  if (codeCheck) {
-    feedbackBlock = feedback ? `\n${feedback}` : '';
-  } else if (directorsRound) {
-    feedbackBlock = `
-
-EVALUATOR FEEDBACK:
-${feedback || '(no specific feedback provided)'}`;
-  }
-
-  // Brief 4.5 (ruling 9): a code check has no confidence and no scores, so its rework
-  // reads the check's lines alone, under the check's label. A director's round at the
-  // story meeting reads no finding from before the round, so it prints no evaluation.
-  // Brief 4.6b: the map's rework reads the map checks' lines, or nothing when no check
-  // result is in hand (after going back to the map, R9, the result is cleared).
+  // Brief K (R27): the evaluation is its findings alone. On a director's round it prints only
+  // when it holds a must-fix line, after the note. On an automatic pass, whose scope names the
+  // must-fix heading, the heading prints over "(none reported)" when it holds none, as a
+  // check's always has; with no evaluation in hand the line says so. Brief 4.5: a director's
+  // round at the story meeting reads no finding from before the round (its caller passes none).
+  // Brief 4.6b: the map's rework reads the map checks' lines, or nothing when no check result
+  // is in hand (after going back to the map, R9, the result is cleared).
   let evaluationBlock;
-  if (((meetingMode && directorsRound) || mapMode) && !hasEvaluation) {
+  if (directorsRound) {
+    evaluationBlock = mustFix.length > 0 ? `${issuesHeading}:
+${issuesList}${feedbackBlock}` : '';
+  } else if (mapMode && !hasEvaluation) {
     evaluationBlock = '';
-  } else if (codeCheck && hasEvaluation) {
+  } else if (hasEvaluation) {
     evaluationBlock = `${issuesHeading}:
 ${issuesList}${feedbackBlock}${shouldConsiderBlock}`;
-  } else if (hasEvaluation) {
-    evaluationBlock = `EVALUATION SUMMARY:
-  Confidence: ${confidenceText}
-  Ready: ${passed ? 'YES' : 'NO (must address issues)'}${sendBackLine}
-
-${scoresGuideBlock}CRITERIA SCORES:
-${criteriaList}
-
-${issuesHeading}:
-${issuesList}${shouldConsiderBlock}${feedbackBlock}`;
   } else {
     evaluationBlock = '(no evaluator feedback for this phase)';
   }
@@ -1179,13 +1141,13 @@ ${formatEditLines(standingEdits, previousOutput)}
   // reached the director were in lines rewritten with no finding behind them. Every
   // automatic rework is evaluated again (graph.js), so the reason says where the errors
   // came from, not that the next evaluation never reads the line.
-  const suggestionSources = [
-    advisories.length > 0 && 'a SHOULD CONSIDER item',
-    hasSuggestionLines && 'a suggestion in CRITERIA SCORES'
-  ].filter(Boolean).join(' or ');
+  //
+  // Brief K (R27): CRITERIA SCORES no longer prints, so the clauses that named its fixes and
+  // its suggestions went with it: a failed criterion's fix is a must-fix line when it prints at
+  // all, and the suggestions are SHOULD CONSIDER's alone.
   const automaticScope = [
-    `This rework fixes the must-fix items: the ${issuesHeading}${hasFixLines ? ' and the fixes in CRITERIA SCORES' : ''}.`,
-    suggestionSources && `Take up ${suggestionSources} only where it touches a line this rework is already changing for a must-fix item.`,
+    `This rework fixes the must-fix items: the ${issuesHeading}.`,
+    suggestions.length > 0 && 'Take up a SHOULD CONSIDER item only where it touches a line this rework is already changing for a must-fix item.',
     `Everything else in the previous ${outputName} stays word for word.`,
     'Those lines passed the check or evaluation that ran before this pass, and in past reworks the new errors that reached the director were in lines rewritten with no finding behind them.',
     // 3 final, item 4: the weave's automatic passes (the check rework and the fact-check fix) keep
@@ -1256,7 +1218,9 @@ ${formatEditLines(standingEdits, previousOutput)}
   // settled angle's headline word for word, so this scope says when the note may change it.
   const MAP_SEND_BACK_HEADLINE = "The map's headline stays word for word unless the director's note asks for a new one: then write the headline the note asks for, as the brief says a headline is written.";
   const mapHeadlineLine = mapMode && directorsRound ? ` ${MAP_SEND_BACK_HEADLINE}` : '';
-  const noteScope = `The director's note above is the task, and it sets how much of the previous ${outputName} this rework keeps: change what the note asks, as far as it asks, so a note that asks for a rethink gets a rethink. What the note leaves alone stays as it was${hasEvaluation ? ', unless an issue to address needs it changed' : ''}.${sentBackAngleLine}${mapHeadlineLine}`;
+  // Brief K: the clause on an issue to address prints only when a must-fix line does, which on a
+  // director's round is the one evaluation block it prints.
+  const noteScope = `The director's note above is the task, and it sets how much of the previous ${outputName} this rework keeps: change what the note asks, as far as it asks, so a note that asks for a rethink gets a rethink. What the note leaves alone stays as it was${mustFix.length > 0 ? ', unless an issue to address needs it changed' : ''}.${sentBackAngleLine}${mapHeadlineLine}`;
   let scope;
   if (meetingRound === 'reweave') scope = reweaveScope;
   else if (directorsRound) scope = noteScope;
@@ -1272,7 +1236,7 @@ ${scope}`;
   // (lib/__tests__/fixtures/removed-phrases.js instructionText; brief 4.5b). At the story
   // meeting a director's round reads no finding, so only the line about the evaluator's
   // issues stays out there (brief 4.5); on the map, which no evaluator reads, it stays out
-  // too (brief 4.6b).
+  // too (brief 4.6b). The labels and the NOTE lines keep their words until run 2c.
   const noEvaluatorLine = meetingMode || mapMode;
   const noteBlock = humanFeedback
     ? `HUMAN FEEDBACK (HIGHEST PRIORITY):
@@ -1283,12 +1247,18 @@ ${noEvaluatorLine ? '' : `Address human feedback FIRST, then address any remaini
 `}`
     : '';
 
+  // Brief K (R27): the director's note comes first, then the findings, the director's edits and
+  // the scope, each a block of its own with a blank line between. An automatic pass carries no
+  // note, so it opens on its findings as before.
+  const blocks = [noteBlock, evaluationBlock, handEditsBlock, instructionsSection]
+    .map((block) => block.replace(/\n+$/, ''))
+    .filter(Boolean);
   const contextSection = `
 ═══════════════════════════════════════════════════════════════════════════════
 REVISION CONTEXT: ${outputName.toUpperCase()} (${passLabel})
 ═══════════════════════════════════════════════════════════════════════════════
 
-${evaluationBlock ? `${evaluationBlock}\n\n` : ''}${noteBlock}${noteBlock && noEvaluatorLine ? '\n' : ''}${handEditsBlock}${instructionsSection}
+${blocks.join('\n\n')}
 `.trim();
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -1498,6 +1468,7 @@ module.exports = {
   buildRevisionContext,
   withoutDirectorsFindings,
   leadingRuleIds,
+  withLimitNames,
 
   // The bar a criterion must reach: the judges' and the revision context's one constant
   // (phase 3, 3.10; evaluator-nodes.js imports it)

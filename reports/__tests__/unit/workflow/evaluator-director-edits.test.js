@@ -20,7 +20,7 @@
 const { evaluateArticle, evaluateArcs, _testing: { buildEvaluationUserPrompt, buildFactCheckArgs } } =
   require('../../../lib/workflow/nodes/evaluator-nodes');
 const { standingAfterSendBack, DIRECTOR_EDIT_PREFIX } = require('../../../lib/hand-edit-diff');
-const { buildRevisionContext } = require('../../../lib/workflow/nodes/node-helpers');
+const { buildRevisionContext, withLimitNames } = require('../../../lib/workflow/nodes/node-helpers');
 const { reworkFixtureState, PREVIOUS_BUNDLE } = require('../../../lib/__tests__/fixtures/rework-state');
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
@@ -312,14 +312,17 @@ describe('what the rework reads of a verdict about the director\'s edits (F1, fi
     revisionGuidance: '', confidence: 'high', ...overrides
   });
 
-  /** The part of a rework's context that carries the evaluation: from its summary to <HAND_EDITS>. */
+  /**
+   * The part of a rework's context that carries the evaluation: from its must-fix list to
+   * <HAND_EDITS> (phase 18, run 2b, brief K: the findings alone, with no summary above them).
+   */
   function evaluationPart(validationResults, state) {
     const { contextSection } = buildRevisionContext({
       phase: 'article', revisionCount: 1, validationResults, previousOutput: state.contentBundle,
       humanFeedback: null, handEdits: state._articleHandEdits
     });
     expect(contextSection).toContain('<HAND_EDITS>');
-    return contextSection.slice(contextSection.indexOf('EVALUATION SUMMARY'), contextSection.indexOf('<HAND_EDITS>'));
+    return contextSection.slice(contextSection.indexOf('ISSUES TO ADDRESS'), contextSection.indexOf('<HAND_EDITS>'));
   }
 
   it('journalist, a mixed verdict: the automatic pass reads the writer\'s fixes and none located in the director\'s text', async () => {
@@ -344,8 +347,10 @@ describe('what the rework reads of a verdict about the director\'s edits (F1, fi
     expect(result.validationResults.feedback).toBe('');
 
     const part = evaluationPart(result.validationResults, state);
-    expect(part).toContain(WRITER_ISSUE);
-    expect(part).toContain('fix: Cut the line.');
+    // Brief K: the must-fix line reads the limit's name for its code, and the writer's fix is
+    // read once, in it; wordsTruth's fix, its second copy, does not print.
+    expect(part).toContain(`  - ${withLimitNames(WRITER_ISSUE)}`);
+    expect(part.split('Cut the line.').length - 1).toBe(1);
     expect(part).not.toContain(CLOSING);
     expect(part).not.toContain('the closing');
     expect(part).not.toContain('The closing');
