@@ -772,3 +772,33 @@ Run 2c's line for the article's judge stays as built. With R40 it is true: each 
 **Done.** The above holds and the suite is green.
 
 **Seats.** Builder Fable 5.2 at high, reviewer Fable 5.2 at high in a fresh context: this is the code that protects the director's edits.
+
+---
+
+## Run 2g: the desk after the lock (added 2026-11-24)
+
+The lock (run 2f) puts the map's headline, the line under it and its headings among the director's lines on every new article. Its reviewer found two things on the desk that this now puts on the main path. The director was told both on 2026-11-24 and answered: "yes say 'your lines'".
+
+### Rulings
+
+- **R42. The desk calls a standing line "your line".** Since the lock, the lines the desk lists as the director's include ones the director approved on the map and did not type. The mark labels read "Concern about your line" and "Your line", and the round's record reads "All 4 of your lines stand." with its number. A string that names the act of editing at the desk ("Possibly resolved by your edits", "Your hand edits are sent with this note") keeps its words.
+- **R43. A concern sits beside the line it is about, whether or not it quotes it.** The judge is told to write a concern about one of the director's lines with the line's id and the limit, and may quote nothing. The desk placed a concern by its quotation alone, so such a concern showed among the marks beside no block, with its id stripped and nothing to say which line it meant, and a concern about a heading never sat beside the heading. The article stop's payload carries where each standing line sits, and the desk places a concern by its id when it has no quotation to place it by. A concern whose line is no longer on the desk shows apart, and says which line it was about in the desk's own name for it.
+
+### Brief V: the desk after the lock
+
+**Intent.** At the desk the director can see which of their lines a concern is about, and the desk's words fit a line they approved as well as one they typed.
+
+**Layers.**
+- The server's payload for the article stop (`getCheckpointData` in `server.js`, or where the article stop's keys are built): one key that gives, for each standing line at the stop, its id and where it sits, in the address form the director's edits already use. Nothing else of the payload changes.
+- `console/checkpoint-view-logic.js`: the desk's marks read that key through the module's own reader of payload keys. A concern is placed by its quotation as today; one with no quotation that names a line's id is placed by that line: beside the headline for the headline or the line under it, on a section's heading for a heading, beside the block for a block. R42's three strings.
+- `console/components/checkpoints/Article.js` only if a label is printed there and not from the logic module.
+
+**Tests.** In node, on the dual-export module: a concern with an id and no quotation beside the headline, on a heading, beside a block; one whose line is gone, shown apart with the line's name; a concern with a quotation placed as before; a payload from before this change, with no such key, behaving as today; the three strings.
+
+**Invariants.** The marks' kinds, order and the rule for where a quoted concern sits. What the stop sends back. The words of the two lines run 2d put under the note box, except that they name no label this run changes: check, and if one does, stop and return NEEDS_CONTEXT. No file under `lib/` but the payload's builder, if it lives there.
+
+**Verification.** The node tests. Then the integrator's click-through: say exactly what to open and what should appear.
+
+**Done.** The above holds and the suite is green.
+
+**Seats.** Builder Opus 5.5 at medium, reviewer Opus 5.5 at medium.
