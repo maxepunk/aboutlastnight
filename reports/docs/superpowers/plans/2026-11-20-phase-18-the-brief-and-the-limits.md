@@ -726,3 +726,49 @@ Run 2c's reviewers found four approved lines that were right for one reader and 
 **Done.** The approved lines stand in the renders word for word, the suite is green, the moved pins carry their reasons.
 
 Seats: builder Opus 5.5 at medium, reviewer Opus 5.5 at medium.
+
+---
+
+## Run 2f: the lines the director approves on the map are locked (added 2026-11-24)
+
+### What was found
+
+Run 2c's line for the article's judge says the headline, the line under it and each section's heading "were settled" on the map and that the writer "prints them as given", and tells the judge to report a problem in one as a concern. The code did not make that true. The stamp puts the map's headline and the line under it on the first draft and nothing holds them afterwards, and no code holds a heading at all. Only a line the director typed or changed on the map was recorded as the director's at the article stop. Any other one stayed the writer's, so a judge's finding in it sent a rework with two instructions that pull apart (print these lines exactly as the map gives them; fix this line), and the rework could rewrite a line the director had approved. With run 2c's line the judge would file such a finding as a concern, and the verdict keeps only concerns about a director's edit, so it would be dropped.
+
+The director's decision on 2026-11-24: "B, lock them once I approve the map".
+
+### Ruling
+
+- **R40. A line on the approved map is the director's line at the article.** The stamp records the map's headline, the line under it and each section's heading as the director's lines at the article stop, whoever wrote them, and stamps the headings onto the first draft as it stamps the other two. Everything that follows is what the director's lines already get, with no new rule: an automatic pass that changes one has it put back, a judge's finding located in one is a concern shown on the desk and holds no rework, and a send-back whose note asks for a new one may change it and says why. The top photo's rule is unchanged: it is the director's line only where the director chose it on the map. *If wrong:* the stamp's one list.
+- **R41. The guard reads a limit's name as its code.** Run 2c's line tells a judge to open a concern "with the edit's id and then the limit it concerns", and a judge may write the limit by name. The guard read only a code or a criterion's name, so such a concern would not cover its criterion and a rework would be sent about the director's own line. The guard reads a name through `LIMIT_CODES`. No word a model reads changes.
+
+Run 2c's line for the article's judge stays as built. With R40 it is true: each of the three kinds of line is listed to the judge among the director's edits, with an id, and the block over that list already says how a concern is written.
+
+### Review focus for run 2f
+
+- The whole path with no line edited on the map: first write, the judge, an automatic pass, the desk, a send-back whose note leaves the headline alone, a send-back whose note asks for a new one.
+- The same path where the director edited one of the lines on the map, which must behave exactly as before.
+- A thread stamped before this change: its standing edits are as they were, and nothing treats its headline as locked or errors for want of the new records.
+- What the desk shows: no new mark when nothing is wrong; a concern beside the line when the judge has one; the edit report after a pass.
+- A finding that quotes a heading to name its section is still read as naming the section, as today.
+
+### Brief U: the lock, and the guard's reading of a limit's name
+
+**Intent.** Once the director approves the map, no automatic pass changes its headline, the line under it or a section heading in the article, and a judge's problem with one reaches the director at the desk.
+
+**Layers.**
+- `lib/workflow/nodes/ai-nodes.js`, `stampFromMap`: R40. A section's heading is stamped by the section's slot: the map's heading where it has one, and no heading where the map's is empty. A section of the draft with no section of the map behind it is left as the writer wrote it. The stamp's note is rewritten to say what it now does.
+- `lib/workflow/nodes/evaluator-nodes.js`: R41, and nothing else of the guard.
+- Left from run 2c: one derived assertion that every code a question cites is one of its criterion's codes; the clause of `docs/architecture/judges.md` that still gives the old question.
+
+**Not touched.** `lib/hand-edit-diff.js`, `settleEdits`, the rules over the director's edits in a prompt, the desk's labels. The lock is built by recording the lines where the director's lines are already recorded, and by nothing else.
+
+**Tests.** Through the article stage with the mock writer and judge, on a map whose three kinds of line the director did not edit: the first draft carries the map's headings; the article stop's standing edits hold the headline, the line under it and each heading that is not empty; an automatic pass that rewrites each has it put back; a judge's finding located in the headline or the line under it is a concern in the verdict and holds no rework; a concern the judge writes with a heading's edit id is kept; a send-back whose note asks for a new headline changes it and reports why; one whose note does not leaves it. The same on a map where the director edited the headline: as before. A thread stamped before the change. R41: a concern that names its limit by name covers its criterion, for each limit a criterion scores.
+
+**Invariants.** The director's edits are final. The top photo's rule. The first draft's other stamps (the line above the headline). The judge's prompt holds no new word: it gains only entries in the list of the director's edits.
+
+**Verification.** No stored session was stamped this way, so the renders of 111326 and 101826 will not show it. Build a thread in a scratch script through the real nodes with the mock SDK, and print the article rework's prompt and the judge's: read the list of the director's edits in each. Then say, from the console's code, what the desk shows for such a thread with no finding, and with a concern about the headline.
+
+**Done.** The above holds and the suite is green.
+
+**Seats.** Builder Fable 5.2 at high, reviewer Fable 5.2 at high in a fresh context: this is the code that protects the director's edits.
