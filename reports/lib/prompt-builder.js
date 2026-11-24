@@ -6,7 +6,7 @@
  */
 
 const { createThemeLoader, PHASE_REQUIREMENTS } = require('./theme-loader');
-const { renderDirectorEnrichmentBlock, directorTensionSentences } = require('./prompt-renderers/director-notes-renderer');
+const { renderDirectorEnrichmentBlock } = require('./prompt-renderers/director-notes-renderer');
 const { renderRecordView, DOCUMENT_POINTER } = require('./prompt-renderers/record-view');
 const { withSessionClock } = require('./prompt-renderers/session-clock');
 const { DERIVED_LABELS } = require('./prompt-renderers/derived-labels');
@@ -113,6 +113,19 @@ Code reads who is placed from each beat's players, counts the cards by their fla
 const PRONOUN_NOT_GIVEN = 'pronoun not given';
 
 /**
+ * The list of names' headings (phase 18, run 2c; the wording doc's part 5), which every writer
+ * and judge prints through generateRosterSection:
+ * - ROSTER_OPENING, over the game's characters, each first name with the full name the article
+ *   prints;
+ * - ROSTER_PLAYED, after it where the theme prints pronouns: a played character is marked with
+ *   its pronoun or PRONOUN_NOT_GIVEN ("marked as having none given"), and the rest print bare;
+ * - ROSTER_NPC_HEADING, over the game's own characters, each with its canon pronoun or none.
+ */
+const ROSTER_OPENING = 'Every character of the game, first name and then the full name the article prints. A surname that is not on this list is invented, so use these.';
+const ROSTER_PLAYED = 'A name marked with a pronoun, or marked as having none given, was played in this session. The rest were not played.';
+const ROSTER_NPC_HEADING = "The game's own characters, who are never played. Where a pronoun is given here, it is fixed:";
+
+/**
  * The rule-set call each writer phase reads (lib/rule-set.js), for requirePhasePrompts: the
  * same calls for every theme, each from its theme's rules folder (R14).
  */
@@ -139,6 +152,11 @@ const WRITER_RULE_SET_CALLS = Object.freeze({
  * Phases 14 and 15 (R4): the line of the NPC who writes the article gains the session's
  * name for it (session-authors.js writerSignsLine, from the theme's file and the first name
  * the director gave), so every writer and judge knows who signs the article.
+ *
+ * Phase 18, run 2c (the wording doc's part 5): the headings are ROSTER_OPENING, ROSTER_PLAYED and
+ * ROSTER_NPC_HEADING. The line that said a name with no pronoun is not on the roster went: the
+ * marks say who played, and the limits say what a missing pronoun means. A theme that prints no
+ * pronouns prints no ROSTER_PLAYED.
  *
  * @param {string} theme - Theme name (e.g., 'journalist') — kept for signature compatibility
  * @param {Object|null} canonicalCharacters - Notion-derived map of firstName -> fullName
@@ -190,13 +208,12 @@ function generateRosterSection(theme = 'journalist', canonicalCharacters = null,
       return pronouns ? `- ${first} → ${full} (${pronouns})` : `- ${first} → ${full}`;
     })
     .join('\n');
-  const unrecorded = showPronouns && entries.some(([first]) => !pronounOf(first))
-    ? '\nA name with no pronoun is not on this session\'s roster, so its pronoun is not recorded: never guess one.'
-    : '';
 
-  let result = `CANONICAL CHARACTER ROSTER:
-Use ONLY these full names in ALL article text. NEVER invent different last names:
-${lines}${unrecorded}`;
+  // Phase 18, run 2c (the wording doc's part 5): the heading in the limits' manner. A played
+  // character carries its pronoun or PRONOUN_NOT_GIVEN, so the two sentences on the marks say who
+  // played; a theme that prints no pronouns leaves them out.
+  let result = `${ROSTER_OPENING}${showPronouns ? ` ${ROSTER_PLAYED}` : ''}
+${lines}`;
 
   // BASELINE §4 class 3: the NPCs are fixed canon and are NOT on the session
   // roster, so the victim had no pronoun anywhere in the prompt and the model
@@ -215,7 +232,7 @@ ${lines}${unrecorded}`;
   if (npcLines.length > 0) {
     result += `
 
-Non-player characters (fixed canon, NOT on the session roster; these pronouns are as authoritative as the roster's):
+${ROSTER_NPC_HEADING}
 ${npcLines.join('\n')}`;
   }
 
@@ -659,6 +676,21 @@ const UNSHOWN_BUNDLE_FIELDS = Object.freeze([
   ['heroImage', 'characters']
 ].map((entry) => Object.freeze(entry)));
 
+/**
+ * The kinds of block a section's content may hold that the article writer is not offered (phase 18,
+ * run 2c, R34; the wording doc's part 6): the caption that names a document and prints none of its
+ * text, and the list. The generation instruction names neither, and writerBundleSchemaOf leaves
+ * their shapes out of the writer's schema, the one printed and given to the SDK. The full schema,
+ * the validator and the template keep both, so a stored article that holds one validates and
+ * prints.
+ */
+const UNOFFERED_BLOCK_TYPES = Object.freeze(['evidence-reference', 'list']);
+
+/** The list of a section's block shapes in a ContentBundle schema, each a branch of its oneOf. */
+function blockShapesOf(schema) {
+  return schema.properties?.sections?.items?.properties?.content?.items;
+}
+
 /** A plain object: not null, not an array. */
 function isPlainObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -671,7 +703,8 @@ function unshownNamesAt(place) {
 
 /**
  * The article writer's schema (phase 18, R13; run 2b, R23): the full ContentBundle schema less
- * UNSHOWN_BUNDLE_FIELDS, derived here so the two cannot drift. It is the schema printed in the
+ * UNSHOWN_BUNDLE_FIELDS, and less the block shapes of UNOFFERED_BLOCK_TYPES in a section's content
+ * (run 2c, R34), derived here so the two cannot drift. It is the schema printed in the
  * writer's <SCHEMA> and the schema the SDK is given for the article call and its rework (ai-nodes.js
  * generateContentBundle, articleReworkCall), so the printed copy and the tool always agree. A
  * pure function: it returns a copy and leaves `schema` as it is. The validator (schema-validator.js)
@@ -680,7 +713,8 @@ function unshownNamesAt(place) {
  *
  * It fails loud, naming the field, when a field it removes is missing from `schema` (the schema
  * changed and the list did not follow) or is required where it sits (a required field the writer
- * cannot write would fail every bundle). No property removed is the target of a "$ref", since the
+ * cannot write would fail every bundle), and naming the block, when a block shape it removes is
+ * missing. No property or shape removed is the target of a "$ref", since the
  * schema holds none, so the copy stays valid JSON Schema. It adds no keyword, so the SDK's
  * sanitizing (lib/llm/client.js sanitizeSchemaForSdk) treats it as it treats the full schema.
  *
@@ -699,6 +733,14 @@ function writerBundleSchemaOf(schema) {
       throw new Error(`writerBundleSchemaOf: "${name}" on ${where} is required, so the article writer's schema cannot leave it out`);
     }
     delete object.properties[name];
+  });
+  const blocks = blockShapesOf(trimmed);
+  UNOFFERED_BLOCK_TYPES.forEach((type) => {
+    const shapes = blocks && Array.isArray(blocks.oneOf) ? blocks.oneOf : [];
+    if (!shapes.some((branch) => branch?.properties?.type?.const === type)) {
+      throw new Error(`writerBundleSchemaOf: the ContentBundle schema has no "${type}" block to leave out of the article writer's schema`);
+    }
+    blocks.oneOf = shapes.filter((branch) => branch?.properties?.type?.const !== type);
   });
   return trimmed;
 }
@@ -774,18 +816,22 @@ function carryUnshownFields(previous, reworked) {
 }
 
 /**
- * The story map as the article writer and its rework are shown it (phase 18, run 2b, R20): a copy
- * of the map with no beat's `kind`, and each beat under `leftOut` by its id and its title (its
- * "move") alone. The kind is the retired form of a beat, which pulled the draft toward a scene,
- * then the evidence; a struck beat's synopsis and evidence would hand back what the director took
- * out. The map the stop stores, the stamp, the fact check, the judge and the page read the map
- * whole; this copy is only what <STORY_MAP> prints. The map it is given is untouched; anything
- * that is no map passes through, and so does a left-out entry that is no object.
+ * A story map with no beat's `kind` (phase 18, run 2b, R21; run 2c, R31): a copy of the map with
+ * the kind taken off each beat in a section and each beat under `leftOut`, and every other field as
+ * the map holds it, a left-out beat whole. The kind is the retired form of a beat, which pulled the
+ * draft toward a scene, then the evidence; the map writer's schema no longer asks for it, and a map
+ * stored before that change may hold it.
  *
- * @param {Object|null} map - the map as the article reads it (ai-nodes.js articleMapOf)
+ * The one rule for a beat's kind, in two forms: the map's rework prints the map it starts from
+ * through this step, since it hands back a whole map (ai-nodes.js mapReworkCall), and the map as
+ * the article writer is shown it builds on it (mapAsShown). The map the stop stores, the edits, the
+ * settle and the state read the map whole. The map it is given is untouched; anything that is no
+ * map passes through, and so does a beat that is no object.
+ *
+ * @param {Object|null} map
  * @returns {Object|null}
  */
-function mapAsShown(map) {
+function mapWithoutBeatKinds(map) {
   if (!isPlainObject(map)) return map;
   const shown = JSON.parse(JSON.stringify(map));
   const withoutKind = (beat) => {
@@ -798,6 +844,25 @@ function mapAsShown(map) {
       ? { ...section, beats: section.beats.map(withoutKind) }
       : section));
   }
+  if (Array.isArray(shown.leftOut)) shown.leftOut = shown.leftOut.map(withoutKind);
+  return shown;
+}
+
+/**
+ * The story map as the article writer and its rework are shown it (phase 18, run 2b, R20; run 2c,
+ * R31): the map with no beat's kind (mapWithoutBeatKinds), then each beat under `leftOut` cut to
+ * its id and its title (its "move") alone, since a struck beat's synopsis and evidence would hand
+ * back what the director took out. The map the stop stores, the stamp, the fact check, the judge
+ * and the page read the map whole; this copy is only what <STORY_MAP> prints. The map it is given
+ * is untouched; anything that is no map passes through, and so does a left-out entry that is no
+ * object.
+ *
+ * @param {Object|null} map - the map as the article reads it (ai-nodes.js articleMapOf)
+ * @returns {Object|null}
+ */
+function mapAsShown(map) {
+  if (!isPlainObject(map)) return map;
+  const shown = mapWithoutBeatKinds(map);
   if (Array.isArray(shown.leftOut)) {
     shown.leftOut = shown.leftOut.map((beat) => {
       if (!isPlainObject(beat)) return beat;
@@ -1129,7 +1194,9 @@ ${loadRuleSet('outline', { theme: this.themeName }).craft}`;
    * @param {Array} shellAccounts - Shell account data for financial summary
    * @param {Object|null} sessionFacts - Session facts for non-roster character guardrail
    * @param {Object|null} directorNotes - Director observations for article grounding
-   * @param {Object|null} narrativeTensions - Programmatic contradictions from surfaceContradictions node
+   * @param {Object|null} narrativeTensions - the sentences about Blake (surfaceContradictions). The
+   *   article writer no longer prints them (phase 18, run 2c; the wording doc's part 6), and the
+   *   argument keeps its place so the inputs keep their order (ai-nodes.js articleWriterInputs)
    * @param {Object} options - { gateNotes, evidenceBundle, directorCorrections, photoDescriptions,
    *   photos, schema }: `schema` is the one the call is given, printed in <SCHEMA>; the writer's
    *   (WRITER_BUNDLE_SCHEMA) when absent
@@ -1231,12 +1298,20 @@ ${this._rosterSection({ withCharacterContext: false })}`;
    * the instruction lists no field to leave out. A rework passes the schema its call is given in
    * options.schema (ai-nodes.js articleReworkCall: with the changed-edits field on a send-back
    * that carries the director's edits), so the copy it prints is the tool's. The money tracker
-   * prints itself from the ledger (M2). An evidence reference is described as the template
-   * prints it, a caption naming a document (M1).
+   * prints itself from the ledger (M2).
+   *
+   * Phase 18, run 2c (R34; the wording doc's part 6): the instruction offers four blocks, a
+   * paragraph, a quote, an inline card and a photo. The caption that names a document and the
+   * list are no longer offered, and their shapes are gone from the writer's schema
+   * (UNOFFERED_BLOCK_TYPES); the full schema, the validator and the template keep them.
    *
    * Phase 18, run 2b (R20): <STORY_MAP> prints the map as the writer is shown it (mapAsShown):
    * no beat's kind, and each left-out beat by its id and title. The cards line, the top photo
    * and the photos read the map they are given, whole.
+   *
+   * Run 2c (the wording doc's parts 4 and 6): the sentences about Blake no longer print here, and
+   * neither does their tag, <NARRATIVE_TENSIONS>: they are in the notes once, and the map places
+   * what the story needs of Blake. `narrativeTensions` is no longer read.
    *
    * Phase 3 (3.9; T13, the integrator's ruling): the article places every photo the
    * director has not excluded, so the writer is given every kept photo
@@ -1260,16 +1335,6 @@ ${this._rosterSection({ withCharacterContext: false })}`;
 
 ${photos.map((photo, i) => renderPhotoListEntry(photo, i, options.photoDescriptions)).join('\n\n')}`
       : 'PHOTOS: none';
-
-    // T4: the director's sentences about Blake and the Valet, through the filter the
-    // arc writer's section uses (fix 3.2b): each stored sentence prints only when the
-    // notes hold it word for word.
-    const tensions = directorTensionSentences(narrativeTensions, directorNotes?.rawProse || '');
-    const tensionsSection = tensions.length > 0 ? `
-<NARRATIVE_TENSIONS>
-${DERIVED_LABELS.narrativeTensions}
-${tensions.map(sentence => `- ${sentence}`).join('\n')}
-</NARRATIVE_TENSIONS>` : '';
 
     const guests = guestReportersOf(this.sessionConfig);
     const byline = [
@@ -1306,7 +1371,7 @@ ${photoSection}
 ${recordSection}
 ${this._buildFinancialSummary(shellAccounts)}
 ${this._buildInvestigationObservations(directorNotes, options.directorCorrections, options.evidenceBundle)}
-${tensionsSection}
+
 </DATA_CONTEXT>
 ${this._sessionFactsSection(sessionFacts)}
 
@@ -1321,9 +1386,7 @@ Write the article as a ContentBundle: JSON in the shape of the schema at the end
      * {"type": "paragraph", "text": "..."}
      * {"type": "quote", "text": "...", "attribution": "..."}: "attribution" is the speaker.
      * {"type": "evidence-card", "tokenId": "...", "headline": "...", "content": "...", "owner": "...", "significance": "critical" | "supporting" | "contextual"}: an inline card, printed whole in the body. "content" is copied from ${DOCUMENT_POINTER}, and "owner" is that document's owner as the record gives it. ${mapCardsLine(map, options.evidenceBundle)}
-     * {"type": "evidence-reference", "tokenId": "...", "caption": "..."}: a one-line caption naming a document, printed in the body with none of the document's text. Give it a caption; with none, the article prints the bare id.
      * {"type": "photo", "filename": "...", "caption": "..."}: an inline photo, by its exact filename.
-     * {"type": "list", "items": ["..."], "ordered": false}
 2. "evidenceCards": the sidebar's entries. Each names a document by its id in "tokenId", with a "headline", a one-line "summary" under 100 characters, and its "significance".
 ${heroLine}
 4. "headline": {"main": "...", "kicker": "...", "deck": "..."}: the headline and the deck as the task above gives them.
@@ -1413,11 +1476,15 @@ module.exports = {
   // the schema printed and given to the SDK, the previous article a rework is shown, and the
   // carry of the fields the writer is not shown into a reworked article
   UNSHOWN_BUNDLE_FIELDS,
+  // Run 2c (R34): the block types the writer's schema leaves out
+  UNOFFERED_BLOCK_TYPES,
   writerBundleSchemaOf,
   WRITER_BUNDLE_SCHEMA,
   bundleAsShown,
   carryUnshownFields,
-  // Run 2b (R20): the story map as the article writer is shown it
+  // Run 2c (R31): one rule for a beat's kind in two forms: the strip, which the map's rework
+  // prints its map through, and the story map as the article writer is shown it, built on it
+  mapWithoutBeatKinds,
   mapAsShown,
   filterGateNotes,
   buildReportingModeBlock,

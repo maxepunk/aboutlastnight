@@ -538,7 +538,7 @@ describe('the fact check scores the truth criteria only, for the weave', () => {
     expect(prompt).toContain(JSON.stringify(reworkFixtureState('journalist').weave, null, 2));
     expect(prompt).not.toContain('_factCheck');
     expect(prompt).toContain('<DIRECTOR_ACCUSATION>');
-    expect(prompt).toContain('CANONICAL CHARACTER ROSTER:');
+    expect(prompt).toContain('Every character of the game, first name and then the full name the article prints.');
     expect(prompt).toContain('<DIRECTOR_NOTES>');
     expect(prompt).toContain(arcNodes.ARC_NOTES_LABEL);
     expect(prompt.match(/^<RECORD>$/gm)).toHaveLength(1);

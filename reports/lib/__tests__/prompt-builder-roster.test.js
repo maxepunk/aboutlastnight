@@ -17,10 +17,15 @@ const { writerSignsLine } = require('../prompt-renderers/session-authors');
 
 const CANONICAL = { Vic: 'Vic Kingsley', Mel: 'Mel Nilsson' };
 
+/** Run 2c (the wording doc's part 5): the heading over the names, and the one over the game's own characters. */
+const NAMES_HEADING = 'Every character of the game, first name and then the full name the article prints. A surname that is not on this list is invented, so use these.';
+const PLAYED = 'A name marked with a pronoun, or marked as having none given, was played in this session. The rest were not played.';
+const NPC_HEADING = "The game's own characters, who are never played. Where a pronoun is given here, it is fixed:";
+
 describe('generateRosterSection — NPC pronoun line', () => {
   it('states the NPC pronouns for the journalist theme', () => {
     const section = generateRosterSection('journalist', CANONICAL, null, { Vic: 'he/him' });
-    expect(section).toContain('Non-player characters');
+    expect(section).toContain(NPC_HEADING);
     expect(section).toContain('Marcus Blackwood (he/him)');
     // Phase 3 (3.2; T9): Nova is never gendered, so the canon gives Nova no pronoun.
     expect(section).toContain('- Nova - the NovaNews reporter who writes the article');
@@ -46,7 +51,7 @@ describe('generateRosterSection — NPC pronoun line', () => {
     // X-6 suppresses the pronoun annotation for the detective theme; the NPC line
     // follows the same rule so the block stays internally consistent.
     const section = generateRosterSection('detective', CANONICAL, null, { Vic: 'he/him' });
-    expect(section).toContain('Non-player characters');
+    expect(section).toContain(NPC_HEADING);
     expect(section).toContain('Marcus Blackwood');
     expect(section).not.toContain('(he/him)');
     expect(section).not.toContain('Nova');
@@ -84,12 +89,42 @@ describe('theme-config NPC entries', () => {
   });
 });
 
-// Phase 3 (3.2): character-voice.md, which pointed at this block, is retired. The block
-// states its own authority, and T9 in the truth rules gives the pronoun rule.
-describe('the article prompt names the NPC line as authoritative', () => {
-  it("the roster block says the NPC pronouns are as authoritative as the roster's", () => {
-    const section = generateRosterSection('journalist', CANONICAL, null, { Vic: 'he/him' });
-    expect(section).toContain("these pronouns are as authoritative as the roster's");
+// Phase 18, run 2c (the wording doc's part 5): the list of names, in the limits' manner. Every
+// writer and judge prints it from generateRosterSection.
+describe('the list of names, as approved (run 2c)', () => {
+  it("opens on the approved heading, then the names, then the game's own characters under theirs, each word for word", () => {
+    const section = generateRosterSection('journalist', CANONICAL, null, { Vic: 'he/him' }, ['Vic', 'Mel']);
+    expect(section.startsWith([
+      `${NAMES_HEADING} ${PLAYED}`,
+      '- Vic → Vic Kingsley (he/him)',
+      '- Mel → Mel Nilsson (pronoun not given)',
+      '',
+      NPC_HEADING,
+      '- Marcus Blackwood (he/him) - the man whose death is being investigated'
+    ].join('\n'))).toBe(true);
+  });
+
+  it('no longer says a name with no pronoun is not on the roster, nor speaks in capitals', () => {
+    const section = generateRosterSection('journalist', { ...CANONICAL, Kai: 'Kai Andersen' }, null, { Vic: 'he/him' }, ['Vic']);
+    expect(section).toContain('- Kai → Kai Andersen\n');
+    ['A name with no pronoun', 'CANONICAL CHARACTER ROSTER', 'NEVER', 'ONLY', 'Non-player characters', 'authoritative']
+      .forEach((gone) => expect(`${gone}: ${section.includes(gone)}`).toBe(`${gone}: false`));
+  });
+
+  // "marked as having none given" is what a played character with no pronoun prints.
+  it('marks a played character with no pronoun given as having none given, and a name not played with nothing', () => {
+    const section = generateRosterSection('journalist', { ...CANONICAL, Kai: 'Kai Andersen' }, null, { Vic: 'he/him' }, ['Vic', 'Mel']);
+    expect(section).toContain('- Mel → Mel Nilsson (pronoun not given)');
+    expect(section).toContain('- Kai → Kai Andersen\n');
+  });
+
+  // A theme that prints no pronouns (the parked detective) leaves out the two sentences about
+  // the marks, and what is left reads whole.
+  it('leaves out the two sentences about the marks where the theme prints no pronouns', () => {
+    const section = generateRosterSection('detective', CANONICAL, null, { Vic: 'he/him' }, ['Vic', 'Mel']);
+    expect(section.startsWith(`${NAMES_HEADING}\n- Vic → Vic Kingsley\n- Mel → Mel Nilsson\n\n${NPC_HEADING}\n`)).toBe(true);
+    expect(section).not.toContain(PLAYED);
+    expect(section).not.toMatch(/pronoun not given|\(he\/him\)/);
   });
 });
 

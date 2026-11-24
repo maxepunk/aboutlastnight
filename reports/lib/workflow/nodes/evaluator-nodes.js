@@ -151,7 +151,7 @@ const TRUTH_MATERIAL = Object.freeze({
   directorEdits: "THE DIRECTOR'S EDITS (",  // the director's edits, right after the output judged, when it carries one (renderJudgeDirectorEdits; brief 4.7f)
   epilogue: '<EPILOGUE>',                   // Nova's day, from the director's notes
   verdict: '<DIRECTOR_ACCUSATION>',         // the room's verdict, in the director's words
-  roster: 'CANONICAL CHARACTER ROSTER:',    // each player with the roster's pronoun
+  roster: 'Every character of the game, first name and then the full name the article prints.', // each player with the roster's pronoun (generateRosterSection; run 2c)
   whiteboard: '### The Whiteboard',         // the whiteboard, as context (renderWhiteboardConnections)
   photos: '\nPHOTOS (',                     // the photos the judged writer was given, with the director's descriptions
   modeBlock: '<this-session>',              // the part about this session, where Nova was (system prompt; phase 18, R2)

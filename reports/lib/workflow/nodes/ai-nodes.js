@@ -28,14 +28,16 @@ const { CHECKPOINT_TYPES } = require('../checkpoint-helpers');
 const { isTransientError } = require('../../llm/retry');
 const { SchemaValidator } = require('../../schema-validator');
 // Phase 18, run 2b (R23): the article writer's one shape, the previous article as it is shown,
-// and the carry of the fields it is not shown into a reworked article.
+// and the carry of the fields it is not shown into a reworked article. Run 2c (R31): the strip of
+// a beat's kind, the one rule the map's rework prints its map through.
 const {
   createPromptBuilder,
   buildDirectorGuidanceSection,
   filterGateNotes,
   WRITER_BUNDLE_SCHEMA,
   bundleAsShown,
-  carryUnshownFields
+  carryUnshownFields,
+  mapWithoutBeatKinds
 } = require('../../prompt-builder');
 const {
   carriedEdits, settleEdits, standingAfterSendBack, SEND_BACK_PASS, CHANGED_EDITS_KEY, MAP_TOP_PHOTO, isCut, sessionPhotoNames,
@@ -1428,41 +1430,11 @@ async function reviseOutline(state, config) {
 }
 
 /**
- * The map the map's rework is shown (phase 18, run 2b; R21): `map` with no beat's kind, in a
- * section or in leftOut, since the writer's schema no longer asks for one and a map stored
- * before the change may hold it. Everything else is as `map` holds it, and `map` itself is
- * untouched: the edits, the settle and the state read it whole. A value that is no map passes
- * through as it is.
- *
- * Until brief H's function for the map as a writer is shown it is merged, this is the map's
- * own; the integrator folds it into that one.
- *
- * @param {*} map
- * @returns {*}
- */
-function mapWithoutBeatKinds(map) {
-  if (!map || typeof map !== 'object' || Array.isArray(map)) return map;
-  const withoutKind = (beat) => {
-    if (!beat || typeof beat !== 'object' || Array.isArray(beat) || !('kind' in beat)) return beat;
-    const { kind: _kind, ...rest } = beat;
-    return rest;
-  };
-  const shown = { ...map };
-  if (Array.isArray(map.sections)) {
-    shown.sections = map.sections.map((section) => (section && typeof section === 'object' && Array.isArray(section.beats)
-      ? { ...section, beats: section.beats.map(withoutKind) }
-      : section));
-  }
-  if (Array.isArray(map.leftOut)) shown.leftOut = map.leftOut.map(withoutKind);
-  return shown;
-}
-
-/**
  * The map's rework call, the one place it is built (phase 4, brief 4.6), as the arc rework's
  * is (arc-specialist-nodes.js arcReworkCall): reviseOutline sends it, and
  * scripts/render-prompts.js renders it. From the map the rework starts from
- * (`_previousOutline`, printed without a beat's kind: mapWithoutBeatKinds), the director's
- * standing edits it carries, the map checks' lines or
+ * (`_previousOutline`, printed without a beat's kind through prompt-builder.js
+ * mapWithoutBeatKinds, R31), the director's standing edits it carries, the map checks' lines or
  * the director's note, the round, and the standing notes without the note being acted on.
  * A director's round, the send-back, reads no check failure from before the round, as the
  * meeting's does (task 4.14b): those lines were found on the map the stop showed, the
@@ -1489,7 +1461,8 @@ async function mapReworkCall(state, promptBuilder, theme = state.theme || 'journ
     // 4.12c: the stop's round, the one rule).
     round: stopRoundOf(CHECKPOINT_TYPES.OUTLINE, state),
     validationResults: sendBack ? null : state.validationResults,
-    // Phase 18, run 2b (R21): the map it starts from, printed without a beat's kind.
+    // Phase 18, run 2b (R21): the map it starts from, printed without a beat's kind (run 2c, R31:
+    // the one strip, which the map as the article writer is shown it builds on).
     previousOutput: mapWithoutBeatKinds(before),
     humanFeedback: state._outlineFeedback || null,
     handEdits: edits
@@ -1707,7 +1680,9 @@ function articleWriterInputs(state) {
     // Session facts for the non-roster character guardrail (RC3) and the verdict (brief 2.2)
     buildSessionFacts(state),
     state.directorNotes || null,  // RC5: director observations for article grounding
-    state.narrativeTensions || null,  // Task F: programmatic contradictions for narrative weaving
+    // The sentences about Blake: in their place among the arguments, though the article writer no
+    // longer prints them (phase 18, run 2c; the wording doc's part 6)
+    state.narrativeTensions || null,
     // Spec 2026-09-19 §5.3: the standing gate notes; brief 2.2: the director's input-review
     // corrections and photo descriptions; phase 3 (3.9): every photo the article places.
     {
@@ -1723,10 +1698,11 @@ function articleWriterInputs(state) {
 /**
  * The article writer's first draft (phase 4, brief 4.7b; spec 6.1): one call, its prompt
  * built from the writer's own inputs (articleWriterInputs: the settled weave, the map as
- * the article reads it, the money, the session facts, the director's notes, the narrative
- * tensions, and the standing notes, the record, the input-review corrections, the photo
- * descriptions and the photos it places), its output held to the article writer's schema, the one
- * its prompt prints (prompt-builder.js WRITER_BUNDLE_SCHEMA; phase 18, run 2b, R23).
+ * the article reads it, the money, the session facts, the director's notes, the sentences about
+ * Blake, which it no longer prints, and the standing notes, the record, the input-review
+ * corrections, the photo descriptions and the photos it places), its output held to the article
+ * writer's schema, the one its prompt prints (prompt-builder.js WRITER_BUNDLE_SCHEMA; phase 18,
+ * run 2b, R23).
  * Code stamps the map's headline, deck and top photo into the draft (stampFromMap; R7). A
  * thread that already holds a bundle (a resume) passes through with no call.
  *

@@ -13,9 +13,10 @@
  *   by its id, its name and its line; and under each, its evidence, one piece a line: its stance,
  *   its sources and what it shows (phase 4b, brief 1B; R7), for the map writer to give each beat
  *   the pieces that tell it. A thread with none yet, such as one the director added, says so.
- *   With `withEvidence: false` (phase 18, run 2b, R19) no thread's evidence prints, and the intro
- *   says only that the threads come in the angle's order: the article writer and its rework read
- *   it so, since the map holds the evidence the map writer chose for each beat. Every other
+ *   With `withEvidence: false` (phase 18, run 2b, R19) no thread's evidence prints, the intro
+ *   says only that the threads come in the angle's order, and it ends on the sentences for the
+ *   article (run 2c): the article writer and its rework read it so, since the map holds the
+ *   evidence the map writer chose for each beat. Every other
  *   reader (the map writer, the map's rework, the article's judge) reads it whole;
  * - the threads the angle leaves out, last among the threads, by name and nothing more: no id,
  *   no line, no evidence (phase 4b fix round, fix 5). The map writer adds no thread, so what a
@@ -35,10 +36,17 @@
  *
  * The other angles stay with the meeting, for going back to it (R9): no later writer reads them.
  *
+ * The intro ends on what the lines are (phase 18, run 2c; LINES_SENTENCES): for every reader,
+ * that WHERE IT ENDS UP answers the QUESTION and what FROM THE DIRECTOR'S NOTES is; for the
+ * article writer and its rework, in the form without the evidence, that the headline prints as it
+ * stands and no other line is a sentence for the article.
+ *
  * renderDirectorAnswers prints the answers alone, for the meeting's fact check after a
  * director's round, which reads them as the director's words (T1).
  *
- * Generic: a weave is angles, threads, connections and questions, so nothing here names a theme.
+ * A weave is angles, threads, connections and questions, so nothing here reads a theme. The one
+ * name of the journalist's in its own words is Nova's, in the intro's approved sentence on WHERE
+ * IT ENDS UP (run 2c); only the journalist has a weave.
  */
 'use strict';
 
@@ -222,6 +230,21 @@ const THREADS_SENTENCE = Object.freeze({
 });
 
 /**
+ * The intro's last sentences (phase 18, run 2c; the wording doc's part 3), what the settled
+ * angle's lines are:
+ * - `shared`, for every reader of the settled weave (the map writer, the map's rework, the article
+ *   writer, its rework and the article's judge): which line is the answer to the question, and what
+ *   "from the director's notes" is;
+ * - `forTheArticle`, after them in the form without the evidence, the one the article writer and
+ *   its rework read: the headline prints as it stands, and every other line is the director's to
+ *   decide by, not a sentence for the article.
+ */
+const LINES_SENTENCES = Object.freeze({
+  shared: "WHERE IT ENDS UP is Nova's answer to the QUESTION. FROM THE DIRECTOR'S NOTES, when it is there, is the director's own read of the session, which this angle rests on.",
+  forTheArticle: 'The headline is printed as it stands. Every other line here was written for the director to decide by, the lines the director changed included. They say what the article argues. None of them is a sentence for the article.'
+});
+
+/**
  * The story the director settled at the story meeting, for every later writer: the angle they
  * picked, as they left it (lib/weave.js settledAngleOf).
  *
@@ -230,7 +253,8 @@ const THREADS_SENTENCE = Object.freeze({
  *   (lib/hand-edit-diff.js carriedEdits)
  * @param {Object} [options]
  * @param {boolean} [options.withEvidence=true] - false leaves out the evidence under each thread
- *   in the story, and the intro's clause on it (phase 18, run 2b, R19): the article writer's form
+ *   in the story, and the intro's clause on it (phase 18, run 2b, R19), and ends the intro on the
+ *   sentences for the article (run 2c, LINES_SENTENCES.forTheArticle): the article writer's form
  * @returns {string} the tagged block, or '' when there is no weave or it holds no angle
  */
 function renderSettledWeave(weave, edits, { withEvidence = true } = {}) {
@@ -244,7 +268,7 @@ function renderSettledWeave(weave, edits, { withEvidence = true } = {}) {
 
   const lines = [
     `<${SETTLED_WEAVE_TAG}>`,
-    `The story the director settled at the story meeting: the angle they picked, as they left it, with the director's answers to the questions. A line that ends in [the director's change ...] holds a change the director made at the meeting, named by its id. Each answer is the director's words, word for word. ${withEvidence ? THREADS_SENTENCE.withEvidence : THREADS_SENTENCE.without} The threads the angle leaves out come after them, by name.`,
+    `The story the director settled at the story meeting: the angle they picked, as they left it, with the director's answers to the questions. A line that ends in [the director's change ...] holds a change the director made at the meeting, named by its id. Each answer is the director's words, word for word. ${withEvidence ? THREADS_SENTENCE.withEvidence : THREADS_SENTENCE.without} The threads the angle leaves out come after them, by name. ${LINES_SENTENCES.shared}${withEvidence ? '' : ` ${LINES_SENTENCES.forTheArticle}`}`,
     '',
     ...PITCH_LINES.map(([field, label]) => `${label}: ${textOf(angle[field])}${marked(`pitch:${field}`)}`)
   ];

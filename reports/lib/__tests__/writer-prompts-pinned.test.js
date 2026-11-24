@@ -549,11 +549,23 @@ const REPO = path.join(__dirname, '..', '..');
  *   and a connection's evidence shows what the two threads share (+5): arcs-journalist
  *   12633 -> 12513 (-120). The rule files are stubs here, so their copy moves no pin. The article
  *   pin does not move.
+ * - Phase 18, run 2c, slice O (R31, R34; the wording doc's parts 3 to 6), the article writer and the
+ *   blocks every prompt shares. The list of names opens on the approved heading, with the two
+ *   sentences on who played (+151), and the game's own characters take their approved heading
+ *   (-24); the label over the quote bank and the line over the quoted lines take the approved
+ *   lines (+64); the epilogue's label too (-16); and the summary of the characters' label, which
+ *   the weave writer prints (+80). The settled weave's intro ends on the two sentences every
+ *   reader reads (+166), and the article writer's form on the four for the article after them
+ *   (+222). The article writer's generation instruction no longer offers the caption naming a
+ *   document or the list (-289), and their shapes leave the schema printed in <SCHEMA>
+ *   (UNOFFERED_BLOCK_TYPES; -1320). The fixture prints no sentences about Blake to the article
+ *   writer, so their removal moves nothing here. outline-journalist 24086 -> 24427 (+341),
+ *   arcs-journalist 12633 -> 12888 (+255), article-journalist 27701 -> 26655 (-1046).
  */
 const PINNED = {
-  'outline-journalist': ['30d51ffe266f1142eec558b5e0af91bc388710c0440ddfe775ffc4d375cd5486', 24285],
-  'article-journalist': ['26009a56d885912e8f213ce304c2cde938e367ed316c00c59fcf5b8d20f80d15', 27701],
-  'arcs-journalist': ['52ecf53d1dd4d267e1f005cf23a0c29c9f28aba64d6952ea73620443804079e7', 12513]
+  'outline-journalist': ['86480e58bbbf46336ccd9a6f72a3d86d9c0929d261a753588783aa7f5790dc59', 24626],
+  'article-journalist': ['27c5f84562713f941fd3b146e9f3152ca2d56e29b28f09d4b9123d03548507ee', 26655],
+  'arcs-journalist': ['916799e5ff606ce5d3b753c42e0982ae47bd0ec897f2a37b479557026b22ed52', 12768]
 };
 
 describe('the writers send exactly what they sent before the reworkers were built from them', () => {

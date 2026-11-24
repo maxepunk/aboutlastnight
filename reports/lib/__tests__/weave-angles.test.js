@@ -505,7 +505,7 @@ describe('the settled reading: the picked angle (spec 8; R11)', () => {
     [a2.headline, a2.story, a2.question, a2.lands, a2.ends].forEach((line) => expect(text).toContain(line));
     expect(text).not.toContain(left.angles[0].headline);
     expect(text).not.toContain(left.angles[2].story);
-    expect(text).not.toContain("FROM THE DIRECTOR'S NOTES");
+    expect(text).not.toContain("FROM THE DIRECTOR'S NOTES: ");
     expect(text).not.toContain(left.fromYourNotes);
     const order = ['t3', 't1', 't6', 't8'].map((id) => text.indexOf(`- ${id} `));
     order.forEach((at) => expect(at).toBeGreaterThan(-1));

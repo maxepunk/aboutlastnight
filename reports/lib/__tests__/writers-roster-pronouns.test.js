@@ -82,7 +82,7 @@ describe('the section is the one the article writer and the judges print', () =>
   it("is _rosterSection's roster and NPC lines, which the article writer's system prompt carries", async () => {
     const state = reworkFixtureState('journalist');
     const section = rosterSectionFor(state);
-    expect(section.startsWith('CANONICAL CHARACTER ROSTER:\n')).toBe(true);
+    expect(section.startsWith('Every character of the game, first name and then the full name the article prints. ')).toBe(true);
     PRONOUN_LINES.forEach((line) => expect(section).toContain(line));
     expect(section).toContain('- Marcus Blackwood (he/him)');
     const articleBuilder = createPromptBuilder({
@@ -107,7 +107,7 @@ describe('the arc writer', () => {
     expect(count(writer, '### Character Context (')).toBe(1);
     // The roster comes after the character categories, under its own heading.
     const at = (s) => writer.indexOf(s);
-    expect(at('### Names and Pronouns\nCANONICAL CHARACTER ROSTER:')).toBeGreaterThan(at('### Character Categories'));
+    expect(at('### Names and Pronouns\nEvery character of the game, first name and then the full name the article prints.')).toBeGreaterThan(at('### Character Categories'));
     expect(at('### Character Context (')).toBeGreaterThan(at('### Names and Pronouns'));
   });
 

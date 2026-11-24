@@ -154,9 +154,12 @@ ${rawProse || '(no director notes provided)'}
       .filter(q => q && typeof q === 'object')
       .map(q => quoteEntry(q, rawProse, correctionList))
       .join('\n');
+    // Phase 18, run 2c (the wording doc's part 5): the line over the quoted lines says what the
+    // bank is for, a line's words and speaker once the story needs it, and that being listed is no
+    // reason to use a line.
     blocks.push(`<QUOTE_BANK>
 ${DERIVED_LABELS.directorNotesIndex}
-The lines the director's notes quote, each with its speaker as the notes and corrections give it:
+Each line the director's notes quote, with who said it, as the notes and the corrections give it. Use it to get a line's words and its speaker right once the story needs that line. Being on this list is no reason to use a line.
 ${lines}
 </QUOTE_BANK>`);
   }
@@ -200,8 +203,8 @@ ${epilogue.map(sentence => `- ${sentence}`).join('\n')}
  * stored observations are read, and only the ones the notes hold word for word, so
  * every sentence a print site shows is the director's, as DERIVED_LABELS.narrativeTensions
  * says. A sentence wrapped across lines prints on one line. It is the one filter for
- * both journalist print sites (fix 3.2b): the arc writer's Blake section and the
- * article writer's <NARRATIVE_TENSIONS>.
+ * the journalist's print site (fix 3.2b): the arc writer's Blake section. The article
+ * writer's <NARRATIVE_TENSIONS> went in phase 18, run 2c (the wording doc's part 6).
  *
  * @param {Object|null} narrativeTensions - state.narrativeTensions ({tensions: [...]})
  * @param {string} rawProse - the director's notes

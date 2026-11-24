@@ -666,8 +666,9 @@ describe('the removed-phrase fixture: the wording 3.8 retires from the rule file
 
 /**
  * The 3.6b fix batch: instructionText also strips the data prompts carry, built here by
- * the real builders: the director's Blake and Valet sentences (the article writer's
- * <NARRATIVE_TENSIONS> and the arc writer's heading). The pipeline's labels around them
+ * the real builders: the director's Blake and Valet sentences (the arc writer's heading; the
+ * article writer printed them under <NARRATIVE_TENSIONS> until phase 18, run 2c, and prints
+ * them only in the notes now). The pipeline's labels around them
  * stay scanned. The arc packages' excerpts and the outline judge's photo analyses it
  * stripped too went with the packages and the outline judge (phase 4, brief 4.6).
  */
@@ -698,12 +699,15 @@ describe('instructionText: the tension sentences (3.6b fix batch)', () => {
     { evidenceBundle: s.evidenceBundle }
   ));
 
-  it("strips the director's sentences under <NARRATIVE_TENSIONS>, and keeps the label", async () => {
+  // Phase 18, run 2c (the wording doc's parts 4 and 6): the article writer prints no
+  // <NARRATIVE_TENSIONS>; the director's sentence stands once, in the notes, which the scan strips.
+  it("prints the director's sentence once, in the notes, with no <NARRATIVE_TENSIONS> or its label, and the scan finds nothing", async () => {
     const render = await articleRender();
-    expect(render).toContain(`- ${SENTENCE}`);
-    const text = instructionText(render);
-    expect(findRemovedPhrases(text)).toEqual([]);
-    expect(text).toContain(`<NARRATIVE_TENSIONS>\n${DERIVED_LABELS.narrativeTensions}\n-\n</NARRATIVE_TENSIONS>`);
+    expect(render).not.toContain(`- ${SENTENCE}`);
+    expect(render.split(SENTENCE)).toHaveLength(2);
+    expect(render).not.toContain('NARRATIVE_TENSIONS');
+    expect(render).not.toContain(DERIVED_LABELS.narrativeTensions);
+    expect(findRemovedPhrases(instructionText(render))).toEqual([]);
   });
 
   it("strips the director's sentences under the arc writer's Blake and Valet heading, and keeps the label and what follows", () => {

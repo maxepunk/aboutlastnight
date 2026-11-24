@@ -19,7 +19,7 @@
 const { reworkFixtureState, MAP, PREVIOUS_BUNDLE } = require('./fixtures/rework-state');
 const aiNodes = require('../workflow/nodes/ai-nodes');
 const { generateContentBundle, reviseContentBundle, generateOutline, articleMapOf } = aiNodes;
-const { mapAsShown, STORY_MAP_TAG } = require('../prompt-builder');
+const { mapAsShown, mapWithoutBeatKinds, STORY_MAP_TAG } = require('../prompt-builder');
 const { settledWeaveOf } = require('../prompt-renderers/settled-weave');
 const { RULE_SET_CALLS } = require('../rule-set');
 const { _testing: evalTesting } = require('../workflow/nodes/evaluator-nodes');
@@ -108,6 +108,48 @@ describe('R20: mapAsShown, the map as the article writer is shown it', () => {
   });
 });
 
+// Phase 18, run 2c (R31): one rule for a beat's kind, in two forms. The strip of `kind` is its own
+// exported step (mapWithoutBeatKinds), which the map's rework calls, since it hands back a whole
+// map; the map as the article writer is shown it (mapAsShown) builds on it and then cuts each
+// left-out beat to its id and title.
+describe("R31: the strip of a beat's kind, and the map as shown built on it", () => {
+  it("leaves out each beat's kind, in the sections and under leftOut, and keeps every other field, a left-out beat whole", () => {
+    const stripped = mapWithoutBeatKinds(clone(MAP));
+    const expected = clone(MAP);
+    [...expected.sections.flatMap((section) => section.beats), ...expected.leftOut].forEach((beat) => { delete beat.kind; });
+    expect(stripped).toEqual(expected);
+    expect(stripped.leftOut[0].synopsis).toBe(MAP.leftOut[0].synopsis);
+    expect(JSON.stringify(stripped)).not.toContain('"kind"');
+  });
+
+  it('leaves the map it is given untouched, and passes a map with no beats or something that is no map through', () => {
+    const map = clone(MAP);
+    mapWithoutBeatKinds(map);
+    expect(map).toEqual(MAP);
+    expect(mapWithoutBeatKinds(null)).toBe(null);
+    expect(mapWithoutBeatKinds({ sections: [] })).toEqual({ sections: [] });
+    expect(mapWithoutBeatKinds({ sections: [{ slot: 'lede' }], leftOut: ['b9'] })).toEqual({ sections: [{ slot: 'lede' }], leftOut: ['b9'] });
+  });
+
+  it('the map as shown is the stripped map, each left-out beat cut to its id and title', () => {
+    const stripped = mapWithoutBeatKinds(clone(MAP));
+    expect(mapAsShown(clone(MAP))).toEqual({ ...stripped, leftOut: stripped.leftOut.map((beat) => ({ id: beat.id, move: beat.move })) });
+  });
+
+  it("the map's rework prints the map it starts from through the strip, left-out beats whole", async () => {
+    const state = reworkFixtureState('journalist');
+    let sent;
+    await aiNodes.reviseOutline(
+      { ...state, _previousOutline: clone(MAP), outlineRevisionCount: 1 },
+      { configurable: { sdkClient: async (options) => { sent = options; return mapWithoutBeatKinds(clone(MAP)); }, theme: 'journalist' } }
+    );
+    expect(sent.prompt).toContain(JSON.stringify(mapWithoutBeatKinds(clone(MAP)), null, 2));
+    // One rule: the nodes hold no strip of their own.
+    const source = require('fs').readFileSync(require.resolve('../workflow/nodes/ai-nodes'), 'utf8');
+    expect(source).not.toMatch(/function mapWithoutBeatKinds|const withoutKind/);
+  });
+});
+
 describe('R19: the article writer and its rework read the settled weave without the evidence under its threads', () => {
   it('opens the writer and its rework on the settled weave without its evidence', async () => {
     const state = articleState();
@@ -150,7 +192,7 @@ describe("R22: the article writer's system prompt holds no character digest", ()
     [writer, rework].forEach(({ systemPrompt }) => {
       expect(systemPrompt).not.toContain('CHARACTER CONTEXT');
       expect(systemPrompt).not.toContain('Role: CEO');
-      expect(systemPrompt).toContain('CANONICAL CHARACTER ROSTER:\n');
+      expect(systemPrompt).toContain('Every character of the game, first name and then the full name the article prints.');
       expect(systemPrompt).toContain('- Alex → Alex Reeves (he/him)');
     });
   });

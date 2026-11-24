@@ -2,19 +2,26 @@
  * Labels for derived material (phase 2, brief 2.1)
  *
  * Anything a machine produced says so wherever it reaches a writer or a judge:
- * who made it, and that the record decides where the two differ. These used to
+ * that a model or code made it, and what decides where the two differ. These used to
  * reach the prompts as "use for factual accuracy", "ground truth" and "verified to
  * respect evidence boundaries", and nothing had verified any of it
  * (docs/superpowers/specs/2026-09-24-information-architecture.md §5, root cause 3).
  *
- * One wording per kind of material, shared by every prompt that carries it.
+ * One wording per kind of material, shared by every prompt that carries it. Phase 18, run 2c
+ * (the wording doc's parts 4 and 5): the labels over the quote bank, the epilogue, the summary of
+ * the characters and the sentences about Blake take the approved lines, in the limits' manner.
  */
 
 const DERIVED_LABELS = {
-  /** characterData, from extractCharacterData (Haiku). */
+  /**
+   * characterData, from extractCharacterData (Haiku). Run 2c: its pronouns are the documents',
+   * which the roster overrides, so the label says to take pronouns from the roster. The weave
+   * writer and the two judges print it; the article writer reads no summary (run 2b, R22).
+   */
   characterContext:
-    'A model (Haiku) extracted this from the documents. It is derived, not the record: ' +
-    'where it differs from the record, the record decides.',
+    'A model made this summary from the documents in the record. Where it differs from a document, ' +
+    "the document decides. Its pronouns are the documents', which are often not this session's. " +
+    'Take pronouns from the roster.',
 
   /**
    * narrativeTensions, from surfaceContradictions (code, no model). Since phase 3
@@ -23,31 +30,35 @@ const DERIVED_LABELS = {
    * 2 the print sites drop the old-type tensions a thread surfaced before 3.6 stored
    * (092026 and 092626 carry "Director observed multiple characters interacting
    * with Blake") and re-print a stored blake-proximity tension from its
-   * `observations`, so every printed tension is the director's sentences. The label
-   * says so: the sentences are record, and only their gathering is code's (3.6 fix
-   * batch, item 4, integrator's ruling).
+   * `observations`, so every printed tension is the director's sentences.
+   *
+   * Phase 18, run 2c (the wording doc's part 4): the label says what the sentences are for, the
+   * check on who was seen making a deal, and that being listed does not make them more important.
+   * The weave writer (and its rework) is the one reader: it prints them under its Blake heading,
+   * after the notes. The article writer and its rework no longer read the block.
    */
   narrativeTensions:
-    "The pipeline's code gathered the sentences below by searching the director's notes for Blake and the Valet. " +
-    "Each is the director's own sentence, copied as written, so each is part of the record; only the choice of sentences is the code's.",
+    "Code gathered these sentences from the director's notes above: every one that mentions Blake. " +
+    'A memory is sold to Blake, so these are where the notes record who was seen making a deal. ' +
+    'They are listed again for that check only. Being listed here does not make them more important to the story.',
 
   // photoDescriptions, the Haiku photo analyses' label, went with the outline judge, its
   // last reader (phase 4, brief 4.6).
 
   /**
-   * The director-notes indexes, from enrichDirectorNotes (Opus): <QUOTE_BANK>
-   * (integrator ruling, phase 2 final fix wave: they are machine-made). The notes
+   * The director-notes index, from enrichDirectorNotes (Opus): <QUOTE_BANK>
+   * (integrator ruling, phase 2 final fix wave: it is machine-made). The notes
    * themselves, and the corrections after them, are the director's words and carry
-   * no label.
+   * no label. Run 2c: where the bank differs from the notes, the notes decide.
    */
   directorNotesIndex:
-    'A model (Opus) built this from the director\'s notes above. It is derived, not the record: ' +
-    'where it differs from the notes or the rest of the record, the record decides.',
+    "A model built this from the director's notes above. Where it differs from the notes, the notes decide.",
 
   /**
    * <TRANSACTION_LINKS>, from enrichDirectorNotes (Opus). Phase 3 (3.6): a link joins
    * one of the director's observations to ledger sales, and that join is the model's
-   * reading of the notes, never something the notes state (T4).
+   * reading of the notes, never something the notes state (T4). Run 2c gives no wording for
+   * this label, so it keeps its own.
    */
   transactionLinks:
     'A model (Opus) paired each observation below, quoted from the director\'s notes, with ledger ' +
@@ -57,12 +68,12 @@ const DERIVED_LABELS = {
   /**
    * <EPILOGUE>, from enrichDirectorNotes (Opus). Phase 3 (3.6): the sentences are the
    * director's, checked word for word against the notes; which sentences make the
-   * epilogue is the model's choice.
+   * epilogue is the model's choice. Run 2c: where the notes tell what happened afterwards
+   * differently, the notes decide.
    */
   epilogue:
-    'A model (Opus) picked these sentences out of the director\'s notes as the epilogue, what ' +
-    'happened after the investigation, and each is copied as written. The picking is derived, ' +
-    'not the record: where it differs from the notes, the record decides.'
+    "A model picked these sentences out of the director's notes as the epilogue, what happened after the investigation. " +
+    'Each is copied as written. Where the notes give a different account of what happened afterwards, the notes decide.'
 };
 
 module.exports = { DERIVED_LABELS };

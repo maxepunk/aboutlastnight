@@ -172,7 +172,7 @@ describe('renderSettledWeave: the angle the director settled (briefs 4.5 and 3B)
 
   it('prints no "from your notes" line when angle 1 did not start from the director\'s read', () => {
     const { fromYourNotes: _f, ...thin } = clone(WRITERS);
-    expect(renderSettledWeave(thin, [])).not.toContain("FROM THE DIRECTOR'S NOTES");
+    expect(renderSettledWeave(thin, [])).not.toContain("FROM THE DIRECTOR'S NOTES: ");
   });
 
   // R11: "from your notes" travels with the first angle, the one that rests on the director's read.
@@ -180,7 +180,7 @@ describe('renderSettledWeave: the angle the director settled (briefs 4.5 and 3B)
     const weave = { ...clone(WRITERS), picked: 'a2' };
     const text = renderSettledWeave(weave, []);
     expect(text).toContain(`HEADLINE: ${WRITERS.angles[1].headline}`);
-    expect(text).not.toContain("FROM THE DIRECTOR'S NOTES");
+    expect(text).not.toContain("FROM THE DIRECTOR'S NOTES: ");
     expect(text.split('\n').filter((line) => /^- t\d/.test(line)).map((line) => line.slice(0, 4))).toEqual(['- t2', '- t1']);
     expect(text).toContain('THREADS LEFT OUT: The bathroom; The coat check');
     expect(text).toContain('- c2, joining "The case against Rowan" and "The last two minutes"');
@@ -193,13 +193,15 @@ describe('renderSettledWeave: the angle the director settled (briefs 4.5 and 3B)
     expect(renderSettledWeave({ ...clone(WRITERS), angles: [] }, [])).toBe('');
   });
 
-  it('carries no em-dash and names no theme in its own words', () => {
+  // Run 2c (the wording doc's part 3): the intro's approved sentence names Nova as the one whose
+  // answer WHERE IT ENDS UP is, the only name of the theme in the block's own words.
+  it("carries no em-dash, and names no theme in its own words but Nova in the intro's approved sentence", () => {
     const own = renderSettledWeave({
       angles: [{ id: 'a1', headline: 'h', gist: 'g', story: 's', question: 'q', lands: 'l', ends: 'e', threads: ['t1'] }],
       threads: [{ id: 't1', name: 'n', line: 'l', verdict: true, evidence: [piece(['ledger'], 'x')] }], connections: [], questions: []
     }, []);
     expect(own).not.toMatch(/[–—]/);
-    expect(own).not.toMatch(/Nova|NovaNews|detective/i);
+    expect(own.replace("WHERE IT ENDS UP is Nova's answer to the QUESTION.", '')).not.toMatch(/Nova|NovaNews|detective/i);
   });
 });
 
@@ -400,11 +402,11 @@ describe('R19: the option that leaves out the evidence under the threads', () =>
     const weave = directors();
     const whole = introOf(renderSettledWeave(weave, []));
     const without = introOf(renderSettledWeave(weave, [], { withEvidence: false }));
-    expect(without).toBe("The story the director settled at the story meeting: the angle they picked, as they left it, with the director's answers to the questions. A line that ends in [the director's change ...] holds a change the director made at the meeting, named by its id. Each answer is the director's words, word for word. The threads in the story come in the order the angle tells them. The threads the angle leaves out come after them, by name.");
+    expect(without).toBe("The story the director settled at the story meeting: the angle they picked, as they left it, with the director's answers to the questions. A line that ends in [the director's change ...] holds a change the director made at the meeting, named by its id. Each answer is the director's words, word for word. The threads in the story come in the order the angle tells them. The threads the angle leaves out come after them, by name. WHERE IT ENDS UP is Nova's answer to the QUESTION. FROM THE DIRECTOR'S NOTES, when it is there, is the director's own read of the session, which this angle rests on. The headline is printed as it stands. Every other line here was written for the director to decide by, the lines the director changed included. They say what the article argues. None of them is a sentence for the article.");
     expect(whole).toBe(without.replace(
       'The threads in the story come in the order the angle tells them.',
       'The threads in the story come in the order the angle tells them, and under each is its evidence, one piece a line: whether it supports the thread or cuts against it, its sources, and what it shows.'
-    ));
+    ).replace(' The headline is printed as it stands. Every other line here was written for the director to decide by, the lines the director changed included. They say what the article argues. None of them is a sentence for the article.', ''));
   });
 
   it('prints the evidence by default, and with the option set to true', () => {
@@ -418,5 +420,32 @@ describe('R19: the option that leaves out the evidence under the threads', () =>
     const edits = carriedEdits(state._weaveHandEdits, state.weave);
     expect(settledWeaveOf(state, { withEvidence: false })).toBe(renderSettledWeave(state.weave, edits, { withEvidence: false }));
     expect(settledWeaveOf(state)).toBe(renderSettledWeave(state.weave, edits));
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 18, run 2c (the wording doc's part 3; brief O): what the settled angle's lines are
+// ═══════════════════════════════════════════════════════════════════════════
+describe("Run 2c: the intro says what the settled angle's lines are, to every reader and to the article", () => {
+  /** The intro line, the one after the tag. */
+  const introOf = (text) => text.split('\n')[1];
+  const SHARED = "WHERE IT ENDS UP is Nova's answer to the QUESTION. FROM THE DIRECTOR'S NOTES, when it is there, is the director's own read of the session, which this angle rests on.";
+  const FOR_THE_ARTICLE = 'The headline is printed as it stands. Every other line here was written for the director to decide by, the lines the director changed included. They say what the article argues. None of them is a sentence for the article.';
+
+  it('ends the intro on the two shared sentences for every reader: the map writer, its rework and the article judge read it whole', () => {
+    const whole = introOf(renderSettledWeave(directors(), []));
+    expect(whole.endsWith(` The threads the angle leaves out come after them, by name. ${SHARED}`)).toBe(true);
+    expect(whole).not.toContain(FOR_THE_ARTICLE);
+  });
+
+  it('adds the four sentences for the article after them only in the form without the evidence, the article writer\'s and its rework\'s', () => {
+    const without = introOf(renderSettledWeave(directors(), [], { withEvidence: false }));
+    expect(without.endsWith(` The threads the angle leaves out come after them, by name. ${SHARED} ${FOR_THE_ARTICLE}`)).toBe(true);
+  });
+
+  it("prints both whether or not FROM THE DIRECTOR'S NOTES is there, since the sentence says when it is", () => {
+    const weave = { ...directors(), picked: 'a2' };
+    expect(renderSettledWeave(weave, [])).not.toContain("FROM THE DIRECTOR'S NOTES: ");
+    expect(introOf(renderSettledWeave(weave, []))).toContain(SHARED);
   });
 });

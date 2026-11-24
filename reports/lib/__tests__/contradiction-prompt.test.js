@@ -57,6 +57,8 @@ describe('contradiction data in arc prompt', () => {
     const prompt = buildWeavePrompt(baseState({ narrativeTensions: STORED }));
     const section = prompt.slice(prompt.indexOf("### Blake and the Valet in the director's notes"), prompt.indexOf('### Session Roster'));
     expect(section).toContain(DERIVED_LABELS.narrativeTensions);
+    // Run 2c (the wording doc's part 4): the weave writer keeps the block, under the new label.
+    expect(section).toContain("### Blake and the Valet in the director's notes\nCode gathered these sentences from the director's notes above: every one that mentions Blake. ");
     expect(section).toContain(`- ${BLAKE_SENTENCE}`);
     expect(prompt).not.toContain('transparency-vs-burial');
     expect(prompt).not.toContain('$155,000');
@@ -79,10 +81,10 @@ describe('contradiction data in arc prompt', () => {
     expect(prompt).not.toContain(DERIVED_LABELS.narrativeTensions);
   });
 
-  // Fix 3.2b: one filter, directorTensionSentences, for both journalist print sites.
-  // Given the same stored tensions and notes, the arc writer's Blake section and the
-  // article writer's <NARRATIVE_TENSIONS> list the same sentences, in the same order.
-  test('the arc writer and the article writer print the same sentences, through one filter', async () => {
+  // Fix 3.2b: one filter, directorTensionSentences, for the journalist's print site. Phase 18,
+  // run 2c (the wording doc's parts 4 and 6): the weave writer is its one reader; the article
+  // writer no longer prints <NARRATIVE_TENSIONS>.
+  test('the arc writer prints the sentences through the one filter, and the article writer prints none', async () => {
     const { directorTensionSentences } = require('../prompt-renderers/director-notes-renderer');
     const promptBuilderModule = require('../prompt-builder');
     const OTHER = 'The Valet counted the cash at the door.';
@@ -111,8 +113,8 @@ describe('contradiction data in arc prompt', () => {
     const { userPrompt } = await builder.buildArticlePrompt(
       renderSettledWeave(WEAVE, null), MAP, [], null, state.directorNotes, state.narrativeTensions, { evidenceBundle: state.evidenceBundle }
     );
-    const articleBlock = userPrompt.slice(userPrompt.indexOf('<NARRATIVE_TENSIONS>'), userPrompt.indexOf('</NARRATIVE_TENSIONS>'));
-    expect(listed(articleBlock)).toEqual(expected);
+    expect(userPrompt).not.toContain('NARRATIVE_TENSIONS');
+    expect(userPrompt).not.toContain(DERIVED_LABELS.narrativeTensions);
 
     expect(promptBuilderModule.narrativeTensionSentences).toBeUndefined();
   });

@@ -103,7 +103,14 @@ ${DERIVED_LABELS.directorNotesIndex}
     expect(out).toContain(`<TRANSACTION_LINKS>
 ${DERIVED_LABELS.transactionLinks}
 `);
-    expect(DERIVED_LABELS.directorNotesIndex).toMatch(/^A model \(Opus\) built this .* the record decides\.$/);
+    // Run 2c (the wording doc's part 5): the label, then the line over the quoted lines, word for word.
+    expect(out).toContain([
+      '<QUOTE_BANK>',
+      "A model built this from the director's notes above. Where it differs from the notes, the notes decide.",
+      "Each line the director's notes quote, with who said it, as the notes and the corrections give it. Use it to get a line's words and its speaker right once the story needs that line. Being on this list is no reason to use a line.",
+      '- (speaker not recorded): "we had to act"'
+    ].join('\n'));
+    expect(out).not.toContain("The lines the director's notes quote, each with its speaker as the notes and corrections give it:");
     // The director's own words carry no label.
     expect(out.slice(0, out.indexOf('<QUOTE_BANK>'))).not.toContain(DERIVED_LABELS.directorNotesIndex);
   });
@@ -279,7 +286,7 @@ describe("renderDirectorEnrichmentBlock: the director's notes, unguessed (phase 
     });
     expect(block(out, 'EPILOGUE')).toBe([
       '<EPILOGUE>',
-      DERIVED_LABELS.epilogue,
+      "A model picked these sentences out of the director's notes as the epilogue, what happened after the investigation. Each is copied as written. Where the notes give a different account of what happened afterwards, the notes decide.",
       '- Remi was not available for comment after the investigation.',
       '- At the time of writing this article, Nova intercepted a communication between the NeurAI board of directors and Blake.',
       '</EPILOGUE>'

@@ -176,7 +176,7 @@ describe('R28: the two judges read the same notes, roster and totals', () => {
     expect(count(arcs, block)).toBe(1);
     expect(count(article, block)).toBe(1);
     expect(count(arcs, 'SESSION ROSTER (4 players who were present at this session\'s investigation):')).toBe(1);
-    expect(count(arcs, 'CANONICAL CHARACTER ROSTER:')).toBe(1);
+    expect(count(arcs, 'Every character of the game, first name and then the full name the article prints.')).toBe(1);
     expect(count(arcs, facts.timeOfDayLine)).toBe(1);
   });
 

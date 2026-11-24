@@ -257,7 +257,7 @@ describe('journalist article stop', () => {
   it("the reworker's system prompt is its writer's (the roster with pronouns, the world and the limits), then the rework rules", async () => {
     const { writer, rework } = await writerAndRework(SEND_BACK);
     expect(rework.system).toBe(`${writer.system}\n\n${ARTICLE_REVISION_RULES}`);
-    expect(writer.system).toContain('CANONICAL CHARACTER ROSTER');
+    expect(writer.system).toContain('Every character of the game, first name and then the full name the article prints.');
     expect(writer.system).toContain('Morgan → Morgan Reed');
     expect(writer.system).toContain('<limits>');
   });

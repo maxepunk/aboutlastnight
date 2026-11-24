@@ -754,7 +754,7 @@ describe('PromptBuilder', () => {
     it('should return empty roster when no characters provided', () => {
       const { generateRosterSection } = require('../prompt-builder');
       const result = generateRosterSection('journalist');
-      expect(result).toContain('CANONICAL CHARACTER ROSTER');
+      expect(result).toContain('Every character of the game, first name and then the full name the article prints.');
       // No character entries since no hardcoded fallback
       expect(result).not.toContain('→');
     });
@@ -1130,62 +1130,24 @@ describe('the record view in the outline and article prompts (brief 2.1)', () =>
     expect(userPrompt).not.toContain('from arcEvidencePackages.evidenceItems[].fullContent');
   });
 
-  // Phase 3 (3.2; T4): the tensions print as the director's sentences that name Blake
-  // or the Valet. A note from before 3.6 that read an account's name as its holder
-  // prints nothing, and an old blake-proximity note prints its observations, not its
-  // generic narrativeNote. The filter is the arc writer's (directorTensionSentences,
-  // fix 3.2b): only the sentences the notes hold word for word print, each once.
-  const TENSION_NOTES = { rawProse: 'Blake pulled Vic aside at the bar. The Valet read the balances.' };
-
-  it('prints the director\'s sentences about Blake, labelled, and drops the old account-name notes', async () => {
+  // Phase 18, run 2c (the wording doc's parts 4 and 6): the article writer no longer reads the
+  // sentences about Blake. They are in <DIRECTOR_NOTES> once; the weave writer reads them again,
+  // under their label, for its check on who was seen making a deal (arc-specialist-nodes.js).
+  it('prints no block of sentences about Blake, nor its label, whatever the thread stores', async () => {
+    const notes = { rawProse: 'Blake pulled Vic aside at the bar. The Valet read the balances.' };
     const tensions = {
       tensions: [
         { type: 'named-account', narrativeNote: 'Mel used their own name for a burial account.' },
-        { type: 'transparency-vs-burial', narrativeNote: 'Mel publicly demonstrated transparency.' },
-        {
-          type: 'blake-proximity',
-          observations: ['Blake pulled Vic aside\n  at the bar.', 'The Valet read the balances.'],
-          narrativeNote: 'Director observed multiple characters interacting with Blake.'
-        }
+        { type: 'blake-proximity', observations: ['Blake pulled Vic aside at the bar.', 'The Valet read the balances.'] }
       ]
     };
-    const { userPrompt } = await builderFor('journalist').buildArticlePrompt(
-      SETTLED_WEAVE, STORY_MAP, [], null, TENSION_NOTES, tensions, { evidenceBundle }
+    const { systemPrompt, userPrompt } = await builderFor('journalist').buildArticlePrompt(
+      SETTLED_WEAVE, STORY_MAP, [], null, notes, tensions, { evidenceBundle }
     );
-    const block = userPrompt.slice(userPrompt.indexOf('<NARRATIVE_TENSIONS>'), userPrompt.indexOf('</NARRATIVE_TENSIONS>'));
-    expect(block).toBe(`<NARRATIVE_TENSIONS>\n${DERIVED_LABELS.narrativeTensions}\n- Blake pulled Vic aside at the bar.\n- The Valet read the balances.\n`);
-    expect(block).not.toMatch(/Black Market|verified to respect|named-account|Director observed/);
-  });
-
-  it('prints a stored sentence only when the notes hold it word for word, and each once', async () => {
-    const tensions = {
-      tensions: [{
-        type: 'blake-proximity',
-        observations: ['Blake paid Vic.', 'The Valet read the balances.', 'The Valet read the balances.']
-      }]
-    };
-    const { userPrompt } = await builderFor('journalist').buildArticlePrompt(
-      SETTLED_WEAVE, STORY_MAP, [], null, TENSION_NOTES, tensions, { evidenceBundle }
-    );
-    const block = userPrompt.slice(userPrompt.indexOf('<NARRATIVE_TENSIONS>'), userPrompt.indexOf('</NARRATIVE_TENSIONS>'));
-    expect(block).toBe(`<NARRATIVE_TENSIONS>\n${DERIVED_LABELS.narrativeTensions}\n- The Valet read the balances.\n`);
-    expect(userPrompt).not.toContain('Blake paid Vic.');
-  });
-
-  it('prints no tensions block when the thread has no notes to hold the sentences', async () => {
-    const tensions = { tensions: [{ type: 'blake-proximity', observations: ['The Valet read the balances.'] }] };
-    const { userPrompt } = await builderFor('journalist').buildArticlePrompt(
-      SETTLED_WEAVE, STORY_MAP, [], null, null, tensions, { evidenceBundle }
-    );
-    expect(userPrompt).not.toContain('<NARRATIVE_TENSIONS>');
-  });
-
-  it('prints no tensions block when only old account-name notes are stored', async () => {
-    const tensions = { tensions: [{ type: 'named-account', narrativeNote: 'Mel used their own name for a burial account.' }] };
-    const { userPrompt } = await builderFor('journalist').buildArticlePrompt(
-      SETTLED_WEAVE, STORY_MAP, [], null, null, tensions, { evidenceBundle }
-    );
-    expect(userPrompt).not.toContain('<NARRATIVE_TENSIONS>');
+    const whole = `${systemPrompt}\n${userPrompt}`;
+    expect(whole).not.toContain('NARRATIVE_TENSIONS');
+    expect(whole).not.toContain(DERIVED_LABELS.narrativeTensions);
+    expect(whole.split('Blake pulled Vic aside at the bar.')).toHaveLength(2);
   });
 
   it('labels the character context as a model\'s extraction that the record overrules', () => {
@@ -1437,8 +1399,8 @@ describe('phase 3 (3.2): the journalist writers read the rule set', () => {
 
     it('the roster block is in the article system prompt once (M20)', async () => {
       const { systemPrompt, userPrompt } = await articleOf(journalist());
-      expect(systemPrompt.split('CANONICAL CHARACTER ROSTER:').length - 1).toBe(1);
-      expect(userPrompt).not.toContain('CANONICAL CHARACTER ROSTER:');
+      expect(systemPrompt.split('Every character of the game, first name and then the full name the article prints.').length - 1).toBe(1);
+      expect(userPrompt).not.toContain('Every character of the game, first name and then the full name the article prints.');
     });
   });
 

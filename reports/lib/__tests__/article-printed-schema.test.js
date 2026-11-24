@@ -19,7 +19,7 @@
 const Ajv = require('ajv');
 const contentBundleSchema = require('../schemas/content-bundle.schema.json');
 const {
-  writerBundleSchemaOf, WRITER_BUNDLE_SCHEMA, UNSHOWN_BUNDLE_FIELDS, bundleAsShown, carryUnshownFields
+  writerBundleSchemaOf, WRITER_BUNDLE_SCHEMA, UNSHOWN_BUNDLE_FIELDS, UNOFFERED_BLOCK_TYPES, bundleAsShown, carryUnshownFields
 } = require('../prompt-builder');
 const { SchemaValidator } = require('../schema-validator');
 const { diffBundle, PRINTED_FIELDS, CHANGED_EDITS_KEY } = require('../hand-edit-diff');
@@ -106,9 +106,7 @@ const NAMED = {
   'a paragraph': [(s) => blockOf(s, 'paragraph'), ['type', 'text']],
   'a quote': [(s) => blockOf(s, 'quote'), ['type', 'text', 'attribution']],
   'an evidence card': [(s) => blockOf(s, 'evidence-card'), ['type', 'tokenId', 'headline', 'content', 'owner', 'significance']],
-  'an evidence reference': [(s) => blockOf(s, 'evidence-reference'), ['type', 'tokenId', 'caption']],
   'a photo': [(s) => blockOf(s, 'photo'), ['type', 'filename', 'caption']],
-  'a list': [(s) => blockOf(s, 'list'), ['type', 'items', 'ordered']],
   '2. a sidebar entry': [(s) => s.properties.evidenceCards.items, ['tokenId', 'headline', 'summary', 'significance']],
   '3. the hero image': [(s) => s.properties.heroImage, ['filename', 'caption']],
   '4. the headline': [(s) => s.properties.headline, ['main', 'kicker', 'deck']],
@@ -139,6 +137,8 @@ describe("R23: the writer's schema holds exactly the fields the instruction's si
     ['owner', 'placement', 'content'].forEach((name) => delete top.evidenceCards.items.properties[name]);
     delete blockOf(expected, 'photo').properties.characters;
     delete top.heroImage.properties.characters;
+    const blocks = top.sections.items.properties.content.items;
+    blocks.oneOf = blocks.oneOf.filter((branch) => !['evidence-reference', 'list'].includes(branch.properties.type.const));
     expect(writerBundleSchemaOf(contentBundleSchema)).toEqual(expected);
     expect(WRITER_BUNDLE_SCHEMA).toEqual(expected);
     expect(UNSHOWN_BUNDLE_FIELDS).toHaveLength(14);
@@ -353,6 +353,55 @@ describe("R23: the carry runs in the article's rework, before the director's edi
 describe('R23: the validator and the template keep the full schema', () => {
   it('a stored bundle with every field the writer is not shown still validates', () => {
     expect(new SchemaValidator().validate('content-bundle', storedBundle()).valid).toBe(true);
+  });
+});
+
+// Phase 18, run 2c (R34; the wording doc's part 6): two kinds of block are no longer offered, the
+// caption that names a document and prints none of its text, and the list. Their lines leave the
+// generation instruction, and their shapes leave the writer's schema through the one derivation.
+describe('R34: the article writer is offered only the blocks an article uses', () => {
+  const typesOf = (schema) => schema.properties.sections.items.properties.content.items.oneOf.map((branch) => branch.properties.type.const);
+
+  it("the writer's schema offers a paragraph, a quote, a photo and an evidence card, and the full schema keeps the other two", () => {
+    expect(UNOFFERED_BLOCK_TYPES).toEqual(['evidence-reference', 'list']);
+    expect(typesOf(WRITER_BUNDLE_SCHEMA).sort()).toEqual(['evidence-card', 'paragraph', 'photo', 'quote']);
+    expect(typesOf(contentBundleSchema).sort()).toEqual(['evidence-card', 'evidence-reference', 'list', 'paragraph', 'photo', 'quote']);
+  });
+
+  it('the generation instruction offers neither, on the first write, an automatic rework and a send-back, and each prints the schema it is given', async () => {
+    const all = await calls();
+    Object.entries(all).forEach(([name, { prompt, jsonSchema }]) => {
+      // The instruction's own lines, above the schema it prints.
+      const instruction = instructionOf(prompt).split('<SCHEMA>')[0];
+      ['"evidence-reference"', '"list"', '"items"', '"ordered"', 'a one-line caption naming a document']
+        .forEach((gone) => expect(`${name} ${gone}: ${instruction.includes(gone)}`).toBe(`${name} ${gone}: false`));
+      expect(typesOf(jsonSchema).sort()).toEqual(['evidence-card', 'paragraph', 'photo', 'quote']);
+      expect(printedOf(prompt)).toEqual(jsonSchema);
+    });
+  });
+
+  it('the instruction lists the four blocks it offers, in order', async () => {
+    const { writer } = await calls();
+    const opening = '     * {"type": "';
+    const blocks = instructionOf(writer.prompt).split('\n').filter((line) => line.startsWith(opening));
+    expect(blocks.map((line) => line.slice(opening.length, line.indexOf('"', opening.length))))
+      .toEqual(['paragraph', 'quote', 'evidence-card', 'photo']);
+  });
+
+  it('a stored article that holds a list and a caption naming a document still validates', () => {
+    const bundle = storedBundle();
+    bundle.sections[0].content.push(
+      { type: 'evidence-reference', tokenId: 'mor001', caption: 'The envelope Morgan handed over.' },
+      { type: 'list', items: ['The vote', 'The sale'], ordered: false }
+    );
+    expect(new SchemaValidator().validate('content-bundle', bundle).valid).toBe(true);
+  });
+
+  it('fails loud, naming it, when a block type it leaves out is gone from the full schema', () => {
+    const schema = clone(contentBundleSchema);
+    const blocks = schema.properties.sections.items.properties.content.items;
+    blocks.oneOf = blocks.oneOf.filter((branch) => branch.properties.type.const !== 'list');
+    expect(() => writerBundleSchemaOf(schema)).toThrow(/"list"/);
   });
 });
 

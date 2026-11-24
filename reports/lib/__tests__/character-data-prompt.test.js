@@ -26,7 +26,7 @@ describe('character data in prompts', () => {
       'Alex': { groups: [], relationships: {}, role: 'Wronged Partner' }
     };
     const result = generateRosterSection('journalist', null, charData);
-    expect(result).toContain('CANONICAL CHARACTER ROSTER');
+    expect(result).toContain('Every character of the game, first name and then the full name the article prints.');
     expect(result).toContain('CHARACTER CONTEXT');
     expect(result).toContain('Stanford Four');
     expect(result).toContain('Attorney');
@@ -35,7 +35,7 @@ describe('character data in prompts', () => {
 
   test('generateRosterSection handles null characterData gracefully', () => {
     const result = generateRosterSection('journalist', null, null);
-    expect(result).toContain('CANONICAL CHARACTER ROSTER');
+    expect(result).toContain('Every character of the game, first name and then the full name the article prints.');
     expect(result).not.toContain('CHARACTER CONTEXT');
   });
 
