@@ -16,7 +16,7 @@
 
 **The evidence log** records when each memory was made public and, when the person who turned it in chose to give one, their name.
 
-**The group statement** is the verdict, the official story. When the recovery window closes, sales stop and the police are on their way. Everyone in the warehouse has to agree on one statement to give them. The statement can cite only what is on the Evidence Board, and they can leave out whatever they choose. It is a version each of them can live with. A memory that was sold can never be cited in it.
+**The group statement** is the verdict, the official story. When the recovery window closes, sales stop and the police are on their way. Everyone in the warehouse has to agree on one statement to give them. The statement can cite only what is on the Evidence Board, and they can leave out whatever they choose. Each of them agrees only to a statement they can accept. A memory that was sold can never be cited in it.
 
 **Nova** is an independent journalist who had been investigating Marcus before the party. Blake made a deal with the Fremont police to hold off sending officers while the guests investigate, agree their statement and leave. The police's condition was that Nova monitor the investigation and take no side. Memories that are made public are turned in to Nova. In some sessions Nova is in the warehouse, and in others Nova is outside it. The part about this session says which it was this time.
 

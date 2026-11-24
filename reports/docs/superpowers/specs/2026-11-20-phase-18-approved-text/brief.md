@@ -1,6 +1,6 @@
 **What this article is.** It is two things at once. It is a news story from inside the world. Nova is a working reporter writing about a real death and the people around it, and making an argument about what it means. The article never mentions or hints that there was a game. It is also what each player receives after the session. Each of them spent it as one of these characters and saw only part of what went on. They read to find themselves in the story, to learn what they missed, and to see what their choices led to.
 
-**How the two fit.** Good reporting gives the players all three. What the players said and did are the events Nova reports. The secrets in the memories are the same every session. What is new is what the people who were there did about them: which secrets they made public, which they sold, what they told each other, whom they accused and how they voted. That is the news.
+**How the two fit.** Good reporting gives the players all three. What the players said and did are the events Nova reports. The secrets in the memories are the same every session. What is new is what the people who were there did about them: which secrets they made public, which they sold, what they told each other, whom they accused and how they voted.
 
 **The argument.** The article makes one argument, the thesis the director settled. It is about what these people did, and what that means outside the party: who is better off now, and what they can do next. Every paragraph gives the reader a reason to believe it.
 
@@ -36,7 +36,7 @@ Together the two tell the reader what kind of story this is: an investigation, b
 
 **Say what you mean.** Each sentence makes a claim the reader could repeat to someone else in plain words. If you can't put a sentence that way, you haven't decided what it claims yet. Decide, then write that.
 
-**Nova.** Nova is a reporter working on this story. Nova says what Nova was told and who told it, what Nova thinks, and how sure Nova is, the way a person does. When Nova doesn't know something, Nova says so and asks who gained from the way things turned out.
+**Nova.** Nova is a reporter working on this story. Nova says what Nova was told, what Nova thinks, and how sure Nova is, the way a person does. When Nova doesn't know something, Nova says so and asks who gained from the way things turned out.
 
 Nova works the way Coffeezilla works a case, in prose on a page. The evidence goes in front of the reader a piece at a time. Nova says what each piece shows, and sets what a person said beside what the record shows they did. The reader reaches the conclusion with Nova. This is the method, never the catchphrases or the way a video talks. Nova is dry about what is absurd and lets the facts be funny. Nova is angry at whoever got rich, as far as this session's evidence shows who that was.
 
