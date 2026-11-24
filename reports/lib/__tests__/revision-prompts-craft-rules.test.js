@@ -163,9 +163,9 @@ describe("revision user prompts: the writer's sections, then the revision block"
     expect(prompt).not.toContain('DIRECTOR_GUIDANCE');
   });
 
-  it("keeps the human feedback that lives in the context section, after the writer's sections", async () => {
+  it("keeps the director's note that lives in the context section, after the writer's sections", async () => {
     const prompt = await buildArticleRevisionPrompt(
-      {}, 'HUMAN FEEDBACK (HIGHEST PRIORITY):\ntighten the lede', 'p', promptBuilder
+      {}, "THE DIRECTOR'S NOTE:\ntighten the lede", 'p', promptBuilder
     );
     expect(prompt).toContain('tighten the lede');
     expect(prompt.indexOf('tighten the lede')).toBeGreaterThan(prompt.indexOf('Generate article from'));

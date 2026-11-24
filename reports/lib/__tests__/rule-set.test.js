@@ -48,8 +48,13 @@ const MODE_FILES = ['mode-on-site', 'mode-remote'];
 const ALL_FILES = [...CORE_FILES, ...MODE_FILES, 'brief', 'job-weave', 'job-map', 'job-article'];
 const WRITERS = ['arc', 'outline', 'article'];
 
-/** The line buildRevisionContext (node-helpers.js) prints after the director's send-back note. */
-const SEND_BACK_NOTE_LINE = 'NOTE: The human reviewer has explicitly requested these changes.';
+/**
+ * The label buildRevisionContext (node-helpers.js) prints over the director's note in a rework, and
+ * the opening of the block that always comes after it, the rule over WHAT THIS REWORK DOES (run 2c,
+ * R36: the note's NOTE lines went, and its end is where the context's next block begins).
+ */
+const DIRECTOR_NOTE_LINE = "THE DIRECTOR'S NOTE:";
+const REWORK_SCOPE = '═══════════════════════════════════════════════════════════════════════════════\nWHAT THIS REWORK DOES:';
 
 /** The tag names a loaded string carries, in order. */
 const tagsOf = (text) => (String(text).match(/^<([a-z-]+)>$/gm) || []).map((t) => t.slice(1, -1));
@@ -344,7 +349,7 @@ describe('the removed-phrase fixture', () => {
       '<EPILOGUE>\nthe murder revelation came at noon\n</EPILOGUE>',
       '<RECORD>\n<document id="x">the shape of the silence</document>\n</RECORD>',
       '<QUOTE_BANK>\nA model made this index.\n- Vic: "the murder victim had it coming"\n</QUOTE_BANK>',
-      `HUMAN FEEDBACK (HIGHEST PRIORITY):\nCut the resolution cascade line.\n\n${SEND_BACK_NOTE_LINE}`,
+      `${DIRECTOR_NOTE_LINE}\nCut the resolution cascade line.\n\n${REWORK_SCOPE}`,
       '- p1.jpg: The director\'s description, word for word: Nova and her camera'
     ].join('\n\n');
     const text = instructionText(render);
@@ -352,7 +357,7 @@ describe('the removed-phrase fixture', () => {
     expect(text).toContain('Write the article.');
     expect(text).toContain('A model made this index.');
     expect(text).toContain('<RECORD></RECORD>');
-    expect(text).toContain(SEND_BACK_NOTE_LINE);
+    expect(text).toContain(`${DIRECTOR_NOTE_LINE}\n\n${REWORK_SCOPE}`);
   });
 
   it('still finds a removed phrase in the instruction text around them', () => {
@@ -366,7 +371,7 @@ describe('the removed-phrase fixture', () => {
  * on review finding 3 of 3.1). Besides the director's words and <RECORD>, it strips the
  * model output a prompt carries as data (a previous version shown in a rework, the
  * approved outline, the arcs and the rest of the arc analysis, the plans, the content
- * bundle, the whiteboard reading) and every paragraph of the director's send-back note.
+ * bundle, the whiteboard reading) and every paragraph of the director's note in a rework.
  * It keeps the pipeline's label lines, those inside <DIRECTOR_GUIDANCE> included, so
  * they are scanned.
  *
@@ -383,16 +388,14 @@ describe('instructionText: the pipeline\'s own instructions only', () => {
     'Third paragraph: nobody asked who killed Marcus.'
   ].join('\n\n');
 
-  it('strips every paragraph of the director\'s send-back note, up to the pipeline\'s NOTE line', () => {
+  it('strips every paragraph of the director\'s note, up to the context\'s next block', () => {
     const { contextSection } = buildRevisionContext({
       phase: 'outline', revisionCount: 0, validationResults: null, previousOutput: null, humanFeedback: NOTE, round: 2
     });
     expect(contextSection).toContain('Third paragraph');
     const text = instructionText(contextSection);
     for (const paragraph of NOTE.split('\n\n')) expect(text).not.toContain(paragraph);
-    expect(text).toContain('HUMAN FEEDBACK (HIGHEST PRIORITY):');
-    expect(text).toContain(SEND_BACK_NOTE_LINE);
-    expect(text).toContain('Address human feedback FIRST');
+    expect(text).toContain(`${DIRECTOR_NOTE_LINE}\n\n${REWORK_SCOPE}`);
     expect(findRemovedPhrases(text)).not.toContain('the murder victim');
     expect(findRemovedPhrases(text)).not.toContain('who killed Marcus');
   });
@@ -533,8 +536,8 @@ describe('instructionText: the pipeline\'s own instructions only', () => {
   });
 
   describe('fails loud on a shape it cannot read, rather than scan the director\'s words or skip the pipeline\'s', () => {
-    it('a send-back note with no NOTE line after it', () => {
-      expect(() => instructionText('HUMAN FEEDBACK (HIGHEST PRIORITY):\nCut it.\n\nThe end.')).toThrow(/NOTE: The human reviewer/);
+    it("a director's note with no block of the rework's after it", () => {
+      expect(() => instructionText(`${DIRECTOR_NOTE_LINE}\nCut it.\n\nThe end.`)).toThrow(/THE DIRECTOR'S NOTE:/);
     });
 
     it('model output whose JSON never closes', () => {

@@ -469,7 +469,7 @@ describe("4.7f: the director's desk edits, stated once", () => {
 
   it("a send-back whose note asks for a cut card back: no line outside <HAND_EDITS> says the cut stays out, and <HAND_EDITS> states the rule with its exception", async () => {
     const { user, system } = await cutCardRework({ round: 2 });
-    expect(user).toContain(`HUMAN FEEDBACK (HIGHEST PRIORITY):\n${BRING_BACK}`);
+    expect(user).toContain(`THE DIRECTOR'S NOTE:\n${BRING_BACK}`);
 
     // The pipeline's own lines: the prompts without <HAND_EDITS> and the rule set's files, whose
     // wording is the director's. Every one that keeps something out names HAND_EDITS before it.

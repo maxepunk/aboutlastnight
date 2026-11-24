@@ -656,6 +656,41 @@ const CODE_CHECKS = {
   }
 };
 
+/** The heading a judge's must-fix lines print under in a rework; a code check's label takes its place. */
+const ISSUES_HEADING = 'ISSUES TO ADDRESS';
+
+/** The label over the director's note in a rework, at every stop (run 2c, R36; the wording doc's part 8). */
+const DIRECTOR_NOTE_LABEL = "THE DIRECTOR'S NOTE:";
+
+/**
+ * The blank line, then the opening of a block that can follow the director's note in a revision
+ * context: the findings' heading on a line of its own (ISSUES_HEADING or a code check's label),
+ * the <HAND_EDITS> tag (whole, or emptied as the removed-phrase scan leaves it), or the rule over
+ * WHAT THIS REWORK DOES, which always comes last.
+ */
+const AFTER_DIRECTOR_NOTE = new RegExp(
+  `\\n\\n(?=(?:${[ISSUES_HEADING, ...Object.values(CODE_CHECKS).map((check) => check.label)].join('|')}):\\n|<HAND_EDITS>|═)`,
+  'g'
+);
+
+/**
+ * Where the director's note ends in a revision context (run 2c, R36): the note runs from the line
+ * after DIRECTOR_NOTE_LABEL to the blank line before the context's next block, since buildRevisionContext
+ * prints its blocks in a fixed order and nothing of its own between the note and the next block.
+ * One rule, which the removed-phrase scan reads (lib/__tests__/fixtures/removed-phrases.js); until
+ * run 2c the note's NOTE line marked the end. A paragraph of the note that opened exactly as one of
+ * those blocks does would end it early, a case no note has shown.
+ *
+ * @param {string} text - a revision context, or a prompt that holds one
+ * @param {number} from - where the note's text begins
+ * @returns {number} the index of the blank line that closes the note, or -1 when no block follows
+ */
+function directorNoteEnd(text, from) {
+  AFTER_DIRECTOR_NOTE.lastIndex = from;
+  const end = AFTER_DIRECTOR_NOTE.exec(String(text));
+  return end ? end.index : -1;
+}
+
 /** The code check that wrote these results, by its own `source` key, or null for a judge. */
 function codeCheckOf(validationResults) {
   const source = validationResults?.source;
@@ -959,7 +994,7 @@ function buildRevisionContext(options) {
   // the label heads the check's lines in place of ISSUES TO ADDRESS, each line the defect and
   // its fix, and a guidance text a check writes follows its lines under the same label.
   const codeCheck = codeCheckOf(validationResults);
-  const issuesHeading = codeCheck ? codeCheck.label : 'ISSUES TO ADDRESS';
+  const issuesHeading = codeCheck ? codeCheck.label : ISSUES_HEADING;
 
   // The 4b fix batch (the integrator's ruling): a criterion failed only when it scored below
   // the bar, whatever an issue's words say of it.
@@ -1027,7 +1062,7 @@ ${issuesList}${feedbackBlock}${shouldConsiderBlock}`;
     evaluationBlock = '(no evaluator feedback for this phase)';
   }
 
-  // Spec 2026-09-19 §4.3: the director's edits, after HUMAN FEEDBACK and before the
+  // Spec 2026-09-19 §4.3: the director's edits, after the director's note and before the
   // instructions. Present on EVERY pass of the round, not only the first.
   //
   // F1 (spec 2026-10-02 section 7): the edits stand at the stop by id, and the block
@@ -1231,21 +1266,12 @@ WHAT THIS REWORK DOES:
 
 ${scope}`;
 
-  // The note's own block. Its NOTE line follows the director's note at every stop: it is
-  // where the director's words end, as the removed-phrase scan reads them
-  // (lib/__tests__/fixtures/removed-phrases.js instructionText; brief 4.5b). At the story
-  // meeting a director's round reads no finding, so only the line about the evaluator's
-  // issues stays out there (brief 4.5); on the map, which no evaluator reads, it stays out
-  // too (brief 4.6b). The labels and the NOTE lines keep their words until run 2c.
-  const noEvaluatorLine = meetingMode || mapMode;
-  const noteBlock = humanFeedback
-    ? `HUMAN FEEDBACK (HIGHEST PRIORITY):
-${humanFeedback}
-
-NOTE: The human reviewer has explicitly requested these changes.
-${noEvaluatorLine ? '' : `Address human feedback FIRST, then address any remaining evaluator issues.
-`}`
-    : '';
+  // The note's own block (run 2c, R36; the wording doc's part 8): the director's note under its
+  // own name, at every stop, and nothing after it. The two NOTE lines that followed it went: the
+  // note is the task, as WHAT THIS REWORK DOES says. Where the director's words end is where the
+  // context's next block begins (directorNoteEnd), which the removed-phrase scan reads
+  // (lib/__tests__/fixtures/removed-phrases.js instructionText).
+  const noteBlock = humanFeedback ? `${DIRECTOR_NOTE_LABEL}\n${humanFeedback}` : '';
 
   // Brief K (R27): the director's note comes first, then the findings, the director's edits and
   // the scope, each a block of its own with a blank line between. An automatic pass carries no
@@ -1469,6 +1495,9 @@ module.exports = {
   withoutDirectorsFindings,
   leadingRuleIds,
   withLimitNames,
+  // Run 2c (R36): the note's label in a rework, and where the director's words end
+  DIRECTOR_NOTE_LABEL,
+  directorNoteEnd,
 
   // The bar a criterion must reach: the judges' and the revision context's one constant
   // (phase 3, 3.10; evaluator-nodes.js imports it)

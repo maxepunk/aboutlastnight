@@ -139,8 +139,8 @@ describe('journalist map stop', () => {
 
     // The revision block, in phase 1's order, after the writer's sections.
     const at = (s) => rework.user.indexOf(s);
-    expect(at('HUMAN FEEDBACK (HIGHEST PRIORITY):')).toBeGreaterThan(writer.user.length);
-    expect(at('<HAND_EDITS>')).toBeGreaterThan(at('HUMAN FEEDBACK'));
+    expect(at("THE DIRECTOR'S NOTE:")).toBeGreaterThan(writer.user.length);
+    expect(at('<HAND_EDITS>')).toBeGreaterThan(at("THE DIRECTOR'S NOTE:"));
     expect(at('PREVIOUS MAP OUTPUT')).toBeGreaterThan(at('</HAND_EDITS>'));
     expect(at('## YOUR TASK')).toBeGreaterThan(at('END PREVIOUS OUTPUT'));
     expect(at('\n<DIRECTOR_GUIDANCE>\n')).toBeGreaterThan(at('## YOUR TASK'));
@@ -234,8 +234,8 @@ describe('journalist article stop', () => {
     expect(count(rework.user, '\n<STORY_MAP>\n')).toBe(1);
 
     const at = (s) => rework.user.indexOf(s);
-    expect(at('HUMAN FEEDBACK (HIGHEST PRIORITY):')).toBeGreaterThan(writer.user.length);
-    expect(at('<HAND_EDITS>')).toBeGreaterThan(at('HUMAN FEEDBACK'));
+    expect(at("THE DIRECTOR'S NOTE:")).toBeGreaterThan(writer.user.length);
+    expect(at('<HAND_EDITS>')).toBeGreaterThan(at("THE DIRECTOR'S NOTE:"));
     expect(at('## PREVIOUS ARTICLE OUTPUT (to revise)')).toBeGreaterThan(at('</HAND_EDITS>'));
     expect(at('<DIRECTOR_GUIDANCE>')).toBeGreaterThan(at('## YOUR TASK'));
     expect(rework.user).toContain("REVISION CONTEXT: ARTICLE (round 2: the director's send back)");
@@ -321,8 +321,8 @@ describe('journalist arc stop', () => {
     expect(rework.user).not.toContain('## SESSION CONTEXT');
 
     const at = (s) => rework.user.indexOf(s);
-    expect(at('HUMAN FEEDBACK (HIGHEST PRIORITY):')).toBeGreaterThan(writer.user.length);
-    expect(at('PREVIOUS WEAVE OUTPUT')).toBeGreaterThan(at('HUMAN FEEDBACK'));
+    expect(at("THE DIRECTOR'S NOTE:")).toBeGreaterThan(writer.user.length);
+    expect(at('PREVIOUS WEAVE OUTPUT')).toBeGreaterThan(at("THE DIRECTOR'S NOTE:"));
     expect(at('## YOUR TASK')).toBeGreaterThan(at('END PREVIOUS OUTPUT'));
     expect(rework.user).toContain("REVISION CONTEXT: WEAVE (round 2: the director's send back)");
   });

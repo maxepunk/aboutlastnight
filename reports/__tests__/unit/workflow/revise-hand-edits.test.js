@@ -79,7 +79,7 @@ describe('reviseOutline', () => {
     await reviseOutline({ _previousOutline: OUTLINE, directorGateNotes: NOTES, _outlineFeedback: 'Tighten the lede.', outlineRevisionCount: 1 }, cfg(sdk));
     expect(promptOf(sdk)).toContain('- [arc-selection, rejection 1] Drop the vote arc.');
     expect(promptOf(sdk)).not.toContain('- [outline, rejection 1] Tighten the lede.');
-    expect(promptOf(sdk)).toContain('HUMAN FEEDBACK');
+    expect(promptOf(sdk)).toContain("THE DIRECTOR'S NOTE:\nTighten the lede.");
   });
 
   it('on an evaluator-driven pass (no feedback) every note is passed', async () => {

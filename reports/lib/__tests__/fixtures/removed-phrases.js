@@ -572,9 +572,13 @@ const TENSIONS_HEADING = "### Blake and the Valet in the director's notes";
 const STANDING_NOTES_PREAMBLE = 'Standing notes the director gave at earlier stops';
 const GATE_NOTE_LINE = /^- \[[^\]\n]+\] /m;
 
-/** buildRevisionContext (node-helpers.js): the director's send-back note runs from SEND_BACK_HEAD to SEND_BACK_END. */
-const SEND_BACK_HEAD = 'HUMAN FEEDBACK (HIGHEST PRIORITY):\n';
-const SEND_BACK_END = 'NOTE: The human reviewer has explicitly requested these changes.';
+/**
+ * buildRevisionContext (node-helpers.js): the director's note runs from the line after its label
+ * (DIRECTOR_NOTE_LABEL) to where the context's next block begins (directorNoteEnd). Run 2c (R36)
+ * took away the NOTE line that used to end it, so the end is read by node-helpers' own rule.
+ */
+const { DIRECTOR_NOTE_LABEL, directorNoteEnd } = require('../../workflow/nodes/node-helpers');
+const SEND_BACK_HEAD = `${DIRECTOR_NOTE_LABEL}\n`;
 
 /**
  * buildRevisionContext's previous version: a header line and a rule, the version, then
@@ -626,19 +630,20 @@ function guidanceLabels(block) {
   return `${open}${inner}${close}`;
 }
 
-/** Every paragraph of each send-back note taken out, the pipeline's lines around it kept. */
+/** Every paragraph of each director's note taken out, its label and the pipeline's lines around it kept. */
 function stripSendBackNotes(text) {
   let out = '';
   let rest = text;
   for (let at = rest.indexOf(SEND_BACK_HEAD); at >= 0; at = rest.indexOf(SEND_BACK_HEAD)) {
     const noteAt = at + SEND_BACK_HEAD.length;
-    const endAt = rest.indexOf(SEND_BACK_END, noteAt);
+    const endAt = directorNoteEnd(rest, noteAt);
     if (endAt < 0) {
       throw new Error(
-        `instructionText: a send-back note with no "${SEND_BACK_END}" line after it; where the director's words end is unknown`
+        `instructionText: a "${DIRECTOR_NOTE_LABEL}" with no block of the rework's after it; where the director's words end is unknown`
       );
     }
-    out += `${rest.slice(0, noteAt)}\n`;
+    // The label stays, then the blank line before the next block: "THE DIRECTOR'S NOTE:\n\n<next>".
+    out += rest.slice(0, at + DIRECTOR_NOTE_LABEL.length);
     rest = rest.slice(endAt);
   }
   return out + rest;
@@ -716,8 +721,8 @@ function stripTensionSentences(text) {
  * - the director's words and the record: the whole of each WHOLE_BLOCKS tag; the "- "
  *   lines inside each LISTED_BLOCKS tag (the narrative tensions' sentences included) and
  *   under the arc writer's TENSIONS_HEADING; the director's notes inside
- *   <DIRECTOR_GUIDANCE>; every paragraph of the send-back note after "HUMAN FEEDBACK
- *   (HIGHEST PRIORITY):", up to the pipeline's "NOTE: The human reviewer" line; the
+ *   <DIRECTOR_GUIDANCE>; every paragraph of the director's note in a rework after "THE
+ *   DIRECTOR'S NOTE:", up to the context's next block (node-helpers.js directorNoteEnd); the
  *   text after "The director's description" on a photo line. (The arc packages'
  *   excerpts, stripped since the 3.6b fix batch, went with the packages: phase 4, brief
  *   4.6, R5.)
@@ -734,8 +739,8 @@ function stripTensionSentences(text) {
  *
  * @param {string} render - a rendered prompt, system and user
  * @returns {string}
- * @throws {Error} on a shape it cannot read: a send-back note or a previous version
- *   with no end line, JSON that never closes, a
+ * @throws {Error} on a shape it cannot read: a director's note with no block of the rework's
+ *   after it, a previous version with no end line, JSON that never closes, a
  *   <DIRECTOR_GUIDANCE> block without the pipeline's label. A guess would scan the
  *   director's words or skip the pipeline's.
  */

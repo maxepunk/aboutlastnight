@@ -12,7 +12,7 @@ const { buildRevisionContext } = require('../../../lib/workflow/nodes/node-helpe
 
 describe('buildRevisionContext', () => {
   describe('with humanFeedback', () => {
-    test('includes HUMAN FEEDBACK section when humanFeedback provided', () => {
+    test("includes the director's note under its label when humanFeedback provided", () => {
       const { contextSection } = buildRevisionContext({
         phase: 'outline',
         revisionCount: 1,
@@ -20,11 +20,11 @@ describe('buildRevisionContext', () => {
         previousOutput: { sections: [] },
         humanFeedback: 'Fix the lede hook'
       });
-      expect(contextSection).toContain('HUMAN FEEDBACK');
+      expect(contextSection).toContain("THE DIRECTOR'S NOTE:\nFix the lede hook");
       expect(contextSection).toContain('Fix the lede hook');
     });
 
-    test('omits HUMAN FEEDBACK section when humanFeedback is null', () => {
+    test("omits the director's note when humanFeedback is null", () => {
       const { contextSection } = buildRevisionContext({
         phase: 'outline',
         revisionCount: 1,
@@ -32,20 +32,20 @@ describe('buildRevisionContext', () => {
         previousOutput: { sections: [] },
         humanFeedback: null
       });
-      expect(contextSection).not.toContain('HUMAN FEEDBACK');
+      expect(contextSection).not.toContain("THE DIRECTOR'S NOTE");
     });
 
-    test('omits HUMAN FEEDBACK section when humanFeedback is undefined', () => {
+    test("omits the director's note when humanFeedback is undefined", () => {
       const { contextSection } = buildRevisionContext({
         phase: 'outline',
         revisionCount: 1,
         validationResults: {},
         previousOutput: { sections: [] }
       });
-      expect(contextSection).not.toContain('HUMAN FEEDBACK');
+      expect(contextSection).not.toContain("THE DIRECTOR'S NOTE");
     });
 
-    test('omits HUMAN FEEDBACK section when humanFeedback is empty string', () => {
+    test("omits the director's note when humanFeedback is empty string", () => {
       const { contextSection } = buildRevisionContext({
         phase: 'outline',
         revisionCount: 1,
@@ -53,10 +53,10 @@ describe('buildRevisionContext', () => {
         previousOutput: { sections: [] },
         humanFeedback: ''
       });
-      expect(contextSection).not.toContain('HUMAN FEEDBACK');
+      expect(contextSection).not.toContain("THE DIRECTOR'S NOTE");
     });
 
-    test('includes HIGHEST PRIORITY note when humanFeedback provided', () => {
+    test('prints no priority line and no NOTE line after the director\'s note (run 2c, R36)', () => {
       const { contextSection } = buildRevisionContext({
         phase: 'article',
         revisionCount: 2,
@@ -64,8 +64,9 @@ describe('buildRevisionContext', () => {
         previousOutput: {},
         humanFeedback: 'Rewrite the conclusion'
       });
-      expect(contextSection).toContain('HIGHEST PRIORITY');
-      expect(contextSection).toContain('Rewrite the conclusion');
+      expect(contextSection).not.toContain('HIGHEST PRIORITY');
+      expect(contextSection).not.toContain('NOTE: The human reviewer');
+      expect(contextSection).toContain("THE DIRECTOR'S NOTE:\nRewrite the conclusion");
     });
   });
 

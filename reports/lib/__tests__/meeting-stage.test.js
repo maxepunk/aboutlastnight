@@ -130,7 +130,7 @@ describe('a reweave (brief 4.5)', () => {
     expect(prompt).toContain("This rework fits the director's changes on that angle and on its threads into it: E1, E2, E3 and E4 in <HAND_EDITS>.");
     expect(prompt).toContain(`E2 (thread "t3", line): "${T3_LINE}"`);
     expect(prompt).not.toContain('a stale finding');
-    expect(prompt).not.toContain('HUMAN FEEDBACK');
+    expect(prompt).not.toContain("THE DIRECTOR'S NOTE");
     // The rework reads every connection (R7: no strike takes one out of its view), the answers in it.
     expect(previousOf(prompt)).toContain(C2_LINE);
     expect(previousOf(prompt)).toContain(ANSWER);
@@ -165,7 +165,7 @@ describe('a reweave (brief 4.5)', () => {
     state.directorGateNotes = [{ gate: 'arc-selection', kind: 'rejection', round: 1, text: 'Join the ledger thread to the vote.', at: 't' }];
     const sdk = recordingSdk(reworkOf(() => {}));
     await reviseArcs(state, cfg(sdk));
-    expect(sdk.calls[0].prompt).toContain('HUMAN FEEDBACK (HIGHEST PRIORITY):\nJoin the ledger thread to the vote.');
+    expect(sdk.calls[0].prompt).toContain("THE DIRECTOR'S NOTE:\nJoin the ledger thread to the vote.");
     expect(sdk.calls[0].prompt).toContain('each change the note above asks for');
     expect(sdk.calls[0].prompt).not.toContain('<DIRECTOR_GUIDANCE>');
   });

@@ -230,7 +230,7 @@ describe('buildRevisionContext — the evaluation state it reports (brief 1.3)',
   it('opens a send-back after a pass on the director\'s note, with no line about the pass', () => {
     const section = build({ humanFeedback: 'Rethink the closing.' });
     expect(section).not.toMatch(/Ready|This evaluation passed|reason for this rework/);
-    expect(section.indexOf('HUMAN FEEDBACK (HIGHEST PRIORITY):\nRethink the closing.')).toBeGreaterThan(-1);
+    expect(section.indexOf("THE DIRECTOR'S NOTE:\nRethink the closing.")).toBeGreaterThan(-1);
     expect(section).not.toContain('ISSUES TO ADDRESS');
   });
 
@@ -369,9 +369,9 @@ describe('<HAND_EDITS> block (spec 2026-09-19 §4.3; F1)', () => {
   const SEND_BACK_RULE = "Each edit of the director's is final unless the structural change their note asks for means it no longer fits: the text the director wrote stays exactly as written, each block they moved stays where they put it, each removed sentence stays out, and each block they cut stays out. What a block they cut said is not said again anywhere in the article. List each edit this rework changes, removes or brings back in changedDirectorEdits, with its id and one sentence on why.";
   const AUTOMATIC_RULE = "This automatic pass fixes the writer's text, in a block the director moved too. Each edit of the director's is final: the text the director wrote stays exactly as written, each block they moved stays where they put it, each removed sentence stays out, and each block they cut stays out. What a block they cut said is not said again anywhere in the article.";
 
-  it('sits after HUMAN FEEDBACK and before the instructions (WHAT THIS REWORK DOES since phase 3)', () => {
+  it("sits after the director's note and before the instructions (WHAT THIS REWORK DOES since phase 3)", () => {
     const { contextSection, previousOutputSection } = buildRevisionContext({ ...base, humanFeedback: 'Tighten it', handEdits: standing });
-    const hf = contextSection.indexOf('HUMAN FEEDBACK');
+    const hf = contextSection.indexOf("THE DIRECTOR'S NOTE:");
     const he = contextSection.indexOf('<HAND_EDITS>');
     const cr = contextSection.indexOf('WHAT THIS REWORK DOES');
     expect(hf).toBeGreaterThan(-1);
@@ -446,8 +446,7 @@ describe('<HAND_EDITS> block (spec 2026-09-19 §4.3; F1)', () => {
     };
     const issue = `T12: "${LINE}" is not in the record. Cut the line.`;
     // Brief K: the rework reads the limit's name where the stored finding holds its code.
-    const { LIMIT_CODES } = require('../workflow/nodes/evaluator-nodes');
-    const shown = issue.replace('T12', LIMIT_CODES[11].name);
+    const shown = issue.replace('T12', 'Quotes are exact');
     for (const humanFeedback of [null, 'Move the photos apart.']) {
       const { contextSection } = buildRevisionContext({
         phase: 'article', revisionCount: 1, previousOutput: article(1), humanFeedback,
@@ -605,9 +604,10 @@ describe('buildRevisionContext: the director governs the rework, advisories are 
     expect(instructions.match(/Take up a SHOULD CONSIDER item only where/g)).toHaveLength(1);
   });
 
-  it("keeps the fixture's anchors: the send-back NOTE line, the previous version's header and its end", () => {
+  it("keeps the fixture's anchors: the director's note under its label, the previous version's header and its end", () => {
     const { contextSection, previousOutputSection } = build({ humanFeedback: 'x' });
-    expect(contextSection).toContain('HUMAN FEEDBACK (HIGHEST PRIORITY):\nx\n\nNOTE: The human reviewer has explicitly requested these changes.');
+    expect(contextSection).toContain("THE DIRECTOR'S NOTE:\nx\n\n");
+    expect(contextSection).not.toContain('NOTE: The human reviewer');
     expect(previousOutputSection).toMatch(/^PREVIOUS OUTLINE OUTPUT \(the version this rework starts from\):\n═+$/m);
     expect(previousOutputSection).toMatch(/\n═+\nEND PREVIOUS OUTPUT\n═+$/);
   });
@@ -661,9 +661,12 @@ describe('buildRevisionContext: an automatic rework fixes the must-fix items (ph
     phase: 'arcs', validationResults: EVALUATION, previousOutput: [{ id: 'arc-1' }], ...AUTOMATIC, ...overrides
   }).contextSection;
   const count = (haystack, needle) => haystack.split(needle).length - 1;
-  /** Brief K: the limits' names, which a rework reads in place of the codes a finding opens with. */
-  const { LIMIT_CODES } = require('../workflow/nodes/evaluator-nodes');
-  const nameOf = (code) => LIMIT_CODES.find((limit) => limit.code === code).name;
+  /** Brief K: the limits' names, which a rework reads in place of the codes a finding opens with, as literals. */
+  const NAMES = {
+    T1: 'What can be stated as fact', T2: 'The verdict', T3: 'Sold memories', T4: 'Whose account it is', T6: 'Who made a memory public',
+    T7: 'Three stretches of time', T8: 'Nova takes no side, with the part about this session', T9: 'Pronouns', T12: 'Quotes are exact'
+  };
+  const nameOf = (code) => NAMES[code];
   const SCOPE = 'only where it touches a line this rework is already changing for a must-fix item';
   /** R23's reason (the 4b fix batch), as WHAT THIS REWORK DOES gives it on an automatic pass. */
   const SCOPE_REASON = 'Those lines passed the check or evaluation that ran before this pass, and in past reworks the new errors that reached the director were in lines rewritten with no finding behind them.';
@@ -997,10 +1000,13 @@ describe('a rework never reads a finding located in the director\'s text (FA)', 
   // edits, which quote the director's text; the evaluation is that span.
   const evaluationOf = (contextSection) => {
     const end = contextSection.indexOf('<HAND_EDITS>') >= 0 ? contextSection.indexOf('<HAND_EDITS>') : contextSection.indexOf('WHAT THIS REWORK DOES');
-    return contextSection.slice(contextSection.indexOf('NOTE: The human reviewer'), end);
+    return contextSection.slice(contextSection.indexOf("THE DIRECTOR'S NOTE:"), end);
   };
-  const { LIMIT_CODES } = require('../workflow/nodes/evaluator-nodes');
-  const nameOf = (code) => LIMIT_CODES.find((limit) => limit.code === code).name;
+  const NAMES = {
+    T1: 'What can be stated as fact', T2: 'The verdict', T3: 'Sold memories', T4: 'Whose account it is', T6: 'Who made a memory public',
+    T7: 'Three stretches of time', T8: 'Nova takes no side, with the part about this session', T9: 'Pronouns', T12: 'Quotes are exact'
+  };
+  const nameOf = (code) => NAMES[code];
 
   // Brief 4.7c (R1): one context for every theme, so the detective's case went with its branch.
   // Brief K (R27): what is left prints as the must-fix lines alone, each once and named by its
@@ -1093,14 +1099,14 @@ describe("4.5: the story meeting's rounds in the revision context", () => {
     expect(text).toContain(`The director asked for a reweave at the story meeting of the angle they have open, a1 ("The Room Voted Overdose. The Ledger Kept Talking."). This rework fits the director's changes on that angle and on its threads into it: E1 and E2 in <HAND_EDITS>.`);
     expect(text).toMatch(/keeps every other line word for word/);
     expect(text).not.toContain('This rework fixes the must-fix items');
-    expect(text).not.toContain('HUMAN FEEDBACK');
+    expect(text).not.toContain("THE DIRECTOR'S NOTE:");
     expect(text).not.toContain('EVALUATION SUMMARY');
     expect(text).not.toContain('(no evaluator feedback');
   });
 
   it("a reweave's note is part of what it fits in", () => {
     const text = context({ meetingRound: 'reweave', humanFeedback: 'Join the ledger thread to the vote.', validationResults: null });
-    expect(text).toContain('HUMAN FEEDBACK (HIGHEST PRIORITY):\nJoin the ledger thread to the vote.');
+    expect(text).toContain("THE DIRECTOR'S NOTE:\nJoin the ledger thread to the vote.");
     expect(text).toContain("E1 and E2 in <HAND_EDITS>, and each change the note above asks for.");
   });
 
@@ -1130,7 +1136,7 @@ describe("4.5: the story meeting's rounds in the revision context", () => {
     const text = context({ meetingRound: null, humanFeedback: 'A note left over.', validationResults: { phase: 'arcs', passed: false, structuralIssues: ['T3: "x y z" breaks a rule.'] } });
     expect(text).toContain('automated pass 0');
     expect(text).toContain('This rework fixes the must-fix items');
-    expect(text).not.toContain('HUMAN FEEDBACK');
+    expect(text).not.toContain("THE DIRECTOR'S NOTE:");
     expect(text).toContain("This automatic pass fixes the writer's text. Each change of the director's is final:");
   });
 
@@ -1242,33 +1248,70 @@ describe("3 final: the Reweave's scope names only the open angle's changes", () 
 // 4.5b: the director's note has one end marker at every stop
 // ═══════════════════════════════════════════════════════════════════════════
 //
-// At the story meeting the note block keeps the line after the director's note, "NOTE: The
-// human reviewer has explicitly requested these changes.", and leaves out only the sentence
-// about the evaluator's issues, which a director's round never reads (4.5). The line is
-// where the director's words end: the removed-phrase scan (lib/__tests__/fixtures/
-// removed-phrases.js instructionText) reads it so, and could not read the meeting's
-// send-back render without it.
-describe("4.5b: the director's note ends on the same line at every stop", () => {
-  const { WEAVE } = require('./fixtures/rework-state');
+// Run 2c (R36; the wording doc's part 8): the director's note reads under its own name, "THE
+// DIRECTOR'S NOTE:", at every stop, and both NOTE lines that followed it are gone. The note ends
+// where the context's next block begins, after a blank line: the findings' heading (ISSUES TO
+// ADDRESS or a code check's label), <HAND_EDITS>, or the rule over WHAT THIS REWORK DOES. That is
+// the one rule (directorNoteEnd) by which the removed-phrase scan (lib/__tests__/fixtures/
+// removed-phrases.js instructionText) finds where the director's words end, which it found by the
+// first NOTE line until run 2c.
+describe("R36: the director's note at every stop", () => {
+  const { WEAVE, MAP } = require('./fixtures/rework-state');
+  const { standingAfterSendBack, standingOnMap } = require('../hand-edit-diff');
+  const { DIRECTOR_NOTE_LABEL, directorNoteEnd } = require('../workflow/nodes/node-helpers');
   const clone = (v) => JSON.parse(JSON.stringify(v));
-  const END = 'NOTE: The human reviewer has explicitly requested these changes.';
-  const EVALUATOR = 'Address human feedback FIRST, then address any remaining evaluator issues.';
-  const meeting = (meetingRound) => buildRevisionContext({
-    phase: 'arcs', outputName: 'weave', revisionCount: 0, round: 2, validationResults: null,
-    previousOutput: clone(WEAVE), handEdits: null, humanFeedback: 'Rethink the money thread.', meetingRound
-  }).contextSection;
+  const count = (haystack, needle) => haystack.split(needle).length - 1;
+  /** A note of three paragraphs, the second of which opens on a word a block's heading uses. */
+  const NOTE = 'Rethink the money thread.\n\nIssues to address: the ledger comes too late.\n\nKeep the vote where it is.';
+  const FAILED = { phase: 'article', passed: false, structuralIssues: ['T12: "Marcus bragged." is in no document. Quote the memory.'], advisoryWarnings: [], criteriaScores: {} };
+  const shown = { headline: { main: 'The Room Voted' }, sections: [] };
+  const left = { headline: { main: 'The Room Voted Twice' }, sections: [] };
+  const mapLeft = () => {
+    const map = clone(MAP);
+    map.sections[3].beats[0].move = 'Riley keeps the books, and a second ledger';
+    return map;
+  };
+  /** Each stop's director's round, and what follows the note there. */
+  const ROUNDS = {
+    'the story meeting, a send-back': [{ phase: 'arcs', outputName: 'weave', previousOutput: clone(WEAVE), meetingRound: 'send-back' }, '═'],
+    'the story meeting, a reweave': [{ phase: 'arcs', outputName: 'weave', previousOutput: clone(WEAVE), meetingRound: 'reweave' }, '═'],
+    'the map, a send-back with its edits': [{ phase: 'outline', outputName: 'map', previousOutput: mapLeft(), handEdits: standingOnMap(null, MAP, mapLeft()) }, '<HAND_EDITS>\n'],
+    'the article, a send-back with nothing found': [{ phase: 'article', previousOutput: left }, '═'],
+    'the article, a send-back with open findings': [{ phase: 'article', previousOutput: left, validationResults: FAILED }, 'ISSUES TO ADDRESS:\n'],
+    'the article, a send-back with its edits': [{ phase: 'article', previousOutput: left, handEdits: standingAfterSendBack(null, shown, left, 'bundle') }, '<HAND_EDITS>\n']
+  };
+  const contextOf = (options) => buildRevisionContext({ revisionCount: 0, round: 2, validationResults: null, humanFeedback: NOTE, ...options }).contextSection;
 
-  it.each(['send-back', 'reweave'])("at the story meeting, a %s's note is followed by the end line, with a blank line after it, and nothing about the evaluator", (round) => {
-    const text = meeting(round);
-    expect(text).toContain(`HUMAN FEEDBACK (HIGHEST PRIORITY):\nRethink the money thread.\n\n${END}\n\n`);
-    expect(text).not.toContain(EVALUATOR);
+  it("the label is the wording doc's, word for word", () => {
+    expect(DIRECTOR_NOTE_LABEL).toBe("THE DIRECTOR'S NOTE:");
   });
 
-  it('the outline and the article keep both lines, as before', () => {
+  it.each(Object.keys(ROUNDS))("%s: the note under its label, then the context's next block, and no NOTE line", (name) => {
+    const [options, next] = ROUNDS[name];
+    const text = contextOf(options);
+    expect(text).toContain(`${DIRECTOR_NOTE_LABEL}\n${NOTE}\n\n${next}`);
+    expect(count(text, DIRECTOR_NOTE_LABEL)).toBe(1);
+    ['HUMAN FEEDBACK', 'HIGHEST PRIORITY', 'NOTE: The human reviewer', 'Address human feedback', 'evaluator issues'].forEach((gone) => {
+      expect(`${gone}: ${text.includes(gone)}`).toBe(`${gone}: false`);
+    });
+  });
+
+  it.each(Object.keys(ROUNDS))("%s: directorNoteEnd finds where the director's words end", (name) => {
+    const [options] = ROUNDS[name];
+    const text = contextOf(options);
+    const from = text.indexOf(`${DIRECTOR_NOTE_LABEL}\n`) + DIRECTOR_NOTE_LABEL.length + 1;
+    expect(text.slice(from, directorNoteEnd(text, from))).toBe(NOTE);
+  });
+
+  it('an automatic pass prints no note, whatever its slot holds at the story meeting', () => {
     const text = buildRevisionContext({
-      phase: 'outline', revisionCount: 1, validationResults: null, previousOutput: { lede: { hook: 'h' } }, humanFeedback: 'Tighten it.'
+      phase: 'arcs', outputName: 'weave', revisionCount: 1, validationResults: null, previousOutput: clone(WEAVE), humanFeedback: 'A note left over.', meetingRound: null
     }).contextSection;
-    expect(text).toContain(`HUMAN FEEDBACK (HIGHEST PRIORITY):\nTighten it.\n\n${END}\n${EVALUATOR}\n`);
+    expect(text).not.toContain(DIRECTOR_NOTE_LABEL);
+  });
+
+  it('directorNoteEnd finds no end when no block of the context follows the note', () => {
+    expect(directorNoteEnd('Rethink it.\n\nThe end.', 0)).toBe(-1);
   });
 });
 
@@ -1384,7 +1427,6 @@ describe("4.6b: the map's rework context names no evaluator", () => {
   const { instructionText } = require('./fixtures/removed-phrases');
   const clone = (v) => JSON.parse(JSON.stringify(v));
   const NOTE = 'Lead with the envelope.';
-  const END = 'NOTE: The human reviewer has explicitly requested these changes.';
 
   /** The director's map: b6's line rewritten, and b4 struck. */
   function directorsMap() {
@@ -1402,12 +1444,13 @@ describe("4.6b: the map's rework context names no evaluator", () => {
   }
   const context = (options) => buildRevisionContext({ phase: 'outline', outputName: 'map', revisionCount: 0, round: 2, ...options }).contextSection;
 
-  it("a send-back with no check result in hand prints no evaluator line, and the director's note ends on the NOTE line", () => {
+  it("a send-back with no check result in hand prints no evaluator line, and the director's note ends where its edits begin", () => {
     const left = directorsMap();
     const text = context({ previousOutput: left, handEdits: standingOnMap(null, MAP, left), humanFeedback: NOTE, validationResults: null });
     expect(text).not.toMatch(/evaluator/i);
-    expect(text).toContain(`REVISION CONTEXT: MAP (round 2: the director's send back)\n═══════════════════════════════════════════════════════════════════════════════\n\nHUMAN FEEDBACK (HIGHEST PRIORITY):\n${NOTE}\n\n${END}\n\n<HAND_EDITS>`);
-    expect(instructionText(text)).toContain(`HUMAN FEEDBACK (HIGHEST PRIORITY):\n\n${END}`);
+    expect(text).toContain(`REVISION CONTEXT: MAP (round 2: the director's send back)\n═══════════════════════════════════════════════════════════════════════════════\n\nTHE DIRECTOR'S NOTE:\n${NOTE}\n\n<HAND_EDITS>`);
+    expect(instructionText(text)).toContain("THE DIRECTOR'S NOTE:\n\n<HAND_EDITS>");
+    expect(instructionText(text)).not.toContain(NOTE);
   });
 
   // Brief K (R27): the director's note comes first, then the check's lines, then the edits.
@@ -1417,7 +1460,7 @@ describe("4.6b: the map's rework context names no evaluator", () => {
     const text = context({ previousOutput: failing, handEdits: standingOnMap(null, MAP, failing), humanFeedback: NOTE, validationResults });
     expect(text).not.toMatch(/evaluator/i);
     const lines = validationResults.structuralIssues.map((line) => `  - ${line}`).join('\n');
-    expect(text).toContain(`HUMAN FEEDBACK (HIGHEST PRIORITY):\n${NOTE}\n\n${END}\n\nMAP CHECK FAILURES:\n${lines}\n\n<HAND_EDITS>`);
+    expect(text).toContain(`THE DIRECTOR'S NOTE:\n${NOTE}\n\nMAP CHECK FAILURES:\n${lines}\n\n<HAND_EDITS>`);
   });
 
   it('the automatic pass after a failed check prints no evaluator line either', () => {
@@ -1427,7 +1470,7 @@ describe("4.6b: the map's rework context names no evaluator", () => {
     expect(text).toContain('MAP CHECK FAILURES:');
   });
 
-  it("the send-back's rework, as reviseOutline sends it, names no evaluator and keeps the NOTE line", async () => {
+  it("the send-back's rework, as reviseOutline sends it, names no evaluator and reads the note under its label", async () => {
     const left = directorsMap();
     let sent;
     await reviseOutline(
@@ -1440,7 +1483,7 @@ describe("4.6b: the map's rework context names no evaluator", () => {
     expect(sent.label).toBe('Map revision 0');
     const revision = sent.prompt.slice(sent.prompt.indexOf('REVISION CONTEXT: MAP'), sent.prompt.indexOf('WHAT THIS REWORK DOES'));
     expect(revision).not.toMatch(/evaluator/i);
-    expect(revision).toContain(`${NOTE}\n\n${END}\n\n<HAND_EDITS>`);
+    expect(revision).toContain(`THE DIRECTOR'S NOTE:\n${NOTE}\n\n<HAND_EDITS>`);
   });
 });
 
@@ -1555,7 +1598,7 @@ describe("4.14b: a director's round on the map reads no check failures from befo
     });
     expect(prompt).not.toContain('MAP CHECK FAILURES');
     expect(prompt).not.toContain('Players in no beat');
-    expect(prompt).toContain(`HUMAN FEEDBACK (HIGHEST PRIORITY):\n${NOTE}`);
+    expect(prompt).toContain(`THE DIRECTOR'S NOTE:\n${NOTE}`);
     expect(prompt).toContain('E1 (section "closing", beat "b6", players): "Riley"');
   });
 
@@ -1648,8 +1691,11 @@ describe('4.14b fix round 1: a send-back that empties a section, then an automat
 // stored finding holds its code. A director's send-back opens on the note, then the findings, the
 // edits and the scope, and leaves the suggestions out. A code check's lines print as before.
 describe('brief K: a rework is shown findings, not scores (R27)', () => {
-  const { LIMIT_CODES } = require('../workflow/nodes/evaluator-nodes');
-  const nameOf = (code) => LIMIT_CODES.find((limit) => limit.code === code).name;
+  const NAMES = {
+    T1: 'What can be stated as fact', T2: 'The verdict', T3: 'Sold memories', T4: 'Whose account it is', T6: 'Who made a memory public',
+    T7: 'Three stretches of time', T8: 'Nova takes no side, with the part about this session', T9: 'Pronouns', T12: 'Quotes are exact'
+  };
+  const nameOf = (code) => NAMES[code];
   const count = (haystack, needle) => haystack.split(needle).length - 1;
   const MISQUOTE = 'In whatsMissing, "the office called it preposterous and said Mx. Iyer is recovering" gives Nova\'s own line to the office.';
   const FIX = 'Remove the quotation marks around the recovery line and give it in Nova\'s own voice.';
@@ -1727,7 +1773,7 @@ describe('brief K: a rework is shown findings, not scores (R27)', () => {
     const passed = { phase: 'article', passed: true, confidence: 'high', structuralIssues: [], advisoryWarnings: ['A suggestion from the judge.'],
       criteriaScores: { wordsTruth: { score: 0.95, type: 'structural', notes: 'fine', fix: '' } }, revisionGuidance: 'GUIDANCE none.' };
     const text = context({ revisionCount: 0, round: 2, validationResults: passed, humanFeedback: 'Tighten the closing.' });
-    expect(afterBanner(text)).toMatch(/^HUMAN FEEDBACK \(HIGHEST PRIORITY\):\nTighten the closing\.\n/);
+    expect(afterBanner(text)).toMatch(/^THE DIRECTOR'S NOTE:\nTighten the closing\.\n/);
     expect(noScores(text)).toEqual([]);
     expect(text).not.toMatch(/ISSUES TO ADDRESS|SHOULD CONSIDER|A suggestion from the judge|GUIDANCE|none reported|no evaluator feedback/);
     expect(text).toContain('What the note leaves alone stays as it was.');
@@ -1743,7 +1789,7 @@ describe('brief K: a rework is shown findings, not scores (R27)', () => {
       handEdits: standingAfterSendBack(null, shown, left, 'bundle')
     });
     const at = (needle) => text.indexOf(needle);
-    expect(afterBanner(text)).toMatch(/^HUMAN FEEDBACK \(HIGHEST PRIORITY\):\nTighten the closing\.\n\nNOTE: The human reviewer has explicitly requested these changes\.\nAddress human feedback FIRST, then address any remaining evaluator issues\.\n\nISSUES TO ADDRESS:\n/);
+    expect(afterBanner(text)).toMatch(/^THE DIRECTOR'S NOTE:\nTighten the closing\.\n\nISSUES TO ADDRESS:\n/);
     expect(at('ISSUES TO ADDRESS:')).toBeLessThan(at('<HAND_EDITS>'));
     expect(at('</HAND_EDITS>')).toBeLessThan(at('WHAT THIS REWORK DOES:'));
     expect(text).toContain(`ISSUES TO ADDRESS:\n  - ${nameOf('T12')}: ${MISQUOTE}\n\n<HAND_EDITS>`);
@@ -1781,11 +1827,11 @@ describe('brief K: a rework is shown findings, not scores (R27)', () => {
         phase: 'arcs', outputName: 'weave', revisionCount: 0, round: 2, validationResults: null, previousOutput: clone(WEAVE),
         handEdits: null, humanFeedback: meetingRound === 'send-back' ? 'Rethink it.' : null, meetingRound
       }).contextSection;
-      expect(afterBanner(text)).toMatch(meetingRound === 'send-back' ? /^HUMAN FEEDBACK \(HIGHEST PRIORITY\):\nRethink it\.\n\nNOTE: The human reviewer has explicitly requested these changes\.\n\n═/ : /^═/);
+      expect(afterBanner(text)).toMatch(meetingRound === 'send-back' ? /^THE DIRECTOR'S NOTE:\nRethink it\.\n\n═/ : /^═/);
     }
     const map = buildRevisionContext({
       phase: 'outline', outputName: 'map', revisionCount: 0, round: 2, validationResults: null, previousOutput: clone(MAP), humanFeedback: 'Lead with the envelope.'
     }).contextSection;
-    expect(afterBanner(map)).toMatch(/^HUMAN FEEDBACK \(HIGHEST PRIORITY\):\nLead with the envelope\.\n\nNOTE: The human reviewer has explicitly requested these changes\.\n\n═/);
+    expect(afterBanner(map)).toMatch(/^THE DIRECTOR'S NOTE:\nLead with the envelope\.\n\n═/);
   });
 });
