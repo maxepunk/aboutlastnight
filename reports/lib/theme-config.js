@@ -11,7 +11,8 @@
  * - display: constants for the printed page, including printsHero, whether the theme's
  *   layout prints the bundle's hero (read through printedHero)
  * - map: the story map's slots (phase 4, brief 4.6), each with its key, its label on
- *   the screen and its default heading, in their usual order (read through mapSlotsOf).
+ *   the screen, its stock heading and its description, the words the map writer's prompt
+ *   prints after the slot's name (read through mapSlotsOf).
  *   The map writer lays the settled weave across them; a theme without them has no map
  * - rules: the theme's rules folder (phase 4, R14), relative to the reports folder, which
  *   lib/rule-set.js reads for every writer, rework and judge of the theme
@@ -143,20 +144,23 @@ const THEME_CONFIGS = {
     },
 
     // The story map's slots (phase 4, brief 4.6; spec 5.2): the article's house
-    // sections, in their usual order, each with its label for the screen and the heading
-    // the map starts from. The map uses a slot, gives it its own heading, or drops it
-    // with a reason (C2), and orders the slots it uses. The lede and the closing print no
-    // heading (C14: the closing is untitled). The schema's slot names, the writer's list
-    // and the stop's payload all come from here, so a theme brings its own slots in its
-    // config and no code names them.
+    // sections, each with its label for the screen, its stock heading and its description.
+    // The map uses the slots the story needs, in the order its steps need them, and gives
+    // each its own heading. The lede and the closing print no heading. The stock heading
+    // stays here for whatever else reads a slot (phase 18, run 2c, R33); the map writer's
+    // prompt no longer prints it. The description is what the map writer's <SLOTS> prints
+    // after the slot's name (the wording doc, part 2): which section of the brief's kinds
+    // the slot is, said once, here. The schema's slot names, the writer's list and the
+    // stop's payload all come from here, so a theme brings its own slots in its config and
+    // no code names them.
     map: {
       slots: [
-        { key: 'lede', label: 'Lede', heading: '' },
-        { key: 'theStory', label: 'The Story', heading: 'The Story' },
-        { key: 'followTheMoney', label: 'Follow the Money', heading: 'Follow the Money' },
-        { key: 'thePlayers', label: 'The Players', heading: 'The Players' },
-        { key: 'whatsMissing', label: "What's Missing", heading: "What's Missing" },
-        { key: 'closing', label: 'Closing', heading: '' }
+        { key: 'lede', label: 'Lede', heading: '', description: 'the opening' },
+        { key: 'theStory', label: 'The Story', heading: 'The Story', description: 'what people said and did in front of everyone' },
+        { key: 'followTheMoney', label: 'Follow the Money', heading: 'Follow the Money', description: 'the money' },
+        { key: 'thePlayers', label: 'The Players', heading: 'The Players', description: 'particular people and what they wanted' },
+        { key: 'whatsMissing', label: "What's Missing", heading: "What's Missing", description: 'what nobody has explained' },
+        { key: 'closing', label: 'Closing', heading: '', description: 'the closing' }
       ]
     },
 
@@ -299,12 +303,12 @@ function printedHero(bundle, theme) {
 }
 
 /**
- * The story map's slots for a theme (phase 4, brief 4.6), in their usual order, each
- * `{key, label, heading}`: a copy, so no caller changes the config. A theme with no map
- * in its config, such as the parked detective (R1), has none.
+ * The story map's slots for a theme (phase 4, brief 4.6), in the config's order, each
+ * `{key, label, heading, description}`: a copy, so no caller changes the config. A theme
+ * with no map in its config, such as the parked detective (R1), has none.
  *
  * @param {string} theme - Theme name
- * @returns {Array<{key: string, label: string, heading: string}>}
+ * @returns {Array<{key: string, label: string, heading: string, description: string}>}
  */
 function mapSlotsOf(theme) {
   const slots = Object.prototype.hasOwnProperty.call(THEME_CONFIGS, theme) ? THEME_CONFIGS[theme].map?.slots : null;

@@ -100,10 +100,20 @@ describe('PromptBuilder', () => {
       expect(userPrompt.startsWith(`${SETTLED_WEAVE}\n`)).toBe(true);
       expect(userPrompt.indexOf("Lay the settled weave above across the article's sections"))
         .toBeGreaterThan(userPrompt.indexOf('</SETTLED_WEAVE>'));
-      const slots = userPrompt.slice(userPrompt.indexOf('<SLOTS>'), userPrompt.indexOf('</SLOTS>'));
-      expect(slots).toContain('- lede: no heading');
-      expect(slots).toContain('- theStory: The Story');
-      expect(slots).toContain('- closing: no heading');
+      // Phase 18, run 2c (the wording doc, part 2; R33): the sections as a set to choose and
+      // order from, each with what it is from the theme's config; no stock heading is offered.
+      const slots = userPrompt.slice(userPrompt.indexOf('<SLOTS>') + '<SLOTS>\n'.length, userPrompt.indexOf('</SLOTS>'));
+      expect(slots).toBe([
+        'The sections the map can use, by the name the map gives each. Use the ones the story needs, in the order its steps need them.',
+        '- lede: the opening',
+        '- theStory: what people said and did in front of everyone',
+        '- followTheMoney: the money',
+        '- thePlayers: particular people and what they wanted',
+        '- whatsMissing: what nobody has explained',
+        '- closing: the closing',
+        ''
+      ].join('\n'));
+      expect(slots).not.toMatch(/usual order|no heading|The Story|Follow the Money/);
       expect(userPrompt).not.toContain('SELECTED ARCS');
       expect(userPrompt).not.toContain('<arc-metadata>');
     });

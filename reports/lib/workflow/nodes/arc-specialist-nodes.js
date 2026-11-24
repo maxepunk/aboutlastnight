@@ -63,7 +63,7 @@ const { systemPromptOpening, buildDirectorGuidanceSection, filterGateNotes, rost
 const { loadRuleSet } = require('../../rule-set');
 const { WEAVE_QUESTIONS_PROPERTY, WEAVE_QUESTION_THREAD_KEY, weaveQuestionsOf, carriedWeaveQuestions, withoutAnswers } = require('../../writer-questions');
 const {
-  CONNECTION_KINDS, MEETING_WORD_BOUND, QUESTION_WORD_BOUND, PICKED_KEY, WEAVE_CHECKS_SOURCE, FACT_CHECK_MARK_KEY, MEETING_ROUNDS,
+  CONNECTION_KINDS, QUESTION_WORD_BOUND, PICKED_KEY, WEAVE_CHECKS_SOURCE, FACT_CHECK_MARK_KEY, MEETING_ROUNDS,
   isWeave, weaveForPrompt, weaveKey, factCheckMarkOf, isMeetingApproved, meetingRoundOf,
   weaveFindings, withPickFrom, withHeldQuestionThreads, holdOutsideOpenAngle, writersShareOf, weaveWritersTextBlank, meetingLengthOf, weaveIdOf
 } = require('../../weave');
@@ -274,23 +274,23 @@ function changedEditsFormat(property) {
  * The arc writer's task (phase 4, briefs 4.4 and 4.5; phase 4b, briefs 1B and 3B; spec 2026-10-06
  * sections 4, 5 and 9): which field holds what, and the page's bound. The weave writer's own part
  * (<job-weave>) says what an angle, a thread and a connection are, and how each line is said;
- * the task points at it and states only what it does not say: what the director reads, the page with the labels code prints beside the
- * writer's lines, at most MEETING_WORD_BOUND words with any angle open, and so about 325 words of
- * the writer's own (R5: the checks hold the writer's own words to the allowance lib/word-count.js
- * pageLengthOf's rule gives, never less than MEETING_WORD_FLOOR, 350, so 325 holds with the angle
- * whose page runs longest open, however many words the verdict and the labels code prints take);
- * the page it describes is the one lib/stop-pages.js meetingPage prints (fix round 1, finding 1):
- * the open angle's card says only that it is open below, every other angle its headline and card
- * line, and each connection its line alone; where each lands in the weave's fields, the words
+ * the task points at it and states only what it does not say: that the director opens one angle
+ * at a time, that the writer's own lines with any angle open come to about 325 words and which
+ * lines those are, that the evidence is not counted, that a check counts the words, and what to
+ * leave out first when a page runs long (phase 18, run 2c: the wording doc, part 4). The bound
+ * itself is not printed: the checks hold the writer's own words to the allowance lib/word-count.js
+ * pageLengthOf's rule gives, MEETING_WORD_BOUND less the words code prints, never less than
+ * MEETING_WORD_FLOOR, 350, so 325 holds with the angle whose page runs longest open (R5);
+ * where each lands in the weave's fields, the words
  * "from your notes" holds, the verdict flag, where a piece names its sources, and the bound on a
  * question (R4: QUESTION_WORD_BOUND).
  */
-const WEAVE_TASK = `Pitch two or three angles for the director to read in a few minutes at the story meeting and pick from. The page they read comes to at most ${MEETING_WORD_BOUND} words with any one angle open: your lines, without the evidence under them (the headline and card line of each angle that is not open; the open angle's pitch, its threads and the names of the threads it leaves out; the line of each connection between its threads; the questions), and what code prints around them (the verdict, the line that says the open angle is open below, the line that keeps the verdict's thread in, the labels over your lines, and a line when the notes end without the director's read). So your own lines come to about 325 words. <job-weave> below says what an angle, a thread and a connection are, and how each line is said. The fields hold them:
+const WEAVE_TASK = `Pitch two or three angles for the director to read in a few minutes at the story meeting and pick from. The director opens one angle at a time. With any one angle open, your lines on the page come to about 325 words: that angle's pitch, its threads and its connections, the questions, and the headline and one-line summary of each other angle. The evidence under a line is not counted. A check counts the words and says when a page runs over. Write each line in full, plain words. When the page is too long, leave out a thread or a connection before you clip a sentence. <job-weave> below says what an angle, a thread and a connection are, and how each line is said. The fields hold them:
 
 - **angles**: each angle's **headline**, the article's own printed line; its **gist**, one sentence that sums it up for its card; its **story**, its **question**, why it **lands** with the players and where it **ends** up; and its **threads**, the ids of the threads it tells, in the order it tells them.
 - **fromYourNotes**: when angle 1 is the director's read, the words it rests on: one unbroken passage, copied exactly from the notes or the corrections. When every angle is your own, the field stays out.
 - **threads**: the one set of threads the angles draw on, each a **name** and one **line**. The thread that carries the verdict has "verdict": true.
-- **evidence**: under each thread, the pieces of the record that tell it, and under each connection, the pieces that show the two threads touch; each piece with its **sources** from the Sources list, what it **shows**, and its **stance**. Each thread has at least one piece that supports it, so the map writer can tell it from the record.
+- **evidence**: under each thread, the pieces of the record that tell it, and under each connection, the pieces that show what the two threads share; each piece with its **sources** from the Sources list, what it **shows**, and its **stance**. Each thread has at least one piece that supports it, so the map writer can tell it from the record.
 - **connections**: each one **line**, with the ids of the two threads it **joins** and its **kind**.
 - **questions**: the questions <job-weave> allows, each with what its answer changes in print as "changes", and the id of the thread it sits beside as "thread". Each comes to ${QUESTION_WORD_BOUND} words or fewer across its about, question and changes, so the director reads it in a glance.`;
 

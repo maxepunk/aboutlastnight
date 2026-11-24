@@ -59,7 +59,7 @@
                 "move": { "type": "string", "description": "The move of the story, in a few plain words with its people" },
                 "players": {
                   "type": "array",
-                  "description": "The roster players the beat shows, by name",
+                  "description": "The played characters who do something in this beat that bears on the question, by name",
                   "items": { "type": "string" }
                 },
                 "synopsis": { "type": "string", "description": "One sentence, in the same plain words as the move, saying what the article tells at this beat. The article writer tells it in its own words" },
@@ -119,7 +119,7 @@
           "move": { "type": "string", "description": "The move of the story, in a few plain words with its people" },
           "players": {
             "type": "array",
-            "description": "The roster players the beat shows, by name",
+            "description": "The played characters who do something in this beat that bears on the question, by name",
             "items": { "type": "string" }
           },
           "synopsis": { "type": "string", "description": "One sentence, in the same plain words as the move, saying what the article tells at this beat. The article writer tells it in its own words" },

@@ -295,14 +295,16 @@ describe('theme-config', () => {
 describe("4.6: the map's slots are the theme's", () => {
   const { mapSlotsOf } = require('../theme-config');
 
-  it('the journalist has six slots, in their usual order, each with its label and its default heading', () => {
+  // Phase 18, run 2c (R33): each slot keeps its stock heading for whatever else reads it, and
+  // carries, once, the words the map writer's prompt prints after its name (the wording doc, part 2).
+  it('the journalist has six slots, each with its label, its stock heading and what the section is', () => {
     expect(mapSlotsOf('journalist')).toEqual([
-      { key: 'lede', label: 'Lede', heading: '' },
-      { key: 'theStory', label: 'The Story', heading: 'The Story' },
-      { key: 'followTheMoney', label: 'Follow the Money', heading: 'Follow the Money' },
-      { key: 'thePlayers', label: 'The Players', heading: 'The Players' },
-      { key: 'whatsMissing', label: "What's Missing", heading: "What's Missing" },
-      { key: 'closing', label: 'Closing', heading: '' }
+      { key: 'lede', label: 'Lede', heading: '', description: 'the opening' },
+      { key: 'theStory', label: 'The Story', heading: 'The Story', description: 'what people said and did in front of everyone' },
+      { key: 'followTheMoney', label: 'Follow the Money', heading: 'Follow the Money', description: 'the money' },
+      { key: 'thePlayers', label: 'The Players', heading: 'The Players', description: 'particular people and what they wanted' },
+      { key: 'whatsMissing', label: "What's Missing", heading: "What's Missing", description: 'what nobody has explained' },
+      { key: 'closing', label: 'Closing', heading: '', description: 'the closing' }
     ]);
   });
 

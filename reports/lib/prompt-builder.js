@@ -1053,7 +1053,8 @@ Only the ${n} players above were at the investigation. Every other character exc
    * its own <DIRECTOR_GUIDANCE>.
    *
    * The settled weave comes first, as the writer's task (spec 5.1), then the task itself and
-   * the theme's slots, then what the outline writer read: the director's notes, the photos
+   * the theme's slots, each by its key with its description from the theme's config (phase
+   * 18, run 2c, R33: a slot's stock heading is not printed here), then what the outline writer read: the director's notes, the photos
    * with the director's descriptions, the record with the investigation's timeline, the money, the
    * session facts with the director's accusation, the roster with pronouns (phase 3, 3.10;
    * T9), the map's <SCHEMA> (fix 3.2b) and the craft files last (the integrator's placement
@@ -1084,8 +1085,8 @@ Only the ${n} players above were at the investigation. Every other character exc
 ${mapTask(heroMarked, meetingNote)}
 
 <SLOTS>
-The article's slots, in their usual order, each with the heading the map starts from:
-${slots.map((slot) => `- ${slot.key}: ${slot.heading ? slot.heading : 'no heading'}`).join('\n')}
+The sections the map can use, by the name the map gives each. Use the ones the story needs, in the order its steps need them.
+${slots.map((slot) => `- ${slot.key}: ${slot.description}`).join('\n')}
 </SLOTS>
 ${observationsSection ? `\n${observationsSection}\n` : ''}
 <available-photos>

@@ -140,7 +140,11 @@ describe('the arc writer writes one weave in one call', () => {
     expect(format).toContain('"ends": "Where it ends up: Nova\'s answer to the question, in one line"');
     expect(format).toContain('"line": "Where the two threads connect, in one plain line"');
     expect(format).not.toMatch(/\b[TC]\d{1,2}\b/);
-    expect(task).toContain(`comes to at most ${MEETING_WORD_BOUND} words`);
+    // Run 2c (the wording doc, part 4): the task gives the writer's own share, and no longer the page's bound.
+    expect(task).toContain('With any one angle open, your lines on the page come to about 325 words');
+    expect(task).not.toContain(`comes to at most ${MEETING_WORD_BOUND} words`);
+    expect(task).toContain('under each connection, the pieces that show what the two threads share;');
+    expect(task).not.toContain('touch');
     // The old shape's words went: a claim, a receipt, a connection named exactly.
     expect(`${format}${task}`).not.toMatch(/\bclaim|\breceipt|named exactly|"detail"/i);
     // The prompt's own text: the craft files state their own rules.
@@ -458,9 +462,14 @@ describe('the weave checks (the check node)', () => {
       });
     });
 
-    // Piece 3 (brief 3B; R5): 450 words with any angle open, so about 325 of the writer's own.
-    it("the writer's task says what the director reads: at most 450 words with any angle open, the labels code prints among them, so about 325 of its own", () => {
-      expect(buildWeavePrompt(weaveState())).toContain("The page they read comes to at most 450 words with any one angle open: your lines, without the evidence under them (the headline and card line of each angle that is not open; the open angle's pitch, its threads and the names of the threads it leaves out; the line of each connection between its threads; the questions), and what code prints around them (the verdict, the line that says the open angle is open below, the line that keeps the verdict's thread in, the labels over your lines, and a line when the notes end without the director's read). So your own lines come to about 325 words.");
+    // Piece 3 (brief 3B; R5): about 325 of the writer's own words with any angle open. Run 2c (the
+    // wording doc, part 4): the task says what is counted and what to leave out first; its first
+    // sentence and the two that follow stay as they were. The bound and its check are unchanged.
+    it("the writer's task says what is counted with any angle open, about 325 words of its own, and what to leave out first", () => {
+      const prompt = buildWeavePrompt(weaveState());
+      expect(prompt).toContain("Pitch two or three angles for the director to read in a few minutes at the story meeting and pick from. The director opens one angle at a time. With any one angle open, your lines on the page come to about 325 words: that angle's pitch, its threads and its connections, the questions, and the headline and one-line summary of each other angle. The evidence under a line is not counted. A check counts the words and says when a page runs over. Write each line in full, plain words. When the page is too long, leave out a thread or a connection before you clip a sentence. <job-weave> below says what an angle, a thread and a connection are, and how each line is said. The fields hold them:");
+      expect(prompt).not.toContain('The page they read comes to at most');
+      expect(MEETING_WORD_BOUND).toBe(450);
     });
   });
 });
@@ -911,11 +920,12 @@ describe('the arc rework\'s prompt', () => {
     expect(STRUCTURAL_PASS_SCORE).toBe(0.8);
   });
 
-  it('the bound reaches the rework through the writer\'s task', () => {
+  it('the writer\'s share of the page reaches the rework through the writer\'s task', () => {
     const state = weaveState();
     const prompt = buildArcRevisionPrompt(state, '', '');
     // Phase 4b (brief 1B; R5): the meeting's page within its bound, 450 words since piece 3.
-    expect(prompt).toContain(`comes to at most ${MEETING_WORD_BOUND} words`);
+    // Run 2c (the wording doc, part 4): the task states the writer's share, not the bound.
+    expect(prompt).toContain('With any one angle open, your lines on the page come to about 325 words');
     expect(MEETING_WORD_BOUND).toBe(450);
   });
 });

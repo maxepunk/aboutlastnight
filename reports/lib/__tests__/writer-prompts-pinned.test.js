@@ -539,11 +539,21 @@ const REPO = path.join(__dirname, '..', '..');
  *   (WRITER_BUNDLE_SCHEMA; -935); the task's two tags take backticks (+4); and <job-article> comes
  *   before <brief> (0): article-journalist 29870 -> 27701 (-2169). The outline and arc pins do not
  *   move.
+ * - Phase 18, run 2c, slice N (R29, R33), the weave and map writers' lines as the director
+ *   approved them on 2026-11-24 (the wording doc, parts 2 and 4). <SLOTS> lists the sections the
+ *   map can use, each by its key with its description from the theme's config, and no stock
+ *   heading (+109); a beat's players in the printed schema are the played characters who do
+ *   something there that bears on the question, in a section's beats and in the left-out beats
+ *   (+45 twice): outline-journalist 24086 -> 24285 (+199). The weave writer's task opens on what
+ *   is counted with an angle open and what to leave out first, without the page's bound (-125),
+ *   and a connection's evidence shows what the two threads share (+5): arcs-journalist
+ *   12633 -> 12513 (-120). The rule files are stubs here, so their copy moves no pin. The article
+ *   pin does not move.
  */
 const PINNED = {
-  'outline-journalist': ['41cac07053d52d3e84c2e154e824cf1bf4851d30fc66816f66e74d7ee1249dc3', 24086],
+  'outline-journalist': ['30d51ffe266f1142eec558b5e0af91bc388710c0440ddfe775ffc4d375cd5486', 24285],
   'article-journalist': ['26009a56d885912e8f213ce304c2cde938e367ed316c00c59fcf5b8d20f80d15', 27701],
-  'arcs-journalist': ['f4a41d22d34070ebfc5006510a8e87e6fb8be18f669cb79df50badf1c017dc5c', 12633]
+  'arcs-journalist': ['52ecf53d1dd4d267e1f005cf23a0c29c9f28aba64d6952ea73620443804079e7', 12513]
 };
 
 describe('the writers send exactly what they sent before the reworkers were built from them', () => {

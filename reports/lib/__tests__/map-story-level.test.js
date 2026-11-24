@@ -880,6 +880,27 @@ describe("phase 18, C: the outline schema's three descriptions say what the sect
     });
   });
 
+  // Run 2c (the wording doc, part 2): a beat's players are the played characters who do
+  // something there that bears on the question. A description only: the field keeps its name
+  // and type, and the map checks read who is placed from it as before.
+  it("a beat's players are the played characters who act on the question there, in both places the beat's shape appears", () => {
+    beatShapes.forEach((beat) => {
+      expect(beat.properties.players).toEqual({
+        type: 'array',
+        description: 'The played characters who do something in this beat that bears on the question, by name',
+        items: { type: 'string' }
+      });
+    });
+    ['journalist'].forEach((theme) => {
+      [mapSchemaFor(theme), directorMapSchemaFor(theme)].forEach((schema) => {
+        expect(schema.properties.sections.items.properties.beats.items.properties.players.description).toBe(beatShapes[0].properties.players.description);
+        expect(schema.properties.leftOut.items.properties.players.description).toBe(beatShapes[1].properties.players.description);
+      });
+    });
+    // The line at the top keeps its own description.
+    expect(outline.properties.gapNote.properties.players.description).toBe('The roster players the line raises, by name');
+  });
+
   it('the line at the top is present only when a connection the weave lacks was seen', () => {
     expect(outline.properties.gapNote.description)
       .toBe('The line at the top of the map, present only when the record cannot carry part of the story or a change the director made at the meeting, a player cannot be placed, or a connection the weave lacks was seen');
