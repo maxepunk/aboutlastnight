@@ -46,7 +46,7 @@ const {
   buildRevisionContext
 } = require('./node-helpers');
 // Brief 4.13: the weave writer's and its reworks' identity lines are the theme's.
-const { getThemeNPCs, identityLineOf } = require('../../theme-config');
+const { getThemeNPCs, getThemeNPCEntries, identityLineOf } = require('../../theme-config');
 const { traceNode } = require('../../observability');
 const { WEAVE_SYSTEM_PROMPT, WEAVE_SCHEMA } = require('../../sdk-client/subagents');
 const { renderDirectorEnrichmentBlock, directorTensionSentences } = require('../../prompt-renderers/director-notes-renderer');
@@ -74,11 +74,13 @@ const { SOURCES_GLOSS, EVIDENCE_PIECE_SCHEMA, evidenceContextOf, isCharacterShee
 const { meetingCheckpointData } = require('../../meeting');
 const { wordsShown } = require('../../stop-pages');
 const {
-  carriedEdits, settleEdits, reportWithHeld, threadPlacesOf, weaveDirectorsShare, directorEditConcern, SEND_BACK_PASS, REWEAVE_PASS
+  carriedEdits, settleEdits, reportWithHeld, threadPlacesOf, weaveDirectorsShare, directorEditConcern, SEND_BACK_PASS, REWEAVE_PASS, CHANGED_EDITS_KEY
 } = require('../../hand-edit-diff');
 // Brief 4.5: a send-back that carries the director's edits asks for the list of those it
 // changed, as the outline's and the article's send-backs do (F1): one schema rule, one strip.
-const { reworkSchemaWithChangedEdits, takeChangedEdits } = require('./ai-nodes');
+// Run 2b (R25): the writers' builder, whose FINANCIAL_SUMMARY the weave writer prints as the map
+// and article writers and the judges do (getPromptBuilder(null, state)._buildFinancialSummary).
+const { reworkSchemaWithChangedEdits, takeChangedEdits, getPromptBuilder } = require('./ai-nodes');
 
 /**
  * The director's standing notes for the arc writer and the arc rework (phase 2, brief
@@ -117,8 +119,8 @@ function weaveSystemPrompt(sessionConfig, theme = 'journalist') {
  * The room's conclusions and the director's words, from state.
  *
  * @param {Object} state - Current workflow state
- * @returns {Object} accusation, whiteboard, the director's prose and its indexes, the
- *   roster and the investigation focus
+ * @returns {Object} accusation, whiteboard, the director's prose and its indexes, and the
+ *   roster. Run 2b (R25): the investigation focus went; it printed the charge a third time.
  */
 function extractPlayerFocusContext(state) {
   const playerFocus = state.playerFocus || {};
@@ -133,8 +135,7 @@ function extractPlayerFocusContext(state) {
     directorQuotes: directorNotes.quotes || [],
     directorTransactionLinks: directorNotes.transactionReferences || [],
     directorPostInvestigation: directorNotes.postInvestigationDevelopments || [],
-    roster: sessionConfig.roster || [],
-    primaryInvestigation: playerFocus.primaryInvestigation || 'General investigation'
+    roster: sessionConfig.roster || []
   };
 }
 
@@ -198,9 +199,17 @@ function evidencePieceFormat() {
  * listed from the schema's constants (lib/weave.js), its angles first, each thread and each
  * connection with its evidence underneath (phase 4b, briefs 1B and 3B).
  *
+ * Phase 18, run 2b (brief I): a send-back that carries the director's edits is told to list the
+ * edits it changed, and its call's schema asks for that list (reworkSchemaWithChangedEdits). Its
+ * format then shows the list after the questions, one entry in the words that schema gives its
+ * id and its reason, so the format the rework is pointed at and the call agree.
+ *
+ * @param {Object} [options]
+ * @param {Object|null} [options.changedEdits] - the changed-edits property of the call's schema,
+ *   or null (the writer, a reweave and an automatic pass) for the format without it
  * @returns {string}
  */
-function weaveOutputFormat() {
+function weaveOutputFormat({ changedEdits = null } = {}) {
   const alternatives = (values) => values.map(value => JSON.stringify(value)).join(' | ');
   return `## OUTPUT FORMAT
 
@@ -241,10 +250,24 @@ Return one JSON object in this shape:
       ]
     }
   ],
-  "questions": []
+  "questions": []${changedEdits ? `,\n${changedEditsFormat(changedEdits)}` : ''}
 }
 
 ${weaveQuestionsFormatLine()}`;
+}
+
+/**
+ * The changed-edits list as the OUTPUT FORMAT shows it: its key, then one entry with its id and
+ * its reason in the call schema's own descriptions (phase 18, run 2b, brief I).
+ *
+ * @param {Object} property - the changed-edits property of the rework call's schema
+ * @returns {string}
+ */
+function changedEditsFormat(property) {
+  const { id, reason } = property.items.properties;
+  return `  "${CHANGED_EDITS_KEY}": [
+    { "id": ${JSON.stringify(id.description)}, "reason": ${JSON.stringify(reason.description)} }
+  ]`;
 }
 
 /**
@@ -287,6 +310,13 @@ const WEAVE_TASK = `Pitch two or three angles for the director to read in a few 
 function buildCharacterCategoriesBlock(roster = [], theme = 'journalist', allCharacters = []) {
   const themeNPCs = getThemeNPCs(theme);
   const nonRosterPCs = getNonRosterPCs(roster, allCharacters, themeNPCs);
+  // Run 2b (R25): the game's own characters without an alias, as the roster section lists them
+  // (prompt-builder.js generateRosterSection), so Blake and the Valet read as the one person the
+  // limits say they are.
+  const ownCharacters = getThemeNPCEntries(theme)
+    .filter((entry) => !(entry && typeof entry === 'object' && entry.aliasOf))
+    .map((entry) => (typeof entry === 'string' ? entry : entry && entry.name))
+    .filter(Boolean);
 
   return `### Character Categories
 
@@ -294,7 +324,7 @@ function buildCharacterCategoriesBlock(roster = [], theme = 'journalist', allCha
 ${JSON.stringify(roster)}
 
 **NPCs** (the game's own characters, never players):
-${themeNPCs.join(', ')}
+${ownCharacters.join(', ')}
 
 **NON-ROSTER PCs** (game characters not playing this session):
 ${nonRosterPCs.length > 0 ? `${nonRosterPCs.join(', ')}\n- A thread names one only through what the record shows of them.` : '(none this session)'}
@@ -304,18 +334,27 @@ ${nonRosterPCs.length > 0 ? `${nonRosterPCs.join(', ')}\n- A thread names one on
 /**
  * The arc writer's user prompt up to its <DIRECTOR_GUIDANCE>: the output format; what
  * the room concluded (the accusation and the director's account of it, the whiteboard
- * reading, the director's notes and corrections and their sentences about Blake and the
- * Valet, the investigation focus, the roster with the time-of-day line and, when the session
+ * reading when the board holds something, the director's notes and corrections and their
+ * sentences about Blake and the Valet, the roster with the time-of-day line and, when the session
  * has one, the guest reporter's line, the character categories, the roster with pronouns and the
- * character context); the record with its investigation's timeline and the
+ * character context); the record with its investigation's timeline, the money totals the map and
+ * article writers read (FINANCIAL_SUMMARY, when an account has a total), and the
  * sources a piece of evidence may name; the weave's task; and the rule set's <brief> then
  * <job-weave>, last, from the theme's rules folder. The arc rework opens with
  * the same sections (phase 2, 2.3), so whatever the writer reads reaches its rework.
  *
+ * Phase 18, run 2b (R25, R26): the investigation focus went, since it printed the charge a third
+ * time under a heading that read as an instruction; the totals the limits say the record gives
+ * print after the record, through the builder the map writer's prompt uses, so the block is the
+ * map writer's byte for byte; and an empty whiteboard is left out by the renderer's own option.
+ *
  * @param {Object} state - Current workflow state
+ * @param {Object} [options]
+ * @param {Object|null} [options.changedEdits] - the changed-edits property of a send-back's call
+ *   schema, which its OUTPUT FORMAT then shows (weaveOutputFormat); the writer passes none
  * @returns {string}
  */
-function buildWeaveSections(state) {
+function buildWeaveSections(state, { changedEdits = null } = {}) {
   const context = extractPlayerFocusContext(state);
   const evidenceSummary = extractEvidenceSummary(state.evidenceBundle || {});
   const allCharacters = Object.keys(state.canonicalCharacters || {});
@@ -327,6 +366,11 @@ function buildWeaveSections(state) {
   // Brief E (R7): when the investigation ran, after the session roster; with no sale and no
   // exposure, none. The weave writer reads no SESSION_FACTS, so it reads the line here.
   const whenLine = timeOfDayLine(state.sessionConfig, state.evidenceBundle);
+  // Run 2b (R25): '' when no account has a total, else the block with its leading newline, as
+  // the map writer's prompt prints it after the record.
+  const money = getPromptBuilder(null, state)._buildFinancialSummary(state.shellAccounts || []);
+  // Run 2b (R26): '' when the board holds nothing, as the map and article writers read it.
+  const whiteboard = renderWhiteboardConnections(context.whiteboard, { omitWhenEmpty: true });
 
   const characterContext = state.characterData?.characters && Object.keys(state.characterData.characters).length > 0 ? `
 ### Character Context (${DERIVED_LABELS.characterContext})
@@ -355,7 +399,7 @@ ${blakeSentences.map(sentence => `- ${sentence}`).join('\n')}
 
   return `# The Weave
 
-${weaveOutputFormat()}
+${weaveOutputFormat({ changedEdits })}
 
 ---
 
@@ -364,9 +408,7 @@ ${weaveOutputFormat()}
 ### The Accusation
 ${renderArcAccusation(context.accusation, directorAccusationText(state), "Players' Reasoning")}
 
-${renderWhiteboardConnections(context.whiteboard)}
-
-### ${ARC_NOTES_LABEL}
+${whiteboard ? `${whiteboard}\n\n` : ''}### ${ARC_NOTES_LABEL}
 
 ${renderDirectorEnrichmentBlock({
   rawProse: context.directorProse,
@@ -377,9 +419,6 @@ ${renderDirectorEnrichmentBlock({
   sessionConfig: withSessionClock(state.sessionConfig, state.evidenceBundle)
 })}
 ${blakeSection}
-### Primary Investigation Focus
-${context.primaryInvestigation}
-
 ### Session Roster (the players at the investigation)
 ${JSON.stringify(context.roster)}
 ${whenLine ? `${whenLine}\n` : ''}${guestLine ? `${guestLine}\n` : ''}
@@ -392,7 +431,7 @@ ${characterContext}
 ## SECTION 2: THE RECORD
 
 The ${evidenceSummary.exposedTokens.length} memories that were made public and ${evidenceSummary.exposedPaper.length} paper documents in full, then the investigation's timeline: every sale, memory turned in, bonus and transfer, in time order.
-${renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig })}
+${renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig })}${money ? `\n${money}` : ''}
 
 ### Sources
 A piece of evidence names each of its sources by one of these document ids, or as ${SOURCES_GLOSS}.
@@ -606,10 +645,14 @@ Rework the PREVIOUS WEAVE OUTPUT as the revision context above directs, and retu
  * @param {Object} state - Current workflow state
  * @param {string} contextSection - the revision context (buildRevisionContext)
  * @param {string} previousOutputSection - the previous weave (buildRevisionContext)
+ * @param {Object} [options]
+ * @param {Object|null} [options.changedEdits] - on a send-back that carries the director's
+ *   edits, the changed-edits property of its call's schema, which the OUTPUT FORMAT shows
+ *   (run 2b, brief I)
  * @returns {string}
  */
-function buildArcRevisionPrompt(state, contextSection, previousOutputSection) {
-  return `${buildWeaveSections(state)}
+function buildArcRevisionPrompt(state, contextSection, previousOutputSection, { changedEdits = null } = {}) {
+  return `${buildWeaveSections(state, { changedEdits })}
 ---
 
 # Weave Rework
@@ -694,14 +737,18 @@ function arcReworkCall(state) {
     humanFeedback: note,
     meetingRound
   });
+  // Run 2b (brief I): the OUTPUT FORMAT shows the changed-edits list exactly when the call's
+  // schema asks for it, in that schema's words.
+  const jsonSchema = asksForChangedEdits ? reworkSchemaWithChangedEdits(WEAVE_SCHEMA) : WEAVE_SCHEMA;
+  const changedEdits = asksForChangedEdits ? jsonSchema.properties[CHANGED_EDITS_KEY] : null;
   return {
     meetingRound,
     before,
     edits,
     asksForChangedEdits,
-    prompt: buildArcRevisionPrompt(state, contextSection, previousOutputSection),
+    prompt: buildArcRevisionPrompt(state, contextSection, previousOutputSection, { changedEdits }),
     systemPrompt: getArcRevisionSystemPrompt(meetingRound, state.sessionConfig, state.theme),
-    jsonSchema: asksForChangedEdits ? reworkSchemaWithChangedEdits(WEAVE_SCHEMA) : WEAVE_SCHEMA,
+    jsonSchema,
     label: `Arc revision ${revisionCount}`
   };
 }

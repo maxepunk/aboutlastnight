@@ -55,7 +55,7 @@ describe('contradiction data in arc prompt', () => {
 
   test("the journalist writer prints the director's sentences about Blake under their label, and drops the retired types", () => {
     const prompt = buildWeavePrompt(baseState({ narrativeTensions: STORED }));
-    const section = prompt.slice(prompt.indexOf("### Blake and the Valet in the director's notes"), prompt.indexOf('### Primary Investigation Focus'));
+    const section = prompt.slice(prompt.indexOf("### Blake and the Valet in the director's notes"), prompt.indexOf('### Session Roster'));
     expect(section).toContain(DERIVED_LABELS.narrativeTensions);
     expect(section).toContain(`- ${BLAKE_SENTENCE}`);
     expect(prompt).not.toContain('transparency-vs-burial');
@@ -100,7 +100,7 @@ describe('contradiction data in arc prompt', () => {
     const listed = (text) => text.split('\n').filter(line => line.startsWith('- ')).map(line => line.slice(2));
 
     const arcPrompt = buildWeavePrompt(state);
-    const arcSection = arcPrompt.slice(arcPrompt.indexOf("### Blake and the Valet in the director's notes"), arcPrompt.indexOf('### Primary Investigation Focus'));
+    const arcSection = arcPrompt.slice(arcPrompt.indexOf("### Blake and the Valet in the director's notes"), arcPrompt.indexOf('### Session Roster'));
     expect(listed(arcSection)).toEqual(expected);
 
     const themeLoader = { loadPhasePrompts: jest.fn().mockResolvedValue({}), validate: jest.fn() };

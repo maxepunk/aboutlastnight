@@ -307,18 +307,25 @@ describe("arc prompts: the director's words as record", () => {
         playerFocus: { ...base.playerFocus, accusation: { accused: ['Alex'], charge: 'Murder', reasoning: 'Motive present' } }
       };
       const prompt = buildWeavePrompt(culprit);
-      // Phase 4 (brief 4.4): the whiteboard reading follows the accusation.
-      expect(prompt).toContain('**Accused:** ["Alex"]\n**Charge:** Murder\n**Players\' Reasoning:** Motive present\n\n### The Whiteboard');
+      // Phase 4 (brief 4.4): the whiteboard reading follows the accusation. Run 2b (R26): this
+      // board holds nothing, so the director's notes follow it.
+      expect(prompt).toContain('**Accused:** ["Alex"]\n**Charge:** Murder\n**Players\' Reasoning:** Motive present\n\n### The Director\'s Notes');
       expect(prompt).not.toContain('<DIRECTOR_ACCUSATION>');
     });
   });
 
   describe('the whiteboard section', () => {
     it('is rendered by the shared function, labelled as a model\'s reading of the photo (phase 3, 3.5)', () => {
-      const prompt = buildWeavePrompt(base);
-      expect(prompt).toContain(renderWhiteboardConnections(base.playerFocus.whiteboardContext));
+      const board = { ...base.playerFocus.whiteboardContext, namesFound: ['Alex'] };
+      const prompt = buildWeavePrompt({ ...base, playerFocus: { ...base.playerFocus, whiteboardContext: board } });
+      expect(prompt).toContain(renderWhiteboardConnections(board));
       expect(prompt).toContain("### The Whiteboard (a model's reading of the photo)\nA model's reading of the photo of the whiteboard where the people in the warehouse worked out their thinking during the investigation: context for how they reached the verdict, not a source.\n**Regions, each under the heading the players wrote:** none");
       expect(prompt).not.toContain('Players drew these');
+    });
+
+    // Run 2b (R26): a board that holds nothing is left out, by the renderer's own option.
+    it('is left out when the board holds nothing', () => {
+      expect(buildWeavePrompt(base)).not.toContain('### The Whiteboard');
     });
   });
 
@@ -515,7 +522,7 @@ describe('phase 3 (3.3): the arc calls read the rule set', () => {
         expect(field.description).not.toMatch(/verdict|culmination|thesis|near (its|the) end|end of the article/);
       }
       const { WEAVE_QUESTIONS_PROPERTY } = require('../writer-questions');
-      const own = JSON.stringify(WEAVE_SCHEMA).replace(/\(C9\)/g, '');
+      const own = JSON.stringify(WEAVE_SCHEMA);
       expect(own).not.toMatch(/\b[TC]\d{1,2}\b/);
       expect(JSON.stringify(WEAVE_QUESTIONS_PROPERTY)).not.toMatch(/\b[TC]\d{1,2}\b/);
       expect(JSON.stringify(WEAVE_SCHEMA)).not.toMatch(/murder|maximum/i);
@@ -630,7 +637,9 @@ describe('phase 3 (3.3): the arc calls read the rule set', () => {
       expect(prompt).toContain('- 07:37 AM | memory turned in | document: ale003 | no name given\n- 07:50 AM | sale | account: Melanie | amount: $75,000');
       expect(prompt).not.toContain('### Buried Transactions');
       expect(prompt).not.toContain('"shellAccount"');
-      expect(count(prompt, 'Melanie')).toBe(1);
+      // Run 2b (R25): the account's sale once on the timeline, and its total once in FINANCIAL_SUMMARY.
+      expect(count(prompt, 'Melanie')).toBe(2);
+      expect(count(prompt.slice(0, prompt.indexOf('</RECORD>')), 'Melanie')).toBe(1);
     });
   });
 
@@ -669,5 +678,53 @@ describe('phase 3 (3.3): the arc calls read the rule set', () => {
     const sdk = jest.fn(async () => clone(journalistState().weave));
     await generateWeave(journalistState(), { configurable: { sdkClient: sdk } });
     expect(sdk.mock.calls[0][0].systemPrompt).toContain(loadRuleSet('arc').core);
+  });
+
+  // Phase 18, run 2b (brief I; R25, R26): the weave writer is not told the verdict a third time,
+  // has the totals the limits say the record gives, lists Blake once, and reads no empty whiteboard.
+  describe('what the weave writer is handed (run 2b)', () => {
+    const { getPromptBuilder } = require('../workflow/nodes/ai-nodes');
+    const { buildCharacterCategoriesBlock } = arcModule._testing;
+
+    it('prints the charge under the accusation alone: no investigation focus', () => {
+      const state = journalistState({
+        playerFocus: { ...journalistState().playerFocus, primaryInvestigation: 'A focus line no other block holds' }
+      });
+      const prompt = buildWeaveSections(state);
+      expect(prompt).not.toContain('Primary Investigation Focus');
+      expect(prompt).not.toContain('A focus line no other block holds');
+      expect(count(prompt, `**Charge:** ${state.playerFocus.accusation.charge}`)).toBe(1);
+    });
+
+    it("prints the money totals after the record, from the map writer's builder, byte for byte", () => {
+      const state = journalistState();
+      const money = getPromptBuilder(null, state)._buildFinancialSummary(state.shellAccounts);
+      expect(money).toContain('<FINANCIAL_SUMMARY>');
+      const prompt = buildWeaveSections(state);
+      expect(count(prompt, money.trim())).toBe(1);
+      expect(prompt).toContain(`</RECORD>\n${money}\n\n### Sources`);
+    });
+
+    it('prints no money block, and no blank line for it, when no account has a total', () => {
+      const prompt = buildWeaveSections(journalistState({ shellAccounts: [] }));
+      expect(prompt).not.toContain('FINANCIAL_SUMMARY');
+      expect(prompt).toMatch(/<\/RECORD>\n\n### Sources/);
+    });
+
+    it("lists the game's own characters without an alias: Blake once", () => {
+      const block = buildCharacterCategoriesBlock(['Alex'], 'journalist', []);
+      expect(block).toContain('**NPCs** (the game\'s own characters, never players):\nMarcus, Nova, Blake\n');
+      expect(block).not.toContain('Valet');
+    });
+
+    it('leaves the whiteboard out when the board holds nothing, and prints it when it holds something', () => {
+      const empty = { regions: [], connections: [], notes: [], namesFound: [], ambiguities: [] };
+      const state = journalistState();
+      const without = buildWeaveSections({ ...state, playerFocus: { ...state.playerFocus, whiteboardContext: empty } });
+      expect(without).not.toContain('### The Whiteboard');
+      expect(without).toContain("</DIRECTOR_ACCUSATION>\n\n### The Director's Notes");
+      const withBoard = buildWeaveSections(state);
+      expect(withBoard).toContain('### The Whiteboard');
+    });
   });
 });

@@ -292,11 +292,12 @@ describe('journalist arc stop', () => {
     expectOneRecordAndGuidanceLast(rework.user);
 
     // What the reworker used to lack (rework-inputs.md Step 2): the whiteboard, the
-    // investigation focus, the character context, the rules and the record. Phase 3
+    // character context, the rules and the record. Phase 3
     // (3.3): the rule set's files come last, since phase 18 (R2) the brief and the weave
-    // writer's own part. Phase 4 (brief 4.4): the weave's sections.
+    // writer's own part. Phase 4 (brief 4.4): the weave's sections. Phase 18, run 2b (R25): the
+    // investigation focus went from the writer, and the money totals came after the record.
     [
-      '### The Whiteboard', '### Primary Investigation Focus', '### Character Context',
+      '### The Whiteboard', '### Character Context', '<FINANCIAL_SUMMARY>',
       '## SECTION 2: THE RECORD', '## SECTION 3: THE WEAVE', '## SECTION 4: THE BRIEF AND YOUR PART', '\n<brief>\n', '\n<job-weave>\n'
     ].forEach((heading) => expect(rework.user).toContain(heading));
     Object.values(DOCUMENT_TEXT).forEach((text) => expect(rework.user).toContain(text));

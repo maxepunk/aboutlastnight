@@ -227,6 +227,18 @@ describe('a send-back (brief 4.5; TH7)', () => {
     expect(prompt).not.toContain('a stale finding');
     expect(jsonSchema.properties).toHaveProperty(CHANGED_EDITS_KEY);
     expect(jsonSchema.required).toContain(CHANGED_EDITS_KEY);
+    // Phase 18, run 2b (brief I): the OUTPUT FORMAT the rework returns the weave in shows the
+    // list it is told to fill, each entry in the words the call's schema gives it.
+    const { id, reason } = jsonSchema.properties[CHANGED_EDITS_KEY].items.properties;
+    const format = prompt.slice(prompt.indexOf('## OUTPUT FORMAT'), prompt.indexOf('## SECTION 1'));
+    expect(format).toContain(`"questions": [],\n  "${CHANGED_EDITS_KEY}": [\n    { "id": ${JSON.stringify(id.description)}, "reason": ${JSON.stringify(reason.description)} }\n  ]\n}`);
+  });
+
+  it('a reweave and an automatic pass show no changed-edits list in their format', async () => {
+    const reweave = recordingSdk(reworkOf(() => {}));
+    await reviseArcs(await roundState('reweave'), cfg(reweave));
+    expect(reweave.calls[0].prompt).not.toContain(CHANGED_EDITS_KEY);
+    expect(reweave.calls[0].prompt).toContain('  "questions": []\n}');
   });
 
   it("may change one of the director's edits, with its reason, which the report keeps; the list is not stored", async () => {

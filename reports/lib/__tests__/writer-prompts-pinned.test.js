@@ -518,11 +518,18 @@ const REPO = path.join(__dirname, '..', '..');
  *   fix and the card field's description drop their rule numbers. The fixture's record, whiteboard
  *   and accusation print these: outline-journalist 25217 -> 25277 (+60), article-journalist
  *   36028 -> 36105 (+77), arcs-journalist 12064 -> 12130 (+66).
+ * - Phase 18, run 2b, slice I (R25, R26), what the weave writer is handed. The "Primary
+ *   Investigation Focus" heading and its line go, since they printed the charge a third time
+ *   (-55); the game's own characters list Blake without the Valet alias (-7); and FINANCIAL_SUMMARY,
+ *   from the builder the map writer's prompt uses, prints after the record (+494):
+ *   arcs-journalist 12201 -> 12633 (+432). The fixture's quote has no context and its notes pair no
+ *   sale, so the quote bank and the transaction links change no byte here; outline-journalist and
+ *   article-journalist do not move.
  */
 const PINNED = {
   'outline-journalist': ['ce13061c77ace390949d44fa7a3605d9effe61bd52ac2388841f78fee7f45b95', 24945],
   'article-journalist': ['9d8b249b785b8a12ae3e9086f33f79b5be5cb83c4214ae1ced4cb2385281cbae', 29870],
-  'arcs-journalist': ['c3ba415e6320b02c474f1110364dfb676f6e5b8a2087225a945c39a469f0d6c6', 12201]
+  'arcs-journalist': ['f4a41d22d34070ebfc5006510a8e87e6fb8be18f669cb79df50badf1c017dc5c', 12633]
 };
 
 describe('the writers send exactly what they sent before the reworkers were built from them', () => {
