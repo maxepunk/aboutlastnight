@@ -9,7 +9,8 @@
  * Each theme defines:
  * - npcs: Characters valid in characterPlacements but not on player roster
  * - display: constants for the printed page, including printsHero, whether the theme's
- *   layout prints the bundle's hero (read through printedHero)
+ *   layout prints the bundle's hero (read through printedHero), and kicker, the line code
+ *   prints above the headline (a theme without one prints none)
  * - map: the story map's slots (phase 4, brief 4.6), each with its key, its label on
  *   the screen, its stock heading and its description, the words the map writer's prompt
  *   prints after the slot's name (read through mapSlotsOf).
@@ -176,6 +177,10 @@ const THEME_CONFIGS = {
       crystallizationLabel: "Nova's Insight",
       storyDate: '2027-02-22',           // In-world article date (always Feb 22, 2027)
       printsHero: true,                  // The layout prints heroImage above the first section
+      // The line above the headline (phase 18, R38): the director's, one line on every
+      // article. The stamp (ai-nodes.js stampFromMap) puts it on a first write; no writer
+      // is asked for it, and the director can change it at the desk on one article.
+      kicker: 'NovaNews Investigates',
       postGenValidation: {
         minInlineEvidenceCards: 3
       }

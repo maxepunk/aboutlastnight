@@ -215,6 +215,14 @@ describe('theme-config', () => {
     });
   });
 
+  // Phase 18, run 2d (R38): the line above the headline is the theme's, and code prints it.
+  describe('display.kicker, the line above the headline', () => {
+    it("is the director's line for the journalist, and the parked detective has none", () => {
+      expect(THEME_CONFIGS.journalist.display.kicker).toBe('NovaNews Investigates');
+      expect(THEME_CONFIGS.detective.display).not.toHaveProperty('kicker');
+    });
+  });
+
   describe('getCanonicalName (Notion-derived map)', () => {
     it('looks up first name in provided map', () => {
       const map = { 'Sarah': 'Sarah Blackwood', 'Vic': 'Vic Kingsley' };

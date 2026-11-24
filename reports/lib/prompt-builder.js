@@ -552,9 +552,11 @@ function mapCardsLine(map, evidenceBundle = null) {
  * otherwise (briefs 4.7c and 4.7d): the heading, headline or deck where the director edited
  * one, and the place where the director moved the photo. The stamp records a headline or deck
  * the director wrote on the map, or a top photo they chose there, as their edit the same way.
- * The instruction's heading and headline lines defer to this task, and the headline line gives
- * the kicker no owner, so a kicker the director edited at the desk stands on <HAND_EDITS>
- * alone. The top photo is the map's: the desk edits only its caption.
+ * The instruction's heading and headline lines defer to this task. The line above the headline
+ * (the headline's kicker) is the theme's, which code stamps and a rework carries (phase 18, R38),
+ * so neither the task nor the instruction names it, and a kicker the director edited at the desk
+ * reaches a rework on <HAND_EDITS> alone. The top photo is the map's: the desk edits only its
+ * caption.
  *
  * The beats line and the sections line give the director's edits precedence over the body
  * (briefs 4.7e and 4.7f): the director's edits first, as HAND_EDITS gives them; otherwise every
@@ -596,8 +598,8 @@ const ARTICLE_TASK = `Write the article. The weave above is the story the direct
  * - `objectsOf`, the objects in a bundle the field sits on;
  * - `keyOf`, what pairs an object of the previous article with one of the reworked article in
  *   the carry (carryUnshownFields): a sidebar entry by its document id, a photo block and the top
- *   photo by filename (photoKey, the one rule for a photo's name), and the bundle, its metadata
- *   and its byline each with the other's.
+ *   photo by filename (photoKey, the one rule for a photo's name), and the bundle, its headline,
+ *   its metadata and its byline each with the other's.
  */
 const BUNDLE_PLACES = Object.freeze({
   bundle: {
@@ -605,6 +607,12 @@ const BUNDLE_PLACES = Object.freeze({
     schemaOf: (schema) => schema,
     objectsOf: (bundle) => [bundle],
     keyOf: () => 'bundle'
+  },
+  headline: {
+    where: 'the headline',
+    schemaOf: (schema) => schema.properties?.headline,
+    objectsOf: (bundle) => [bundle.headline],
+    keyOf: () => 'headline'
   },
   metadata: {
     where: "the bundle's metadata",
@@ -650,6 +658,9 @@ const BUNDLE_PLACES = Object.freeze({
  * - The bundle's money tracker, which the page prints from the ledger; its top-level photos, pull
  *   quotes and voice self-check, which nothing prints; and its revision history, which the server
  *   writes after each rework.
+ * - The headline's kicker, the line above the headline (run 2d, R38): the theme's, which the stamp
+ *   puts on a first write (ai-nodes.js stampFromMap) and the carry keeps through a rework, the
+ *   director's at the desk among them.
  * - The metadata's version and story date: the server stamps the story date.
  * - The byline's location and date, which the page does not print.
  * - A sidebar entry's owner, placement and content, which the sidebar does not print (the article
@@ -665,6 +676,7 @@ const UNSHOWN_BUNDLE_FIELDS = Object.freeze([
   ['bundle', 'pullQuotes'],
   ['bundle', 'voice_self_check'],
   ['bundle', '_revisionHistory'],
+  ['headline', 'kicker'],
   ['metadata', 'version'],
   ['metadata', 'storyDate'],
   ['byline', 'location'],
@@ -1389,7 +1401,7 @@ Write the article as a ContentBundle: JSON in the shape of the schema at the end
      * {"type": "photo", "filename": "...", "caption": "..."}: an inline photo, by its exact filename.
 2. "evidenceCards": the sidebar's entries. Each names a document by its id in "tokenId", with a "headline", a one-line "summary" under 100 characters, and its "significance".
 ${heroLine}
-4. "headline": {"main": "...", "kicker": "...", "deck": "..."}: the headline and the deck as the task above gives them.
+4. "headline": {"main": "...", "deck": "..."}: the headline and the deck as the task above gives them.
 5. "byline": {${byline}}.
 6. "metadata": {"sessionId": "...", "theme": "journalist", "generatedAt": "<an ISO 8601 timestamp>"}. The server stamps these values.
 

@@ -109,7 +109,7 @@ const NAMED = {
   'a photo': [(s) => blockOf(s, 'photo'), ['type', 'filename', 'caption']],
   '2. a sidebar entry': [(s) => s.properties.evidenceCards.items, ['tokenId', 'headline', 'summary', 'significance']],
   '3. the hero image': [(s) => s.properties.heroImage, ['filename', 'caption']],
-  '4. the headline': [(s) => s.properties.headline, ['main', 'kicker', 'deck']],
+  '4. the headline': [(s) => s.properties.headline, ['main', 'deck']],
   '5. the byline': [(s) => s.properties.byline, ['author', 'title', 'guestReporter']],
   '6. the metadata': [(s) => s.properties.metadata, ['sessionId', 'theme', 'generatedAt']]
 };
@@ -132,6 +132,7 @@ describe("R23: the writer's schema holds exactly the fields the instruction's si
     const expected = clone(contentBundleSchema);
     const top = expected.properties;
     ['financialTracker', 'photos', 'pullQuotes', 'voice_self_check', '_revisionHistory'].forEach((name) => delete top[name]);
+    delete top.headline.properties.kicker;
     ['version', 'storyDate'].forEach((name) => delete top.metadata.properties[name]);
     ['location', 'date'].forEach((name) => delete top.byline.properties[name]);
     ['owner', 'placement', 'content'].forEach((name) => delete top.evidenceCards.items.properties[name]);
@@ -141,7 +142,7 @@ describe("R23: the writer's schema holds exactly the fields the instruction's si
     blocks.oneOf = blocks.oneOf.filter((branch) => !['evidence-reference', 'list'].includes(branch.properties.type.const));
     expect(writerBundleSchemaOf(contentBundleSchema)).toEqual(expected);
     expect(WRITER_BUNDLE_SCHEMA).toEqual(expected);
-    expect(UNSHOWN_BUNDLE_FIELDS).toHaveLength(14);
+    expect(UNSHOWN_BUNDLE_FIELDS).toHaveLength(15);
   });
 
   it('is valid JSON Schema the SDK takes: no required list names a property it lacks, and no format keyword', () => {
@@ -152,9 +153,10 @@ describe("R23: the writer's schema holds exactly the fields the instruction's si
     expect(JSON.stringify(WRITER_BUNDLE_SCHEMA)).not.toContain('"format"');
   });
 
-  it("each field the writer is not shown is one the page does not print, the writer's money tracker apart", () => {
+  it("each field the writer is not shown is one the page does not print, the money tracker and the line above the headline apart", () => {
     const printedAt = {
       bundle: ['headline', 'byline', 'heroImage', 'sections', 'evidenceCards', 'financialTracker'],
+      headline: PRINTED_FIELDS.headline,
       metadata: [],
       byline: PRINTED_FIELDS.byline,
       sidebarEntry: PRINTED_FIELDS.sidebarCard,
@@ -164,7 +166,8 @@ describe("R23: the writer's schema holds exactly the fields the instruction's si
     const printed = UNSHOWN_BUNDLE_FIELDS
       .filter(([place, name]) => (printedAt[place] || ['?']).includes(name))
       .map(([place, name]) => `${place}: ${name}`);
-    expect(printed).toEqual(['bundle: financialTracker']);
+    // The page prints the money tracker from the ledger, and the line above the headline from the theme (R38).
+    expect(printed).toEqual(['bundle: financialTracker', 'headline: kicker']);
   });
 });
 
@@ -208,6 +211,16 @@ describe('R23: the SDK is given the schema the writer is shown', () => {
     expect(sdk.mock.calls[0][0].jsonSchema).toBe(override);
   });
 
+  it("on all three kinds of call, neither the instruction nor the printed schema names the line above the headline (R38)", async () => {
+    const all = await calls();
+    Object.entries(all).forEach(([name, { prompt, jsonSchema }]) => {
+      expect(`${name}: ${/kicker/i.test(instructionOf(prompt))}`).toBe(`${name}: false`);
+      expect(printedOf(prompt)).toEqual(jsonSchema);
+      expect(jsonSchema.properties.headline.properties).not.toHaveProperty('kicker');
+    });
+    expect(all.writer.prompt).toContain('4. "headline": {"main": "...", "deck": "..."}: the headline and the deck as the task above gives them.\n');
+  });
+
   it("closes the instruction's field list on its first sentence, and names none of the fields left out", async () => {
     const { writer } = await calls();
     const instruction = instructionOf(writer.prompt);
@@ -243,6 +256,7 @@ describe('R23: the previous article a rework reads is in the writer\'s shape', (
     expect(new SchemaValidator().validate('content-bundle', shown).valid).toBe(true);
     expect(shown.evidenceCards[0]).toEqual({ tokenId: 'mor001', headline: 'The envelope', summary: 'Morgan pays Riley', significance: 'supporting' });
     expect(shown.heroImage).toEqual({ filename: 'hero.jpg', caption: 'The bar.' });
+    expect(shown.headline).toEqual({ main: 'The Sale Nobody Called a Sale', deck: PREVIOUS_BUNDLE.headline.deck });
     expect(shown.metadata).toEqual(PREVIOUS_BUNDLE.metadata);
     expect(shown.byline).toEqual(PREVIOUS_BUNDLE.byline);
     expect(Object.keys(shown).sort()).toEqual(['byline', 'evidenceCards', 'headline', 'heroImage', 'metadata', 'sections']);
@@ -353,6 +367,15 @@ describe("R23: the carry runs in the article's rework, before the director's edi
 describe('R23: the validator and the template keep the full schema', () => {
   it('a stored bundle with every field the writer is not shown still validates', () => {
     expect(new SchemaValidator().validate('content-bundle', storedBundle()).valid).toBe(true);
+  });
+
+  it('a stored article with a line above the headline of its own validates and prints it (R38)', async () => {
+    const { TemplateAssembler } = require('../template-assembler');
+    const bundle = storedBundle();
+    bundle.headline.kicker = 'Inside the Ledger';
+    expect(new SchemaValidator().validate('content-bundle', bundle).valid).toBe(true);
+    const html = await new TemplateAssembler('journalist').assemble(bundle);
+    expect(html).toContain('<div class="nn-article__kicker">Inside the Ledger</div>');
   });
 });
 

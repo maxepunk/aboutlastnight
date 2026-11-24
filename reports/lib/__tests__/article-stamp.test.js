@@ -52,9 +52,9 @@ beforeAll(() => {
 afterAll(() => jest.restoreAllMocks());
 
 describe("4.7b: the stamp puts the map's headline, deck and top photo into the first draft (R7)", () => {
-  it("stamps the map's headline, deck and top photo over the writer's, and keeps the writer's kicker and caption", async () => {
+  it("stamps the map's headline, deck and top photo over the writer's, the theme's line above the headline, and keeps the writer's caption", async () => {
     const { contentBundle, _articleHandEdits } = await firstDraft(atArticle());
-    expect(contentBundle.headline).toEqual({ main: MAP.headline, kicker: 'NovaNews', deck: MAP.deck });
+    expect(contentBundle.headline).toEqual({ main: MAP.headline, kicker: 'NovaNews Investigates', deck: MAP.deck });
     expect(contentBundle.heroImage).toEqual({ filename: 'hero.jpg', caption: 'Alex, Morgan and Sarah at the table.' });
     // The writer's map, untouched by the director: nothing at the article stop is theirs.
     expect(_articleHandEdits).toBeNull();
@@ -194,5 +194,107 @@ describe("4.7d: the stamp records no cut of the map's top photo", () => {
       ['E1', 'heroImage.filename', null, 'p2.jpg']
     ]);
     expect(carriedEdits(_articleHandEdits, contentBundle).map((edit) => edit.id)).toEqual(['E1']);
+  });
+});
+
+// Phase 18, run 2d (R38): the line above the headline is the theme's, and code prints it. The
+// writer is not asked for it, so the stamp puts the theme's line on a first write, and a rework
+// carries the line the previous article held (carryUnshownFields), as it carries every field the
+// writer is not shown: the theme's line, the line the director typed at the desk, or an old
+// thread's writer-made line until the director changes it.
+describe('R38: the line above the headline is the theme\'s, and a rework carries it', () => {
+  const { standingAfterSendBack, CHANGED_EDITS_KEY } = require('../hand-edit-diff');
+  const { bundleAsShown } = require('../prompt-builder');
+  const { _testing: nodes } = require('../workflow/nodes/ai-nodes');
+  const THEMES_LINE = 'NovaNews Investigates';
+  const DESK_LINE = 'Inside the Ledger';
+
+  it("a first write carries the theme's line whatever the writer returned", async () => {
+    const none = clone(WRITERS_DRAFT);
+    delete none.headline.kicker;
+    const writerless = await firstDraft(atArticle(), none);
+    expect(writerless.contentBundle.headline.kicker).toBe(THEMES_LINE);
+    const own = { ...clone(WRITERS_DRAFT), headline: { ...WRITERS_DRAFT.headline, kicker: 'A Line the Writer Wrote' } };
+    const overwritten = await firstDraft(atArticle(), own);
+    expect(overwritten.contentBundle.headline.kicker).toBe(THEMES_LINE);
+    // The line is the theme's, not the director's: the stamp records no edit for it.
+    expect(overwritten._articleHandEdits).toBeNull();
+  });
+
+  it('a theme with no line gets none, and the writer\'s line goes', () => {
+    const { contentBundle } = nodes.stampFromMap(clone(WRITERS_DRAFT), atArticle({ theme: 'detective' }));
+    expect(contentBundle.headline).not.toHaveProperty('kicker');
+    expect(contentBundle.headline.main).toBe(MAP.headline);
+  });
+
+  /** The first draft, stamped, as the thread stores it. */
+  async function stored() {
+    return (await firstDraft(atArticle())).contentBundle;
+  }
+
+  /** The reworked article as the writer can return it: the writer's shape, a paragraph changed. */
+  function reworkedFrom(bundle, change = () => {}) {
+    const out = bundleAsShown(bundle);
+    out.sections[0].content[0].text = 'Marcus bragged at the bar.';
+    change(out);
+    return out;
+  }
+
+  it("an automatic pass keeps the theme's line, though the writer was not shown it", async () => {
+    const before = await stored();
+    const sdk = recordingSdk(reworkedFrom(before));
+    const out = await reviseContentBundle({ ...atArticle(), _previousContentBundle: before, articleRevisionCount: 1 }, cfg(sdk));
+    expect(sdk.mock.calls[0][0].prompt).not.toContain(THEMES_LINE);
+    expect(out.contentBundle.headline.kicker).toBe(THEMES_LINE);
+    expect(out.contentBundle.sections[0].content[0].text).toBe('Marcus bragged at the bar.');
+  });
+
+  it("an old thread's line the writer made stays through a rework, until the director changes it", async () => {
+    const before = { ...(await stored()) };
+    before.headline = { ...before.headline, kicker: 'NovaNews' };
+    const out = await reviseContentBundle({ ...atArticle(), _previousContentBundle: before, articleRevisionCount: 1 }, cfg(recordingSdk(reworkedFrom(before))));
+    expect(out.contentBundle.headline.kicker).toBe('NovaNews');
+  });
+
+  describe('a line the director typed at the desk', () => {
+    /** The stored first draft, and the director's at the desk with their own line above the headline. */
+    async function deskState() {
+      const writers = await stored();
+      const directors = clone(writers);
+      directors.headline.kicker = DESK_LINE;
+      return { state: { ...atArticle(), _previousContentBundle: directors, _articleHandEdits: standingAfterSendBack(null, writers, directors, 'bundle') }, directors };
+    }
+
+    it('is the director\'s edit', async () => {
+      const { state } = await deskState();
+      expect(state._articleHandEdits.edits).toEqual([expect.objectContaining({ path: 'headline.kicker', before: THEMES_LINE, after: DESK_LINE })]);
+    });
+
+    it('survives an automatic pass, carried with nothing to put back', async () => {
+      const { state, directors } = await deskState();
+      const out = await reviseContentBundle({ ...state, articleRevisionCount: 1 }, cfg(recordingSdk(reworkedFrom(directors))));
+      expect(out.contentBundle.headline.kicker).toBe(DESK_LINE);
+      expect(JSON.stringify(out._articleHandEditReport || {})).not.toContain('restored');
+    });
+
+    it('is put back by code when an automatic pass changed it', async () => {
+      const { state, directors } = await deskState();
+      const changed = reworkedFrom(directors, (out) => { out.headline.kicker = 'A Line the Rework Wrote'; });
+      const out = await reviseContentBundle({ ...state, articleRevisionCount: 1 }, cfg(recordingSdk(changed)));
+      expect(out.contentBundle.headline.kicker).toBe(DESK_LINE);
+      expect(out._articleHandEditReport.changed).toEqual([
+        expect.objectContaining({ automatic: true, restored: true, director: DESK_LINE })
+      ]);
+    });
+
+    it('survives a send-back', async () => {
+      const { state, directors } = await deskState();
+      const sdk = recordingSdk({ ...reworkedFrom(directors), [CHANGED_EDITS_KEY]: [] });
+      const out = await reviseContentBundle({
+        ...state, _articleFeedback: 'Tighten the story.', articleRevisionCount: 0, humanArticleRevisionCount: 1
+      }, cfg(sdk));
+      expect(out.contentBundle.headline.kicker).toBe(DESK_LINE);
+      expect(out.contentBundle.sections[0].content[0].text).toBe('Marcus bragged at the bar.');
+    });
   });
 });

@@ -146,7 +146,8 @@ describe('the article stage through the real graph (phase 4, brief 4.7b)', () =>
     expect(writerPrompt.startsWith('<SETTLED_WEAVE>\n')).toBe(true);
     expect(block(writerPrompt, 'STORY_MAP')).toContain(`"headline": "${DIRECTORS_HEADLINE}"`);
 
-    expect(stop.values.contentBundle.headline).toEqual({ main: DIRECTORS_HEADLINE, kicker: 'NovaNews', deck: MAP.deck });
+    // R38: the line above the headline is the theme's, stamped over the writer's.
+    expect(stop.values.contentBundle.headline).toEqual({ main: DIRECTORS_HEADLINE, kicker: 'NovaNews Investigates', deck: MAP.deck });
     expect(stop.values.contentBundle.heroImage.filename).toBe('hero.jpg');
     expect(stop.values._articleHandEdits.edits).toEqual([
       expect.objectContaining({ id: 'E1', path: 'headline.main', after: DIRECTORS_HEADLINE })

@@ -561,10 +561,14 @@ const REPO = path.join(__dirname, '..', '..');
  *   (UNOFFERED_BLOCK_TYPES; -1320). The fixture prints no sentences about Blake to the article
  *   writer, so their removal moves nothing here. outline-journalist 24086 -> 24427 (+341),
  *   arcs-journalist 12633 -> 12888 (+255), article-journalist 27701 -> 26655 (-1046).
+ * - Phase 18, run 2d, slice R (R38), the line above the headline is the theme's, and code prints
+ *   it. The generation instruction's fourth item no longer names the headline's kicker (-17), and
+ *   the kicker joins UNSHOWN_BUNDLE_FIELDS, so it leaves the schema printed in <SCHEMA> (-145):
+ *   article-journalist 26655 -> 26493 (-162). The outline and arc pins do not move.
  */
 const PINNED = {
   'outline-journalist': ['86480e58bbbf46336ccd9a6f72a3d86d9c0929d261a753588783aa7f5790dc59', 24626],
-  'article-journalist': ['27c5f84562713f941fd3b146e9f3152ca2d56e29b28f09d4b9123d03548507ee', 26655],
+  'article-journalist': ['f9cfbfcec60b6d4c4bb765f796463ec350fe66dc28cfae86cad429291a8b33c0', 26493],
   'arcs-journalist': ['916799e5ff606ce5d3b753c42e0982ae47bd0ec897f2a37b479557026b22ed52', 12768]
 };
 

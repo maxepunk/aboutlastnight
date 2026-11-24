@@ -1778,7 +1778,8 @@ async function generateContentBundle(state, config) {
   }
 
   // R7 (brief 4.7b): the map's headline, deck and top photo, stamped into the first draft,
-  // and the director's lines among them recorded as the director's at the article stop.
+  // and the director's lines among them recorded as the director's at the article stop; R38:
+  // the theme's line above the headline with them.
   const stamped = stampFromMap(contentBundle, state);
 
   return {
@@ -1791,9 +1792,16 @@ async function generateContentBundle(state, config) {
 /**
  * The stamp (R7; brief 4.7b): the map's headline, deck and top photo, stamped into the
  * article writer's first draft, where the writer was told to print them as the map gives
- * them. The writer's kicker stays, and its hero caption when it captioned the map's top
- * photo; a caption written for another photo goes with that photo. A map with no top photo,
- * or one the director has left out since, prints no hero (articleMapOf).
+ * them. The writer's hero caption stays when it captioned the map's top photo; a caption
+ * written for another photo goes with that photo. A map with no top photo, or one the director
+ * has left out since, prints no hero (articleMapOf).
+ *
+ * Phase 18 (R38): the line above the headline, the headline's kicker, is the theme's
+ * (lib/theme-config.js display.kicker), and the stamp puts it on whatever the writer returned,
+ * which the writer is not asked for; a theme with no line gets none. It is code's line, not the
+ * director's, so the stamp records no edit for it. A rework carries the line the previous article
+ * held (prompt-builder.js carryUnshownFields), so a line the director typed at the desk, or an
+ * old thread's writer-made line, stands.
  *
  * Where the director wrote one of them or chose the top photo on the map (a standing edit
  * the map carries, `_outlineHandEdits`), the stamp records it as the director's line at the
@@ -1811,14 +1819,19 @@ async function generateContentBundle(state, config) {
  * it (lib/hand-edit-diff.js), and T13 prints that photo in its section.
  *
  * @param {Object} bundle - the writer's first draft
- * @param {Object} state - reads the map, the director's edits on it and the leave-out list
+ * @param {Object} state - reads the theme, the map, the director's edits on it and the leave-out
+ *   list
  * @returns {{contentBundle: Object, edits: Object|null}} the stamped draft, and the article
  *   stop's standing edits (null when the director wrote none of the three)
  */
 function stampFromMap(bundle, state) {
-  const map = articleMapOf(state);
-  if (!map) return { contentBundle: bundle, edits: null };
+  const { getThemeConfig } = require('../../theme-config');
+  const line = getThemeConfig(state.theme || 'journalist')?.display?.kicker;
   const stamped = { ...bundle, headline: { ...(bundle.headline || {}) } };
+  if (typeof line === 'string') stamped.headline.kicker = line;
+  else delete stamped.headline.kicker;
+  const map = articleMapOf(state);
+  if (!map) return { contentBundle: stamped, edits: null };
   if (typeof map.headline === 'string') stamped.headline.main = map.headline;
   if (typeof map.deck === 'string') stamped.headline.deck = map.deck;
   const topPhoto = topPhotoOf(map);
@@ -2402,6 +2415,8 @@ module.exports = {
     mapReworkCall,
     // Phase 18, run 2b: the article's rework call, which scripts/render-prompts.js renders too
     articleReworkCall,
+    // Phase 18, run 2d (R38): the stamp, which a theme with no line above the headline is tested through
+    stampFromMap,
     // Brief 2.3: each reworker is built from its writer's builders and inputs.
     // scripts/render-prompts.js renders the rework system prompts through these.
     buildOutlineRevisionSystemPrompt,

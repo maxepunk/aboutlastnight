@@ -143,7 +143,7 @@ describe('4.7b: the article writer reads the settled weave, then the map', () =>
   it("asks for the headline and deck the task gives, and the map's top photo as the hero", async () => {
     const instruction = block((await writerPrompt(articleState())).user, 'GENERATION_INSTRUCTION');
     expect(instruction).toContain('"heroImage": {"filename": "hero.jpg", "caption": "..."}');
-    expect(instruction).toContain('"headline": {"main": "...", "kicker": "...", "deck": "..."}: the headline and the deck as the task above gives them');
+    expect(instruction).toContain('"headline": {"main": "...", "deck": "..."}: the headline and the deck as the task above gives them');
   });
 
   it('reads no arc-stop guidance and no <SHOULD_CONSIDER>, even from a stored state that still holds the old channel', async () => {
@@ -238,7 +238,7 @@ describe("4.7c: the headline and the deck hold the director's words", () => {
   const { standingAfterSendBack } = require('../hand-edit-diff');
   const DESK = 'The Director Rewrote This Headline at the Desk';
   /** The instruction's line on the headline: the task decides the headline and the deck. */
-  const ITEM_4 = '4. "headline": {"main": "...", "kicker": "...", "deck": "..."}: the headline and the deck as the task above gives them.';
+  const ITEM_4 = '4. "headline": {"main": "...", "deck": "..."}: the headline and the deck as the task above gives them.';
 
   /** A send-back rework, the director's desk text standing in one field of the headline. */
   async function sendBackPrompt(field = 'main', text = DESK) {
@@ -266,12 +266,13 @@ describe("4.7c: the headline and the deck hold the director's words", () => {
     expect(prompt).not.toMatch(/the map's headline|the map's deck/);
   });
 
+  // R38: the line above the headline is the theme's, and the writer is not asked for it, so no
+  // line of the rework's prompt names it but the director's own edit in <HAND_EDITS>.
   it("a send-back rework with the director's kicker standing gives the kicker to no one else", async () => {
     const kicker = 'THE DIRECTOR\'S KICKER';
     const prompt = await sendBackPrompt('kicker', kicker);
     expect(block(prompt, 'HAND_EDITS')).toContain(`E1 (headline, kicker): "${kicker}"`);
-    expect(prompt.split('\n').filter((line) => /kicker/i.test(line) && !line.includes(kicker) && !/^\s*"kicker": \{/.test(line)))
-      .toEqual([ITEM_4]);
+    expect(prompt.split('\n').filter((line) => /kicker/i.test(line) && !line.includes(kicker))).toEqual([]);
     expect(prompt).not.toMatch(/your own kicker|kicker is yours/i);
   });
 
