@@ -352,7 +352,7 @@ describe('fix round 4: one rule for a document in the record, from the map to th
     expect(cardTypes(mapFindings(map, inputsOf({ ...state, outline: map }, map)))).toEqual([]);
 
     const builder = new PromptBuilder({ loadPhasePrompts: jest.fn(), validate: jest.fn() }, 'journalist');
-    const { userPrompt } = await builder.buildArticlePrompt(renderSettledWeave(storyLevelWeave(), null), map, [], null, null, null, { evidenceBundle: state.evidenceBundle });
+    const { userPrompt } = await builder.buildArticlePrompt(renderSettledWeave(storyLevelWeave(), null), map, [], null, null, { evidenceBundle: state.evidenceBundle });
     const line = userPrompt.split('\n').find((l) => l.startsWith('     * {"type": "evidence-card"'));
     expect(line).toContain('"sam001" for b3');
     expect(line).not.toContain('SAM001');

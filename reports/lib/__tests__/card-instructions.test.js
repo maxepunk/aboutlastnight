@@ -44,7 +44,7 @@ describe.each(['journalist'])('the %s article writer', (theme) => {
     // Brief 4.7b: the article writer writes from the settled weave and the map.
     const { renderSettledWeave } = require('../prompt-renderers/settled-weave');
     const { WEAVE, MAP } = require('./fixtures/rework-state');
-    ({ userPrompt } = await builder.buildArticlePrompt(renderSettledWeave(WEAVE, null), MAP, [], null, null, null));
+    ({ userPrompt } = await builder.buildArticlePrompt(renderSettledWeave(WEAVE, null), MAP, [], null, null));
   });
 
   it('carries none of the stale card instructions', () => {

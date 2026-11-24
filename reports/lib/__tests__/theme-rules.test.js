@@ -82,8 +82,9 @@ function plantedConfig(rules) {
     identities: { ...PLANTED_IDENTITIES },
     map: {
       slots: [
-        { key: 'opening', label: 'Opening', heading: '' },
-        { key: 'body', label: 'Body', heading: 'The Body' }
+        // Run 2e: each slot carries its description, which <SLOTS> prints and requires.
+        { key: 'opening', label: 'Opening', heading: '', description: 'the planted opening' },
+        { key: 'body', label: 'Body', heading: 'The Body', description: 'the planted body' }
       ]
     },
     display: { articleIdPrefix: 'PLT', printsHero: false, postGenValidation: { minInlineEvidenceCards: 0 } }
@@ -163,7 +164,7 @@ describe('4.13: a planted second theme reads its own rules and identity lines', 
     });
 
     it('the article writer opens with the theme\'s identity and reads its rules', async () => {
-      const { systemPrompt, userPrompt } = await builder.buildArticlePrompt(SETTLED_WEAVE, MAP, [], null, null, null, {});
+      const { systemPrompt, userPrompt } = await builder.buildArticlePrompt(SETTLED_WEAVE, MAP, [], null, null, {});
       expectPlantedSystem(systemPrompt, PLANTED_IDENTITIES.article);
       expectPlantedCraft(userPrompt, 'article');
     });

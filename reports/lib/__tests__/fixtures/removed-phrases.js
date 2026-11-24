@@ -551,13 +551,15 @@ const WHOLE_BLOCKS = [
 
 /**
  * Blocks whose label is instruction text and whose "- " lines are the director's words:
- * the quote bank, the transaction links, and the article writer's narrative tensions,
- * the director's own sentences that name Blake or the Valet, one per line.
+ * the quote bank and the transaction links. (The article writer's <NARRATIVE_TENSIONS>, the
+ * director's sentences that name Blake or the Valet, went in phase 18, run 2c, and its strip
+ * here in run 2e; the weave writer prints them under TENSIONS_HEADING.)
  */
-const LISTED_BLOCKS = ['QUOTE_BANK', 'TRANSACTION_LINKS', 'NARRATIVE_TENSIONS'];
+const LISTED_BLOCKS = ['QUOTE_BANK', 'TRANSACTION_LINKS'];
 
 /**
- * The arc writer's heading for the same sentences (buildJournalistCoreArcSections): its
+ * The arc writer's heading for the director's sentences about Blake and the Valet
+ * (buildJournalistCoreArcSections): its
  * label line, then the sentences as "- " lines, one per sentence.
  */
 const TENSIONS_HEADING = "### Blake and the Valet in the director's notes";
@@ -719,8 +721,8 @@ function stripTensionSentences(text) {
  *
  * Taken out:
  * - the director's words and the record: the whole of each WHOLE_BLOCKS tag; the "- "
- *   lines inside each LISTED_BLOCKS tag (the narrative tensions' sentences included) and
- *   under the arc writer's TENSIONS_HEADING; the director's notes inside
+ *   lines inside each LISTED_BLOCKS tag and under the arc writer's TENSIONS_HEADING (the
+ *   director's sentences about Blake and the Valet); the director's notes inside
  *   <DIRECTOR_GUIDANCE>; every paragraph of the director's note in a rework after "THE
  *   DIRECTOR'S NOTE:", up to the context's next block (node-helpers.js directorNoteEnd); the
  *   text after "The director's description" on a photo line. (The arc packages'

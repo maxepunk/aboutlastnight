@@ -520,7 +520,7 @@ describe('instructionText: the pipeline\'s own instructions only', () => {
         settledWeaveOf(state), [], state.shellAccounts, null, { evidenceBundle: state.evidenceBundle }
       )),
       'article writer': join(await builder.buildArticlePrompt(
-        settledWeaveOf(state), state.outline, state.shellAccounts, null, state.directorNotes, null,
+        settledWeaveOf(state), state.outline, state.shellAccounts, null, state.directorNotes,
         { evidenceBundle: state.evidenceBundle }
       )),
       'arc writer': arcs.buildWeavePrompt(state),
@@ -698,7 +698,7 @@ describe('instructionText: the tension sentences (3.6b fix batch)', () => {
   const join = ({ systemPrompt, userPrompt }) => `${systemPrompt}\n${userPrompt}`;
   const { settledWeaveOf } = require('../prompt-renderers/settled-weave');
   const articleRender = async (s = state()) => join(await builderFor(s).buildArticlePrompt(
-    settledWeaveOf(s), s.outline, s.shellAccounts, null, s.directorNotes, s.narrativeTensions,
+    settledWeaveOf(s), s.outline, s.shellAccounts, null, s.directorNotes,
     { evidenceBundle: s.evidenceBundle }
   ));
 

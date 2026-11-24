@@ -287,7 +287,8 @@ describe('generators pass options.gateNotes', () => {
     builder.buildArticlePrompt = jest.fn(builder.buildArticlePrompt);
     const sdk = sdkReturning({ headline: { main: 'x' }, sections: [] });
     await generateContentBundle({ outline: OUTLINE, directorGateNotes: NOTES }, cfg(sdk, builder));
-    const options = builder.buildArticlePrompt.mock.calls[0][6];
+    // Phase 18, run 2e: the options are the sixth argument, since the sentences about Blake went.
+    const options = builder.buildArticlePrompt.mock.calls[0][5];
     // Phase 3 (3.9) added photos: the hero, then every photo the director kept (none here).
     // Phase 4 (brief 4.6): the outline judge's advisories (shouldConsider) went with it.
     // Brief 4.7b (R4): the arc selection's guidance went with its last readers.

@@ -1662,8 +1662,10 @@ function articleMapOf(state) {
  * `heroImage` is the map's writer's and the map's stop's to write.
  *
  * @param {Object} state
- * @returns {Array} [settledWeave, map, shellAccounts, sessionFacts, directorNotes,
- *   narrativeTensions, options]
+ * Phase 18, run 2e: the sentences about Blake left the inputs; the article writer stopped
+ * printing them in run 2c (the wording doc's part 6), and they are in the notes once.
+ *
+ * @returns {Array} [settledWeave, map, shellAccounts, sessionFacts, directorNotes, options]
  */
 function articleWriterInputs(state) {
   const map = articleMapOf(state);
@@ -1680,9 +1682,6 @@ function articleWriterInputs(state) {
     // Session facts for the non-roster character guardrail (RC3) and the verdict (brief 2.2)
     buildSessionFacts(state),
     state.directorNotes || null,  // RC5: director observations for article grounding
-    // The sentences about Blake: in their place among the arguments, though the article writer no
-    // longer prints them (phase 18, run 2c; the wording doc's part 6)
-    state.narrativeTensions || null,
     // Spec 2026-09-19 §5.3: the standing gate notes; brief 2.2: the director's input-review
     // corrections and photo descriptions; phase 3 (3.9): every photo the article places.
     {

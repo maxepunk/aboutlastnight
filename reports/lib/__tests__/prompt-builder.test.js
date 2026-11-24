@@ -118,6 +118,23 @@ describe('PromptBuilder', () => {
       expect(userPrompt).not.toContain('<arc-metadata>');
     });
 
+    // Phase 18, run 2e: a slot printed with no description would read "- theStory: undefined",
+    // so a slot in the theme's config with none stops the prompt, naming the slot and the theme.
+    it("refuses to print <SLOTS> for a slot the theme's config gives no description, naming the slot and the theme", async () => {
+      const { THEME_CONFIGS } = require('../theme-config');
+      const slot = THEME_CONFIGS.journalist.map.slots.find((s) => s.key === 'theStory');
+      const description = slot.description;
+      try {
+        delete slot.description;
+        await expect(builder.buildOutlinePrompt(SETTLED_WEAVE)).rejects.toThrow(/"theStory".*"journalist"/);
+        slot.description = '  ';
+        await expect(builder.buildOutlinePrompt(SETTLED_WEAVE)).rejects.toThrow(/"theStory".*"journalist"/);
+      } finally {
+        slot.description = description;
+      }
+      await expect(builder.buildOutlinePrompt(SETTLED_WEAVE)).resolves.toHaveProperty('userPrompt');
+    });
+
     it('refuses to lay out a map without a settled weave: the story meeting settles it', async () => {
       await expect(builder.buildOutlinePrompt('')).rejects.toThrow('The map writer reads the settled weave first');
     });
@@ -716,7 +733,7 @@ describe('PromptBuilder', () => {
     // Phase 4 (brief 4.6): the outline judge, whose advisories these were, left the graph.
     it('prints none in the article prompt', async () => {
       const { userPrompt } = await builder.buildArticlePrompt(
-        SETTLED_WEAVE, STORY_MAP, [], null, null, null, { shouldConsider: ADVISORIES }
+        SETTLED_WEAVE, STORY_MAP, [], null, null, { shouldConsider: ADVISORIES }
       );
       expect(userPrompt).not.toContain('SHOULD_CONSIDER');
       expect(userPrompt).not.toContain('- The lede frontloads the verdict');
@@ -727,7 +744,7 @@ describe('PromptBuilder', () => {
         SETTLED_WEAVE, [], [], null, { shouldConsider: ADVISORIES, gateNotes: MEETING_NOTES }
       );
       const article = await builder.buildArticlePrompt(
-        SETTLED_WEAVE, STORY_MAP, [], null, null, null,
+        SETTLED_WEAVE, STORY_MAP, [], null, null,
         { shouldConsider: ADVISORIES, gateNotes: MEETING_NOTES }
       );
       for (const { userPrompt } of [outline, article]) {
@@ -854,7 +871,7 @@ describe('PromptBuilder', () => {
         transactionReferences: [],
         postInvestigationDevelopments: []
       };
-      const { userPrompt } = await builder.buildArticlePrompt(SETTLED_WEAVE, STORY_MAP, [], null, directorNotes, null);
+      const { userPrompt } = await builder.buildArticlePrompt(SETTLED_WEAVE, STORY_MAP, [], null, directorNotes);
       expect(userPrompt).toContain('<INVESTIGATION_OBSERVATIONS>');
       expect(userPrompt).toContain('I watched Alex and Sam in the corner.');
       expect(userPrompt).not.toContain('"behaviorPatterns"');
@@ -867,7 +884,7 @@ describe('PromptBuilder', () => {
         transactionReferences: [],
         postInvestigationDevelopments: []
       };
-      const { userPrompt } = await builder.buildArticlePrompt(SETTLED_WEAVE, STORY_MAP, [], null, directorNotes, null);
+      const { userPrompt } = await builder.buildArticlePrompt(SETTLED_WEAVE, STORY_MAP, [], null, directorNotes);
       expect(userPrompt).toContain('<QUOTE_BANK>');
       expect(userPrompt).toContain('we had to act');
     });
@@ -882,7 +899,7 @@ describe('PromptBuilder', () => {
         }],
         postInvestigationDevelopments: []
       };
-      const { userPrompt } = await builder.buildArticlePrompt(SETTLED_WEAVE, STORY_MAP, [], null, directorNotes, null);
+      const { userPrompt } = await builder.buildArticlePrompt(SETTLED_WEAVE, STORY_MAP, [], null, directorNotes);
       expect(userPrompt).toContain('<TRANSACTION_LINKS>');
       // A buried memory's sale: account, amount and time, never its id (final fix wave).
       expect(userPrompt).toContain('amount: $450,000 | time: 09:40 PM');
@@ -898,7 +915,7 @@ describe('PromptBuilder', () => {
         transactionReferences: [],
         postInvestigationDevelopments: [{ headline: 'Sarah named interim CEO', detail: 'It has just been announced that Sarah is interim CEO.' }]
       };
-      const { userPrompt } = await builder.buildArticlePrompt(SETTLED_WEAVE, STORY_MAP, [], null, directorNotes, null);
+      const { userPrompt } = await builder.buildArticlePrompt(SETTLED_WEAVE, STORY_MAP, [], null, directorNotes);
       // The epilogue is its own block, apart from the notes, holding the director's sentence as written.
       expect(userPrompt).toMatch(/<EPILOGUE>[\s\S]*It has just been announced that Sarah is interim CEO\.[\s\S]*<\/EPILOGUE>/);
       expect(userPrompt).not.toContain('Sarah named interim CEO');
@@ -911,14 +928,14 @@ describe('PromptBuilder', () => {
         transactionReferences: [],
         postInvestigationDevelopments: []
       };
-      const { userPrompt } = await builder.buildArticlePrompt(SETTLED_WEAVE, STORY_MAP, [], null, directorNotes, null);
+      const { userPrompt } = await builder.buildArticlePrompt(SETTLED_WEAVE, STORY_MAP, [], null, directorNotes);
       expect(userPrompt).not.toContain('<QUOTE_BANK>');
       expect(userPrompt).not.toContain('<TRANSACTION_LINKS>');
       expect(userPrompt).not.toContain('<EPILOGUE>');
     });
 
     it('handles null directorNotes gracefully', async () => {
-      const { userPrompt } = await builder.buildArticlePrompt(SETTLED_WEAVE, STORY_MAP, [], null, null, null);
+      const { userPrompt } = await builder.buildArticlePrompt(SETTLED_WEAVE, STORY_MAP, [], null, null);
       expect(userPrompt).not.toContain('<INVESTIGATION_OBSERVATIONS>');
     });
   });
@@ -1078,7 +1095,7 @@ describe('the record view in the outline and article prompts (brief 2.1)', () =>
     SETTLED_WEAVE, [], shellAccounts, null, { evidenceBundle, gateNotes: MEETING_NOTES }
   );
   const articleFor = (theme) => builderFor(theme).buildArticlePrompt(
-    SETTLED_WEAVE, STORY_MAP, shellAccounts, null, null, null, options
+    SETTLED_WEAVE, STORY_MAP, shellAccounts, null, null, options
   );
 
   function expectOneRecord(userPrompt) {
@@ -1133,16 +1150,12 @@ describe('the record view in the outline and article prompts (brief 2.1)', () =>
   // Phase 18, run 2c (the wording doc's parts 4 and 6): the article writer no longer reads the
   // sentences about Blake. They are in <DIRECTOR_NOTES> once; the weave writer reads them again,
   // under their label, for its check on who was seen making a deal (arc-specialist-nodes.js).
-  it('prints no block of sentences about Blake, nor its label, whatever the thread stores', async () => {
+  // Run 2e: the builder takes no argument for them, and its inputs carry none whatever the thread
+  // stores (packages-gone.test.js).
+  it('prints no block of sentences about Blake, nor its label: the sentences stand once, in the notes', async () => {
     const notes = { rawProse: 'Blake pulled Vic aside at the bar. The Valet read the balances.' };
-    const tensions = {
-      tensions: [
-        { type: 'named-account', narrativeNote: 'Mel used their own name for a burial account.' },
-        { type: 'blake-proximity', observations: ['Blake pulled Vic aside at the bar.', 'The Valet read the balances.'] }
-      ]
-    };
     const { systemPrompt, userPrompt } = await builderFor('journalist').buildArticlePrompt(
-      SETTLED_WEAVE, STORY_MAP, [], null, notes, tensions, { evidenceBundle }
+      SETTLED_WEAVE, STORY_MAP, [], null, notes, { evidenceBundle }
     );
     const whole = `${systemPrompt}\n${userPrompt}`;
     expect(whole).not.toContain('NARRATIVE_TENSIONS');
@@ -1206,7 +1219,7 @@ describe("buildOutlinePrompt / buildArticlePrompt — the director's words as re
   );
   const article = (facts, options = {}) => builder().buildArticlePrompt(
     SETTLED_WEAVE,
-    STORY_MAP, [], facts, DIRECTOR_NOTES, null, options
+    STORY_MAP, [], facts, DIRECTOR_NOTES, options
   );
   const between = (text, open, close) => text.slice(text.indexOf(open), text.indexOf(close));
 
@@ -1284,7 +1297,7 @@ describe("buildOutlinePrompt / buildArticlePrompt — the director's words as re
       const photos = [...ARTICLE_PHOTOS, { filename: 'aln092026 (9 of 9).jpg', identifiedCharacters: [] }];
       const { userPrompt } = await builder().buildArticlePrompt(
         SETTLED_WEAVE,
-        STORY_MAP, [], null, DIRECTOR_NOTES, null, { photos }
+        STORY_MAP, [], null, DIRECTOR_NOTES, { photos }
       );
       const list = between(userPrompt, '\nPHOTOS (', '<RECORD>');
       expect(list).toContain('PHOTOS (every photo the director has not excluded, without the whiteboard');
@@ -1358,7 +1371,7 @@ describe('phase 3 (3.2): the journalist writers read the rule set', () => {
     SETTLED_WEAVE, [], ACCOUNTS, FACTS, { directorNotes: NOTES_NO_EPILOGUE, gateNotes: MEETING_NOTES }
   );
   const articleOf = (b, notes = NOTES_NO_EPILOGUE) => b.buildArticlePrompt(
-    SETTLED_WEAVE, STORY_MAP, ACCOUNTS, FACTS, notes, null, { gateNotes: MEETING_NOTES }
+    SETTLED_WEAVE, STORY_MAP, ACCOUNTS, FACTS, notes, { gateNotes: MEETING_NOTES }
   );
   const between = (text, open, close) => text.slice(text.indexOf(open), text.indexOf(close) + close.length);
 

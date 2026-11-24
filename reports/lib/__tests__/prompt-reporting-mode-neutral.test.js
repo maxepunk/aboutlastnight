@@ -59,7 +59,7 @@ async function renderArticlePrompt(mode) {
   });
   // Brief 4.7b: the article writer writes from the settled weave and the map.
   const { systemPrompt, userPrompt } = await builder.buildArticlePrompt(
-    SETTLED_WEAVE, MAP, [], null, DIRECTOR_NOTES, null, {}
+    SETTLED_WEAVE, MAP, [], null, DIRECTOR_NOTES, {}
   );
   return { systemPrompt, userPrompt, all: systemPrompt + '\n' + userPrompt };
 }

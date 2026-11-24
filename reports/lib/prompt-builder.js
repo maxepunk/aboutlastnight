@@ -1141,13 +1141,20 @@ Only the ${n} players above were at the investigation. Every other character exc
    * and the arc stage's <SHOULD_CONSIDER> with the arc selection.
    *
    * @returns {Promise<string>}
-   * @throws {Error} with no settled weave: the map lays out the weave the meeting settled
+   * @throws {Error} with no settled weave: the map lays out the weave the meeting settled; for a
+   *   slot of the theme's with no description, naming the slot and the theme (run 2e)
    */
   async buildOutlineUserSections(settledWeave, photos = [], shellAccounts = [], sessionFacts = null, options = {}) {
     if (typeof settledWeave !== 'string' || !settledWeave.trim()) {
       throw new Error('The map writer reads the settled weave first, and this thread holds no weave: the story meeting settles it. Go back to the story meeting.');
     }
     const slots = mapSlotsOf(this.themeName);
+    // Phase 18, run 2e: <SLOTS> prints each slot's description from the theme's config (R33), so
+    // a slot with none would print as "undefined" to the map writer; it stops the prompt instead.
+    const undescribed = slots.find((slot) => typeof slot.description !== 'string' || !slot.description.trim());
+    if (undescribed) {
+      throw new Error(`The map writer's <SLOTS> prints each slot's description, and slot "${undescribed.key}" of theme "${this.themeName}" has none in lib/theme-config.js (map.slots).`);
+    }
     const observationsSection = this._buildInvestigationObservations(options.directorNotes, options.directorCorrections, options.evidenceBundle);
     // Brief 2.1: every usable document in full, once, with the investigation's timeline.
     const recordSection = renderRecordView(options.evidenceBundle, { sessionConfig: this.sessionConfig });
@@ -1208,18 +1215,15 @@ ${loadRuleSet('outline', { theme: this.themeName }).craft}`;
    * @param {Array} shellAccounts - Shell account data for financial summary
    * @param {Object|null} sessionFacts - Session facts for non-roster character guardrail
    * @param {Object|null} directorNotes - Director observations for article grounding
-   * @param {Object|null} narrativeTensions - the sentences about Blake (surfaceContradictions). The
-   *   article writer no longer prints them (phase 18, run 2c; the wording doc's part 6), and the
-   *   argument keeps its place so the inputs keep their order (ai-nodes.js articleWriterInputs)
    * @param {Object} options - { gateNotes, evidenceBundle, directorCorrections, photoDescriptions,
    *   photos, schema }: `schema` is the one the call is given, printed in <SCHEMA>; the writer's
    *   (WRITER_BUNDLE_SCHEMA) when absent
    * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
    */
-  async buildArticlePrompt(settledWeave, map, shellAccounts = [], sessionFacts = null, directorNotes = null, narrativeTensions = null, options = {}) {
+  async buildArticlePrompt(settledWeave, map, shellAccounts = [], sessionFacts = null, directorNotes = null, options = {}) {
     const systemPrompt = await this.buildArticleSystemPrompt();
     let userPrompt = await this.buildArticleUserSections(
-      settledWeave, map, shellAccounts, sessionFacts, directorNotes, narrativeTensions, options
+      settledWeave, map, shellAccounts, sessionFacts, directorNotes, options
     );
 
     // The standing notes, LAST, so they outrank the rules above (Q2; spec 2026-09-19 §5.3).
@@ -1265,7 +1269,7 @@ ${this._rosterSection({ withCharacterContext: false })}`;
    * @throws {Error} for a theme with no story map, such as the parked detective (R1); with
    *   no settled weave, or no map: the article is written from both
    */
-  async buildArticleUserSections(settledWeave, map, shellAccounts = [], sessionFacts = null, directorNotes = null, narrativeTensions = null, options = {}) {
+  async buildArticleUserSections(settledWeave, map, shellAccounts = [], sessionFacts = null, directorNotes = null, options = {}) {
     mapSchemaFor(this.themeName);
     if (typeof settledWeave !== 'string' || !settledWeave.trim()) {
       throw new Error('The article writer reads the settled weave first, and this thread holds no weave: the story meeting settles it. Go back to the story meeting.');
@@ -1277,7 +1281,7 @@ ${this._rosterSection({ withCharacterContext: false })}`;
     // packages that named each arc's documents went; the record is whole.
     const recordSection = renderRecordView(options.evidenceBundle, { sessionConfig: this.sessionConfig });
     return this._journalistArticleUserSections(
-      settledWeave, map, shellAccounts, sessionFacts, directorNotes, narrativeTensions, options, recordSection
+      settledWeave, map, shellAccounts, sessionFacts, directorNotes, options, recordSection
     );
   }
 
@@ -1325,7 +1329,7 @@ ${this._rosterSection({ withCharacterContext: false })}`;
    *
    * Run 2c (the wording doc's parts 4 and 6): the sentences about Blake no longer print here, and
    * neither does their tag, <NARRATIVE_TENSIONS>: they are in the notes once, and the map places
-   * what the story needs of Blake. `narrativeTensions` is no longer read.
+   * what the story needs of Blake. Run 2e: the builder takes no argument for them.
    *
    * Phase 3 (3.9; T13, the integrator's ruling): the article places every photo the
    * director has not excluded, so the writer is given every kept photo
@@ -1342,7 +1346,7 @@ ${this._rosterSection({ withCharacterContext: false })}`;
    *
    * @returns {string}
    */
-  _journalistArticleUserSections(settledWeave, map, shellAccounts, sessionFacts, directorNotes, narrativeTensions, options, recordSection) {
+  _journalistArticleUserSections(settledWeave, map, shellAccounts, sessionFacts, directorNotes, options, recordSection) {
     const photos = Array.isArray(options.photos) ? options.photos.filter(photo => photo && photo.filename) : [];
     const photoSection = photos.length > 0
       ? `PHOTOS (every photo the director has not excluded, without the whiteboard${photos[0].hero ? ': the map\'s top photo first, marked [hero image], then the rest' : ''}; each gives the names identified in it and the director's description):

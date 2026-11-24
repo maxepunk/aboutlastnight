@@ -624,7 +624,10 @@ describe('ai-nodes', () => {
         { validationResults: { phase: 'outline', passed: true, advisoryWarnings: ['The lede frontloads the verdict'] } },
         configFor(builder, { contentBundle: mockContentBundle })
       );
-      expect(builder.buildArticlePrompt.mock.calls[0][6]).not.toHaveProperty('shouldConsider');
+      // Phase 18, run 2e: six arguments, the options last; the sentences about Blake went.
+      const args = builder.buildArticlePrompt.mock.calls[0];
+      expect(args).toHaveLength(6);
+      expect(args[5]).not.toHaveProperty('shouldConsider');
     });
   });
 

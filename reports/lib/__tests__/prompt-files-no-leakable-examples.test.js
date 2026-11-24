@@ -72,7 +72,7 @@ describe('prompt files carry no leakable example content', () => {
       // Brief 4.7b: the article writer writes from the settled weave and the map.
       const { renderSettledWeave } = require('../prompt-renderers/settled-weave');
       const { WEAVE, MAP } = require('./fixtures/rework-state');
-      const { userPrompt } = await builder.buildArticlePrompt(renderSettledWeave(WEAVE, null), MAP, [], null, null, null);
+      const { userPrompt } = await builder.buildArticlePrompt(renderSettledWeave(WEAVE, null), MAP, [], null, null);
       instruction = userPrompt.slice(userPrompt.indexOf('<GENERATION_INSTRUCTION>'), userPrompt.indexOf('\n<SCHEMA>\n'));
     });
 

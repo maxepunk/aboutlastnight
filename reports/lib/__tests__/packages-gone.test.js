@@ -71,10 +71,13 @@ describe('4.6: the arc packages are gone (R5)', () => {
   });
 
   it("the article writer's inputs carry no package element, and its prompt no package section, for either theme", async () => {
-    const inputs = aiNodes.articleWriterInputs({ theme: 'journalist', outline: { headline: 'x' }, sessionPhotos: [] });
-    // [settledWeave, map, shellAccounts, sessionFacts, directorNotes, narrativeTensions, options]
-    // (brief 4.7b: the settled weave, then the map, in place of the outline and the hero)
-    expect(inputs).toHaveLength(7);
+    const tensions = { tensions: [{ type: 'blake-proximity', observations: ['Blake paid Alex.'] }] };
+    const inputs = aiNodes.articleWriterInputs({ theme: 'journalist', outline: { headline: 'x' }, sessionPhotos: [], narrativeTensions: tensions });
+    // [settledWeave, map, shellAccounts, sessionFacts, directorNotes, options]
+    // (brief 4.7b: the settled weave, then the map, in place of the outline and the hero;
+    // phase 18, run 2e: the sentences about Blake went, the article writer no longer reading them)
+    expect(inputs).toHaveLength(6);
+    expect(inputs).not.toContain(tensions);
     expect(inputs[1]).toEqual({ headline: 'x' });
 
     jest.spyOn(console, 'log').mockImplementation(() => {});

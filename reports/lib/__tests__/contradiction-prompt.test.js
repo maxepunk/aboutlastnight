@@ -124,11 +124,12 @@ describe('contradiction data in arc prompt', () => {
 
     const themeLoader = { loadPhasePrompts: jest.fn().mockResolvedValue({}), validate: jest.fn() };
     const builder = new promptBuilderModule.PromptBuilder(themeLoader, 'journalist', { roster: ['Skyler', 'Alex'] });
-    // Brief 4.7b: the article writer writes from the settled weave and the map.
+    // Brief 4.7b: the article writer writes from the settled weave and the map. Run 2e: the
+    // builder takes no argument for the sentences about Blake; the notes carry them.
     const { renderSettledWeave } = require('../prompt-renderers/settled-weave');
     const { WEAVE, MAP } = require('./fixtures/rework-state');
     const { userPrompt } = await builder.buildArticlePrompt(
-      renderSettledWeave(WEAVE, null), MAP, [], null, state.directorNotes, state.narrativeTensions, { evidenceBundle: state.evidenceBundle }
+      renderSettledWeave(WEAVE, null), MAP, [], null, state.directorNotes, { evidenceBundle: state.evidenceBundle }
     );
     expect(userPrompt).not.toContain('NARRATIVE_TENSIONS');
     expect(userPrompt).not.toContain(DERIVED_LABELS.narrativeTensions);

@@ -36,7 +36,7 @@ async function journalistArticlePrompt() {
   // Brief 4.7b: the article writer writes from the settled weave and the map.
   const { renderSettledWeave } = require('../prompt-renderers/settled-weave');
   const { WEAVE, MAP } = require('./fixtures/rework-state');
-  const { userPrompt } = await builder.buildArticlePrompt(renderSettledWeave(WEAVE, null), MAP, [], null, null, null);
+  const { userPrompt } = await builder.buildArticlePrompt(renderSettledWeave(WEAVE, null), MAP, [], null, null);
   return userPrompt;
 }
 
@@ -117,7 +117,7 @@ describe("the inline card line names each card the map flags (phase 4b, brief 1E
     const builder = new PromptBuilder(themeLoader, 'journalist', {}, { Vic: 'Vic Kingsley' });
     const { renderSettledWeave } = require('../prompt-renderers/settled-weave');
     const { WEAVE } = require('./fixtures/rework-state');
-    const { userPrompt } = await builder.buildArticlePrompt(renderSettledWeave(WEAVE, null), map, [], null, null, null);
+    const { userPrompt } = await builder.buildArticlePrompt(renderSettledWeave(WEAVE, null), map, [], null, null);
     const lines = userPrompt.split('\n').filter((line) => line.startsWith('     * {"type": "evidence-card"'));
     expect(lines).toHaveLength(1);
     return lines[0];

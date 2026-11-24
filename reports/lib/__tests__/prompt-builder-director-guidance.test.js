@@ -61,14 +61,14 @@ describe('buildArticlePrompt — <DIRECTOR_GUIDANCE>', () => {
   const MEETING_NOTE = { gate: 'arc-selection', kind: 'approval', round: 1, text: GUIDANCE, at: '2026-10-03T09:00:00.000Z' };
 
   it("appends the standing notes, the meeting's note among them, as the LAST section of the user prompt", async () => {
-    const { userPrompt } = await makeBuilder().buildArticlePrompt(SETTLED_WEAVE, MAP, [], null, null, null, { gateNotes: [MEETING_NOTE] });
+    const { userPrompt } = await makeBuilder().buildArticlePrompt(SETTLED_WEAVE, MAP, [], null, null, { gateNotes: [MEETING_NOTE] });
     expect(userPrompt).toMatch(/^<DIRECTOR_GUIDANCE>$/m);
     expect(userPrompt).toContain(GUIDANCE);
     expect(userPrompt.trim().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
   });
 
   it('omits the section entirely when there is no note, and reads no arc-selection emphasis', async () => {
-    const { userPrompt } = await makeBuilder().buildArticlePrompt(SETTLED_WEAVE, MAP, [], null, null, null, { directorGuidance: GUIDANCE });
+    const { userPrompt } = await makeBuilder().buildArticlePrompt(SETTLED_WEAVE, MAP, [], null, null, { directorGuidance: GUIDANCE });
     expect(userPrompt).not.toMatch(/^<DIRECTOR_GUIDANCE>$/m);
     expect(userPrompt).not.toContain(GUIDANCE);
   });
@@ -245,7 +245,7 @@ describe('<DIRECTOR_GUIDANCE> standing notes (spec 2026-09-19 §5.3)', () => {
     expect(o.userPrompt).toContain('- [outline, rejection 1] Lead with the ledger.');
     expect(o.userPrompt.trim().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
     // Brief 4.7b: the article writer's section is the standing notes alone (R4).
-    const a = await makeBuilder().buildArticlePrompt(SETTLED_WEAVE, MAP, [], null, null, null, { directorGuidance: GUIDANCE, gateNotes: NOTES });
+    const a = await makeBuilder().buildArticlePrompt(SETTLED_WEAVE, MAP, [], null, null, { directorGuidance: GUIDANCE, gateNotes: NOTES });
     expect(a.userPrompt).not.toContain(GUIDANCE);
     expect(a.userPrompt).toContain('- [arc-selection, rejection 1] Drop the vote arc.');
     expect(a.userPrompt.trim().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
