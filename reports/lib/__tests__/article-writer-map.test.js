@@ -11,7 +11,7 @@
 
 const { reworkFixtureState, MAP, PREVIOUS_BUNDLE } = require('./fixtures/rework-state');
 const { generateContentBundle, reviseContentBundle, articleWriterInputs } = require('../workflow/nodes/ai-nodes');
-const { PromptBuilder, STORY_MAP_TAG } = require('../prompt-builder');
+const { PromptBuilder, STORY_MAP_TAG, mapAsShown } = require('../prompt-builder');
 const { settledWeaveOf } = require('../prompt-renderers/settled-weave');
 const { beatCardOf } = require('../../console/outline-edit-logic');
 
@@ -72,7 +72,8 @@ describe('4.7b: the article writer reads the settled weave, then the map', () =>
     const state = articleState();
     const { user } = await writerPrompt(state);
 
-    expect(user.startsWith(settledWeaveOf(state))).toBe(true);
+    // Run 2b (R19): the settled weave without the evidence under its threads.
+    expect(user.startsWith(settledWeaveOf(state, { withEvidence: false }))).toBe(true);
     const order = [
       '</SETTLED_WEAVE>',
       `<${STORY_MAP_TAG}>`,
@@ -85,10 +86,10 @@ describe('4.7b: the article writer reads the settled weave, then the map', () =>
       '<SESSION_FACTS>',
       '<GENERATION_INSTRUCTION>',
       '<SCHEMA>',
-      // Each section by the line that opens it (phase 18, R3): the brief, then the article
-      // writer's own part, where the craft files sat.
-      '\n<brief>\n',
+      // Each section by the line that opens it (phase 18, R3): where the craft files sat, the
+      // article writer's own part, then the brief (run 2b, R24).
       '\n<job-article>\n',
+      '\n<brief>\n',
       '\n<DIRECTOR_GUIDANCE>\n'
     ].map((marker) => [marker, user.indexOf(marker)]);
     order.forEach(([marker, at]) => expect(`${marker}: ${at >= 0}`).toBe(`${marker}: true`));
@@ -105,7 +106,8 @@ describe('4.7b: the article writer reads the settled weave, then the map', () =>
     left.sections[3].beats[0].move = 'Riley at the door with the ledger, the last to leave';
     const { user } = await writerPrompt(articleState({ outline: left, _mapBaseline: clone(MAP) }));
 
-    expect(blockJson(user, STORY_MAP_TAG)).toEqual(left);
+    // Run 2b (R20): as the article writer is shown it.
+    expect(blockJson(user, STORY_MAP_TAG)).toEqual(mapAsShown(left));
     expect(block(user, STORY_MAP_TAG)).toContain('"move": "Riley at the door with the ledger, the last to leave"');
     expect(block(user, STORY_MAP_TAG)).not.toContain(writers);
   });
@@ -173,7 +175,7 @@ describe('4.7b: the article writer reads the settled weave, then the map', () =>
   it('articleWriterInputs passes the settled weave, then the map as the article reads it', () => {
     const state = articleState({ characterIdMappings: { 'p2.jpg': { exclude: true } } });
     const [settledWeave, map] = articleWriterInputs(state);
-    expect(settledWeave).toBe(settledWeaveOf(state));
+    expect(settledWeave).toBe(settledWeaveOf(state, { withEvidence: false }));
     expect(map.sections.flatMap((s) => s.photos)).toEqual([]);
     expect(state.outline.sections[1].photos).toEqual([{ filename: 'p2.jpg', beat: 'b2' }]);   // the stored map is untouched
   });
@@ -389,11 +391,12 @@ describe("4.7e: the rework's task gives a card the director cut and a paragraph 
     const edits = block(prompt, 'HAND_EDITS');
     expect(edits).toContain('E1 (section "the-story", evidence-card p-dna, cut)');
     expect(edits).toContain(`E2 (section "the-story", paragraph): "${DESK_PARAGRAPH}"`);
-    // The map the rework reads still carries the cut card's beat, and the letter under leftOut.
+    // The map the rework reads still carries the cut card's beat, and the letter under leftOut,
+    // by its id and title alone (run 2b, R20): the letter itself is in the record.
     const map = blockJson(prompt, STORY_MAP_TAG);
     // Phase 4b (brief 1D; R4): a beat's card is its flagged piece, read through beatCardOf.
     expect(map.sections.flatMap((section) => section.beats).filter((beat) => beatCardOf(beat) === 'p-dna').map((beat) => beat.id)).toEqual(['b4']);
-    expect(map.leftOut.map((beat) => beat.evidence[0].sources)).toEqual([['p-rescued']]);
+    expect(map.leftOut).toEqual([{ id: 'b9', move: 'An unsigned letter threatens Marcus' }]);
 
     const lines = taskLines(prompt);
     expect(lines.filter((line) => line.startsWith('- the beats:'))).toEqual([BEATS_LINE]);

@@ -363,3 +363,60 @@ describe('4.14a: the settled weave tells the story the director settled', () => 
     expect(() => meetingChangeId(undefined)).toThrow(/E and a number/);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 18, run 2b (R19; brief H): the settled weave without the evidence under its threads
+// ═══════════════════════════════════════════════════════════════════════════
+describe('R19: the option that leaves out the evidence under the threads', () => {
+  const { settledWeaveOf } = require('../prompt-renderers/settled-weave');
+
+  /** The intro line, the one after the tag. */
+  const introOf = (text) => text.split('\n')[1];
+  const directorsState = () => {
+    const weave = directors();
+    return { weave, _weaveHandEdits: standingAtMeeting(null, WRITERS, weave) };
+  };
+
+  it('prints no piece of evidence under a thread, and no line for a thread with none', () => {
+    const weave = directors();
+    const edits = carriedEdits(standingAtMeeting(null, WRITERS, weave), weave);
+    const text = renderSettledWeave(weave, edits, { withEvidence: false });
+    expect(text.split('\n').filter((line) => line.startsWith('  - '))).toEqual([]);
+    expect(text).not.toContain('No evidence yet.');
+    ['The room named Ellis at the vote.', 'Rowan to Sloane: "Not a word to Ellis."', 'The late sales into RowanVale.']
+      .forEach((shows) => expect(text).not.toContain(shows));
+  });
+
+  it("keeps every other line of the settled weave as it prints with the evidence", () => {
+    const weave = directors();
+    const edits = carriedEdits(standingAtMeeting(null, WRITERS, weave), weave);
+    const whole = renderSettledWeave(weave, edits).split('\n');
+    const without = renderSettledWeave(weave, edits, { withEvidence: false }).split('\n');
+    const kept = whole.filter((line, i) => i !== 1 && !line.startsWith('  - '));
+    expect(without.filter((line, i) => i !== 1)).toEqual(kept);
+  });
+
+  it("says in the intro's fourth sentence only that the threads come in the angle's order, and keeps every other sentence", () => {
+    const weave = directors();
+    const whole = introOf(renderSettledWeave(weave, []));
+    const without = introOf(renderSettledWeave(weave, [], { withEvidence: false }));
+    expect(without).toBe("The story the director settled at the story meeting: the angle they picked, as they left it, with the director's answers to the questions. A line that ends in [the director's change ...] holds a change the director made at the meeting, named by its id. Each answer is the director's words, word for word. The threads in the story come in the order the angle tells them. The threads the angle leaves out come after them, by name.");
+    expect(whole).toBe(without.replace(
+      'The threads in the story come in the order the angle tells them.',
+      'The threads in the story come in the order the angle tells them, and under each is its evidence, one piece a line: whether it supports the thread or cuts against it, its sources, and what it shows.'
+    ));
+  });
+
+  it('prints the evidence by default, and with the option set to true', () => {
+    const weave = directors();
+    expect(renderSettledWeave(weave, [], { withEvidence: true })).toBe(renderSettledWeave(weave, []));
+    expect(renderSettledWeave(weave, [])).toContain('  - supports, from notes: The room named Ellis at the vote.');
+  });
+
+  it('settledWeaveOf takes the same option, from a thread\'s state', () => {
+    const state = directorsState();
+    const edits = carriedEdits(state._weaveHandEdits, state.weave);
+    expect(settledWeaveOf(state, { withEvidence: false })).toBe(renderSettledWeave(state.weave, edits, { withEvidence: false }));
+    expect(settledWeaveOf(state)).toBe(renderSettledWeave(state.weave, edits));
+  });
+});

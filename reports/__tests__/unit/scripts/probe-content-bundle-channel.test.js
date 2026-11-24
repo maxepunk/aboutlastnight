@@ -20,6 +20,7 @@ const {
 } = require('../../../scripts/probe-content-bundle-channel');
 const { FIXED_MAP } = require('../../../scripts/lib/fixed-map');
 const { settledWeaveOf } = require('../../../lib/prompt-renderers/settled-weave');
+const { mapAsShown, WRITER_BUNDLE_SCHEMA } = require('../../../lib/prompt-builder');
 
 // Shaped like a current session's fetched/ files (field names only; the text is
 // synthetic): tokens carry tokenId + fullDescription, paper documents notionId +
@@ -147,11 +148,14 @@ describe('buildProbePrompt', () => {
       tokens: TOKENS,
       paperEvidence: PAPER
     };
-    const { userPrompt } = await buildProbePrompt(session);
+    const { userPrompt, jsonSchema } = await buildProbePrompt(session);
 
-    expect(userPrompt.startsWith(settledWeaveOf(probeArticleState(session)))).toBe(true);
+    // Phase 18, run 2b: the settled weave without its threads' evidence (R19), the map as the
+    // writer is shown it (R20), and the schema the article call is given (R23).
+    expect(userPrompt.startsWith(settledWeaveOf(probeArticleState(session), { withEvidence: false }))).toBe(true);
     const map = userPrompt.slice(userPrompt.indexOf('<STORY_MAP>'), userPrompt.indexOf('</STORY_MAP>'));
-    expect(map).toContain(JSON.stringify(FIXED_MAP, null, 2));
+    expect(map).toContain(JSON.stringify(mapAsShown(FIXED_MAP), null, 2));
+    expect(jsonSchema).toBe(WRITER_BUNDLE_SCHEMA);
     expect(userPrompt).not.toContain('PHOTOS: none');
     expect(userPrompt).toContain(`1. [hero image] ${FIXED_MAP.topPhoto}: Sam, Quinn`);
     expect(userPrompt).toContain('2. render-diff-photo-1.jpg: Sam, Quinn');

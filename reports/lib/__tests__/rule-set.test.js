@@ -32,13 +32,15 @@ const JOURNALIST = { theme: 'journalist' };
 /** R2: every writer and judge reads the world, then the limits. */
 const CORE_FILES = ['world', 'limits'];
 /**
- * R2: each call's own files, after the core. Each writer reads the brief, then its own part;
- * the judges read neither (the spec's section 1).
+ * R2: each call's own files, after the core. Each writer reads the brief and its own part; the
+ * judges read neither (the spec's section 1). The weave and the map writers read the brief first;
+ * the article writer reads its own part first (run 2b, R24), knowing which of the brief's work
+ * the map already did.
  */
 const CALL_FILES = {
   arc: ['brief', 'job-weave'],
   outline: ['brief', 'job-map'],
-  article: ['brief', 'job-article'],
+  article: ['job-article', 'brief'],
   'judge-arc': [],
   'judge-article': []
 };

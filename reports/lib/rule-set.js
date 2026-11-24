@@ -12,8 +12,8 @@
  * - `limits.md`: the fifteen limits on what the article may claim;
  * - `brief.md`: how a reporter approaches this article, with reasons, which the three
  *   writers read;
- * - `job-weave.md`, `job-map.md` and `job-article.md`: each writer's own part, read right
- *   after the brief by the writer whose work it is (the spec's section 3);
+ * - `job-weave.md`, `job-map.md` and `job-article.md`: each writer's own part, read beside
+ *   the brief by the writer whose work it is (the spec's section 3);
  * - `mode-on-site.md` and `mode-remote.md`: where Nova was this session, the part about this
  *   session, which loadModeBlock hands back in a `this-session` tag.
  * Each call reads the files RULE_SET_CALLS gives it.
@@ -39,8 +39,11 @@ const CORE_FILES = ['world', 'limits'];
 
 /**
  * Each call's own files, after the core (phase 18, R2; the spec's sections 1 and 3): each
- * writer reads the brief, then its own part. The weave writer's part is `job-weave`, the map
- * writer's `job-map` and the article writer's `job-article`. A reworker passes its writer's
+ * writer reads the brief and its own part. The weave writer's part is `job-weave`, the map
+ * writer's `job-map` and the article writer's `job-article`. The weave and the map writers read
+ * the brief first, since their parts open on "The brief above". The article writer reads its own
+ * part first (run 2b, R24): it says the map already did the brief's work on the steps, so the
+ * writer reads the brief knowing which of its work is left. A reworker passes its writer's
  * call, so it reads what its writer reads. The judges read the world, the limits and the part
  * about this session alone: they write no notes on the writing, so they read neither the
  * brief nor a writer's part (the story meeting's fact check, brief 4.4; the article judge,
@@ -53,7 +56,7 @@ const CORE_FILES = ['world', 'limits'];
 const RULE_SET_CALLS = Object.freeze({
   arc: ['brief', 'job-weave'],
   outline: ['brief', 'job-map'],
-  article: ['brief', 'job-article'],
+  article: ['job-article', 'brief'],
   'judge-arc': [],
   'judge-article': []
 });
@@ -183,7 +186,7 @@ function tagged(name, text) {
  * @param {string} [options.theme] - the caller's theme, whose rules folder is read
  * @param {string} [options.root] - a folder to read instead (tests); the theme is not read then
  * @returns {{core: string, craft: string}} `core`: <world> then <limits>; `craft`: the
- *   call's own files in RULE_SET_CALLS order, for a writer <brief> then its <job-...>, and
+ *   call's own files in RULE_SET_CALLS order, for a writer <brief> and its <job-...>, and
  *   for a judge nothing. Each file is in its own tag named after it; the caller inserts both
  *   strings unchanged. (The key `craft` keeps the name its callers read.)
  * @throws {Error} on an unknown call; without a theme or a root; for a theme with no rules

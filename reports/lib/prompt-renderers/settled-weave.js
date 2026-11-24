@@ -12,7 +12,11 @@
  * - the threads it tells, in its order, a thread the director added after the angle's own, each
  *   by its id, its name and its line; and under each, its evidence, one piece a line: its stance,
  *   its sources and what it shows (phase 4b, brief 1B; R7), for the map writer to give each beat
- *   the pieces that tell it. A thread with none yet, such as one the director added, says so;
+ *   the pieces that tell it. A thread with none yet, such as one the director added, says so.
+ *   With `withEvidence: false` (phase 18, run 2b, R19) no thread's evidence prints, and the intro
+ *   says only that the threads come in the angle's order: the article writer and its rework read
+ *   it so, since the map holds the evidence the map writer chose for each beat. Every other
+ *   reader (the map writer, the map's rework, the article's judge) reads it whole;
  * - the threads the angle leaves out, last among the threads, by name and nothing more: no id,
  *   no line, no evidence (phase 4b fix round, fix 5). The map writer adds no thread, so what a
  *   left-out thread carries is noise in its prompt;
@@ -209,15 +213,27 @@ function settledChangesOf(weave, edits) {
 }
 
 /**
+ * The intro's sentence on the threads in the story, with the evidence under them and without it
+ * (R19): the one sentence of the intro the option changes.
+ */
+const THREADS_SENTENCE = Object.freeze({
+  withEvidence: 'The threads in the story come in the order the angle tells them, and under each is its evidence, one piece a line: whether it supports the thread or cuts against it, its sources, and what it shows.',
+  without: 'The threads in the story come in the order the angle tells them.'
+});
+
+/**
  * The story the director settled at the story meeting, for every later writer: the angle they
  * picked, as they left it (lib/weave.js settledAngleOf).
  *
  * @param {Object|null} weave - the weave as the director left it (state.weave)
  * @param {Object[]} edits - the director's standing edits the weave carries
  *   (lib/hand-edit-diff.js carriedEdits)
+ * @param {Object} [options]
+ * @param {boolean} [options.withEvidence=true] - false leaves out the evidence under each thread
+ *   in the story, and the intro's clause on it (phase 18, run 2b, R19): the article writer's form
  * @returns {string} the tagged block, or '' when there is no weave or it holds no angle
  */
-function renderSettledWeave(weave, edits) {
+function renderSettledWeave(weave, edits, { withEvidence = true } = {}) {
   const settled = isWeave(weave) ? settledAngleOf(weave) : null;
   if (!settled) return '';
   const { angle } = settled;
@@ -228,7 +244,7 @@ function renderSettledWeave(weave, edits) {
 
   const lines = [
     `<${SETTLED_WEAVE_TAG}>`,
-    "The story the director settled at the story meeting: the angle they picked, as they left it, with the director's answers to the questions. A line that ends in [the director's change ...] holds a change the director made at the meeting, named by its id. Each answer is the director's words, word for word. The threads in the story come in the order the angle tells them, and under each is its evidence, one piece a line: whether it supports the thread or cuts against it, its sources, and what it shows. The threads the angle leaves out come after them, by name.",
+    `The story the director settled at the story meeting: the angle they picked, as they left it, with the director's answers to the questions. A line that ends in [the director's change ...] holds a change the director made at the meeting, named by its id. Each answer is the director's words, word for word. ${withEvidence ? THREADS_SENTENCE.withEvidence : THREADS_SENTENCE.without} The threads the angle leaves out come after them, by name.`,
     '',
     ...PITCH_LINES.map(([field, label]) => `${label}: ${textOf(angle[field])}${marked(`pitch:${field}`)}`)
   ];
@@ -241,7 +257,7 @@ function renderSettledWeave(weave, edits) {
     const id = textOf(thread.id);
     const verdict = thread.verdict === true ? " It carries the verdict." : '';
     lines.push(`- ${id} ${textOf(thread.name)}: ${textOf(thread.line)}${verdict}${marked(`thread:${id}`)}`);
-    lines.push(...evidenceLines(thread));
+    if (withEvidence) lines.push(...evidenceLines(thread));
   });
   if (settled.leftOut.length > 0) {
     const leftOut = settled.leftOut.map((thread) => `${textOf(thread.name) || textOf(thread.line)}${marked(`leftOut:${textOf(thread.id)}`)}`);
@@ -268,14 +284,16 @@ function renderSettledWeave(weave, edits) {
 
 /**
  * The settled weave from a thread's state: the weave and the director's standing edits it
- * carries (state._weaveHandEdits). What the map writer and the article writer call.
+ * carries (state._weaveHandEdits). What the map writer, the article writer and the article's
+ * judge call; the article writer and its rework pass `withEvidence: false` (R19).
  *
  * @param {Object} state
+ * @param {Object} [options] - renderSettledWeave's options
  * @returns {string}
  */
-function settledWeaveOf(state) {
+function settledWeaveOf(state, options = {}) {
   const weave = state && state.weave;
-  return renderSettledWeave(weave, carriedEdits(state && state._weaveHandEdits, weave));
+  return renderSettledWeave(weave, carriedEdits(state && state._weaveHandEdits, weave), options);
 }
 
 /**

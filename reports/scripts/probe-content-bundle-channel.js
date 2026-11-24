@@ -199,13 +199,14 @@ function probeArticleState({ sessionId, sessionConfig, directorNotes, tokens, pa
 /**
  * The article-generation prompt the probe sends, built as generateContentBundle builds
  * it: the writer's own inputs (articleWriterInputs) from the probe's state, the settled
- * weave and the map among them, through the writer's own builder.
+ * weave and the map among them, through the writer's own builder; and the schema the call
+ * is given, the article writer's (phase 18, run 2b, R23: the one its prompt prints).
  *
  * @param {{sessionId: string, sessionConfig: Object, directorNotes: Object, tokens: Object[], paperEvidence: Object[]}} session
- * @returns {Promise<{systemPrompt: string, userPrompt: string, evidenceBundle: Object}>}
+ * @returns {Promise<{systemPrompt: string, userPrompt: string, evidenceBundle: Object, jsonSchema: Object}>}
  */
 async function buildProbePrompt(session) {
-  const { createPromptBuilder } = require('../lib/prompt-builder');
+  const { createPromptBuilder, WRITER_BUNDLE_SCHEMA } = require('../lib/prompt-builder');
   const { articleWriterInputs } = require('../lib/workflow/nodes/ai-nodes');
 
   const state = probeArticleState(session);
@@ -216,13 +217,12 @@ async function buildProbePrompt(session) {
     characterData: {}
   });
   const { systemPrompt, userPrompt } = await promptBuilder.buildArticlePrompt(...articleWriterInputs(state));
-  return { systemPrompt, userPrompt, evidenceBundle: state.evidenceBundle };
+  return { systemPrompt, userPrompt, evidenceBundle: state.evidenceBundle, jsonSchema: WRITER_BUNDLE_SCHEMA };
 }
 
 async function main() {
   // Loaded here, not at the top: requiring the probe must not load the SDK.
   const { sdkQuery } = require('../lib/llm');
-  const contentBundleSchema = require('../lib/schemas/content-bundle.schema.json');
 
   // Verify session data exists before doing any work. The probe needs a real
   // session's inputs to build a representative prompt; failing fast with a
@@ -247,7 +247,7 @@ async function main() {
   const session = loadSession(DATA_DIR);
   console.log(`Loaded: ${session.tokens.length} tokens, ${session.paperEvidence.length} paper items, roster=${session.sessionConfig.roster.length}`);
 
-  const { systemPrompt, userPrompt, evidenceBundle } = await buildProbePrompt({ sessionId: SESSION_ID, ...session });
+  const { systemPrompt, userPrompt, evidenceBundle, jsonSchema } = await buildProbePrompt({ sessionId: SESSION_ID, ...session });
   console.log(`Record: ${evidenceBundle.exposed.paperEvidence.length} paper documents and ` +
     `${evidenceBundle.exposed.tokens.length} memory tokens`);
 
@@ -261,7 +261,7 @@ async function main() {
       prompt: userPrompt,
       systemPrompt,
       model: 'opus',
-      jsonSchema: contentBundleSchema,
+      jsonSchema,
       disableTools: true,
       label: 'phase-3-channel-probe',
       onProgress: (msg) => {

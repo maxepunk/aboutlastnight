@@ -191,7 +191,15 @@ describe.each(['remote', 'on-site'])('the journalist outline and article calls, 
     expect(renders['outline reworker'].systemPrompt.startsWith(`${renders['outline writer'].systemPrompt}\n\n`)).toBe(true);
     expect(renders['article reworker'].systemPrompt.startsWith(`${renders['article writer'].systemPrompt}\n\n`)).toBe(true);
     expect(renders['outline reworker'].prompt.startsWith(writerUser('outline writer'))).toBe(true);
-    expect(renders['article reworker'].prompt.startsWith(writerUser('article writer'))).toBe(true);
+    // Phase 18, run 2b (R23): a send-back that carries the director's edits prints the schema its
+    // call is given, the writer's with the changed-edits field, where the writer prints its own.
+    const { WRITER_BUNDLE_SCHEMA } = require('../prompt-builder');
+    const { reworkSchemaWithChangedEdits } = require('../workflow/nodes/ai-nodes');
+    const sendBackSchema = JSON.stringify(reworkSchemaWithChangedEdits(WRITER_BUNDLE_SCHEMA), null, 2);
+    const articleRework = renders['article reworker'].prompt;
+    expect(articleRework.split(sendBackSchema)).toHaveLength(2);
+    expect(articleRework.replace(sendBackSchema, () => JSON.stringify(WRITER_BUNDLE_SCHEMA, null, 2))
+      .startsWith(writerUser('article writer'))).toBe(true);
   });
 
   it.each(Object.keys(CALL_OF))('%s: no removed phrase, gendered Nova included, in the instruction text', (name) => {

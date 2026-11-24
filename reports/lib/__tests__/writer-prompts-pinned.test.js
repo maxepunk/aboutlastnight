@@ -530,10 +530,19 @@ const REPO = path.join(__dirname, '..', '..');
  *   (-293), and its top description is cut to its first sentence (-213): outline-journalist
  *   24945 -> 24086 (-859). The article and arc pins do not move.
 
+ * - Phase 18, run 2b, slice H (R19, R20, R22, R23, R24), what the article writer is handed. The
+ *   settled weave prints no evidence under its threads, and its intro's sentence on the threads
+ *   ends at their order (-436); <STORY_MAP> prints no beat's kind and each left-out beat by its id
+ *   and title alone (mapAsShown; -540); the system prompt's roster drops the character context
+ *   (-262); the schema printed in <SCHEMA>, the one the SDK is given, also loses the revision
+ *   history, the metadata's version and story date and the byline's location and date
+ *   (WRITER_BUNDLE_SCHEMA; -935); the task's two tags take backticks (+4); and <job-article> comes
+ *   before <brief> (0): article-journalist 29870 -> 27701 (-2169). The outline and arc pins do not
+ *   move.
  */
 const PINNED = {
   'outline-journalist': ['41cac07053d52d3e84c2e154e824cf1bf4851d30fc66816f66e74d7ee1249dc3', 24086],
-  'article-journalist': ['9d8b249b785b8a12ae3e9086f33f79b5be5cb83c4214ae1ced4cb2385281cbae', 29870],
+  'article-journalist': ['26009a56d885912e8f213ce304c2cde938e367ed316c00c59fcf5b8d20f80d15', 27701],
   'arcs-journalist': ['f4a41d22d34070ebfc5006510a8e87e6fb8be18f669cb79df50badf1c017dc5c', 12633]
 };
 

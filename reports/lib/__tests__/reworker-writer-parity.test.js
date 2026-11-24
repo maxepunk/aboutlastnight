@@ -184,6 +184,19 @@ describe('journalist article stop', () => {
   const EDITED = (() => { const b = clone(PREVIOUS_BUNDLE); b.headline.main = 'Hand-edited headline'; return b; })();
   const NOTE = 'Put the test before the sale.';
 
+  /**
+   * Phase 18, run 2b (R23): a send-back that carries the director's edits prints the schema its
+   * call is given, the writer's with the changed-edits field, in its <SCHEMA>. The rework's
+   * prompt with the writer's schema printed in that place is the writer's sections, byte for byte.
+   */
+  const { WRITER_BUNDLE_SCHEMA } = require('../prompt-builder');
+  const { reworkSchemaWithChangedEdits } = require('../workflow/nodes/ai-nodes');
+  function withWriterSchema(prompt) {
+    const sendBackSchema = JSON.stringify(reworkSchemaWithChangedEdits(WRITER_BUNDLE_SCHEMA), null, 2);
+    expect(prompt.split(sendBackSchema)).toHaveLength(2);
+    return prompt.replace(sendBackSchema, () => JSON.stringify(WRITER_BUNDLE_SCHEMA, null, 2));
+  }
+
   async function writerAndRework(reworkOverrides) {
     const state = { ...reworkFixtureState(theme), heroImage: 'hero.jpg' };
     const writerSdk = recordingSdk(PREVIOUS_BUNDLE);
@@ -205,7 +218,7 @@ describe('journalist article stop', () => {
 
   it('the reworker carries every section of its writer, then the revision block, then <DIRECTOR_GUIDANCE> last', async () => {
     const { writer, rework } = await writerAndRework(SEND_BACK);
-    expectWriterSectionsFirst(writer.user, rework.user, '## REVISION CONTEXT\n');
+    expectWriterSectionsFirst(writer.user, withWriterSchema(rework.user), '## REVISION CONTEXT\n');
     expectOneRecordAndGuidanceLast(rework.user);
 
     // The writer's rules and schema replace the reworker's own smaller copies.

@@ -415,7 +415,8 @@ describe('4.12c: one round rule everywhere: the trace\'s round and the reworks\'
     expect(ai).not.toMatch(COPY);
     expect(body(arc, 'function arcReworkCall(')).toMatch(/round: stopRoundOf\(/);
     expect(body(ai, 'async function mapReworkCall(')).toMatch(/round: stopRoundOf\(/);
-    expect(body(ai, 'async function reviseContentBundle(')).toMatch(/round: stopRoundOf\(/);
+    // Phase 18, run 2b: the article's rework call is built in one place, as the map's is.
+    expect(body(ai, 'async function articleReworkCall(')).toMatch(/round: stopRoundOf\(/);
   });
 
   it('the rounds they give are the stop\'s: the trace a stop shows, the trace a pass writes, and the round a send-back\'s banner names', async () => {

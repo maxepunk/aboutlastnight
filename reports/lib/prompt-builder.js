@@ -10,7 +10,7 @@ const { renderDirectorEnrichmentBlock, directorTensionSentences } = require('./p
 const { renderRecordView, DOCUMENT_POINTER } = require('./prompt-renderers/record-view');
 const { withSessionClock } = require('./prompt-renderers/session-clock');
 const { DERIVED_LABELS } = require('./prompt-renderers/derived-labels');
-const { renderSessionFactsVerdict, renderPhotoListEntry } = require('./prompt-renderers/director-words-renderer');
+const { renderSessionFactsVerdict, renderPhotoListEntry, photoKey } = require('./prompt-renderers/director-words-renderer');
 const contentBundleSchema = require('./schemas/content-bundle.schema.json');
 // Phase 4 (brief 4.6): the map writer embeds the map's schema for its theme as its
 // <SCHEMA> (fix 3.2b), the one the SDK channel enforces (ai-nodes.js), as the article
@@ -464,8 +464,8 @@ function systemPromptOpening(theme, call, sessionConfig) {
  * map carries it, a move with its people, the threads it carries and its evidence underneath, each
  * piece with its sources (each named source with what it holds, lib/evidence.js SOURCES_GLOSS,
  * the gloss the weave writer's Sources line prints), what it shows and its stance, and the card
- * as a marker on the beat with its document on the piece flagged "card". The beat's `kind` stays
- * unnamed, a hint the JSON carries.
+ * as a marker on the beat with its document on the piece flagged "card". The beat's `kind` is not
+ * printed (mapAsShown; phase 18, run 2b, R20).
  * Phase 4b, piece 4 (spec 2026-10-07 sections 3 and 9; R1): the line names the beat's "synopsis",
  * the one sentence saying what the article tells there, which the article writer tells in its own
  * words. A map from before piece 4, and a move the director added, may carry none, so the line
@@ -523,7 +523,8 @@ function mapCardsLine(map, evidenceBundle = null) {
  *
  * Phase 18 (the brief-and-the-limits spec, sections 3 and 7; the phase 18 read's part 2): the
  * task points at the brief (<brief>) and the writer's own part (<job-article>) by their tags,
- * which print below it, and repeats neither. It cites no rule by number. It names this call's
+ * which print below it, and repeats neither. Run 2b: each tag in backticks, as mapTask names
+ * <job-map> (the integrator's ruling after run 2). It cites no rule by number. It names this call's
  * decisions: the beats, the sections' order, the headings, the photos' places, the headline and
  * the deck, and the length. How the writer tells a beat, with or without evidence, how it prints
  * a card, and its words, transitions and voice are its own part's to say.
@@ -542,8 +543,9 @@ function mapCardsLine(map, evidenceBundle = null) {
  * (briefs 4.7e and 4.7f): the director's edits first, as HAND_EDITS gives them; otherwise every
  * beat in the map's sections, and no other, in the map's order (piece 4, R2: the order is the
  * map's). The map keeps the beat of a card the director deleted at the desk (only a deleted
- * photo leaves it, through the leave-out list), its leftOut lists material a paragraph the
- * director inserts may use, and code does not restore a send-back's rework, so the edits come
+ * photo leaves it, through the leave-out list), its leftOut names beats whose material, in the
+ * record, a paragraph the director inserts may use (the writer sees a left-out beat by its id and
+ * title: mapAsShown), and code does not restore a send-back's rework, so the edits come
  * first. The rule for those edits, with its send-back exception, is stated in <HAND_EDITS> alone
  * (node-helpers.js buildRevisionContext), and these lines restate neither: 4.7e's restated the
  * rule, a cut staying out among it, without the exception, so a send-back whose note asked for
@@ -561,7 +563,7 @@ function mapCardsLine(map, evidenceBundle = null) {
  * "<HAND_EDITS>" it meets (lib/__tests__/fixtures/removed-phrases.js instructionText), so a
  * bracketed name here would hide every line between the task and the block from it.
  */
-const ARTICLE_TASK = `Write the article. The weave above is the story the director settled at the meeting, and the story map lays it across the article's sections as the director left it at the map's stop. <brief> below says what the article has to be, and <job-article> says what is yours to decide. For this article:
+const ARTICLE_TASK = `Write the article. The weave above is the story the director settled at the meeting, and the story map lays it across the article's sections as the director left it at the map's stop. \`<brief>\` below says what the article has to be, and \`<job-article>\` says what is yours to decide. For this article:
 - the beats: the director's edits first, as HAND_EDITS gives them; otherwise every beat in the map's sections, and no other, so the beats under leftOut, the director's strikes among them, stay out of the article;
 - the map's sections in its order; the director's edits first, as HAND_EDITS gives them; otherwise each section holds its beats in the map's order;
 - each section's heading: the director's own where the director has edited one, otherwise the map's, as written;
@@ -570,60 +572,243 @@ const ARTICLE_TASK = `Write the article. The weave above is the story the direct
 - the length: about the map's expected length.`;
 
 /**
- * The ContentBundle schema's properties the article writer is not shown (phase 18, R13; the
- * phase 18 read's part 5b), each as [where it sits, the object schema that holds it, its name]:
- * the fields the writer does not write. The top-level money tracker, which prints itself
- * from the ledger; the top-level photos, pull quotes and voice self-check, which nothing prints;
- * a sidebar entry's owner, placement and content, which the sidebar does not print (the article
- * stop's sidebar editor writes the owner); and the characters of a photo block and of the hero
- * image. The schema keeps each as optional, for the SDK, the validator, the template and the
- * desk's editors.
+ * The places in a ContentBundle where a field the article writer is not shown sits (phase 18,
+ * run 2b, R23), each with:
+ * - `where`, for an error;
+ * - `schemaOf`, the object schema that holds the field in the ContentBundle schema;
+ * - `objectsOf`, the objects in a bundle the field sits on;
+ * - `keyOf`, what pairs an object of the previous article with one of the reworked article in
+ *   the carry (carryUnshownFields): a sidebar entry by its document id, a photo block and the top
+ *   photo by filename (photoKey, the one rule for a photo's name), and the bundle, its metadata
+ *   and its byline each with the other's.
  */
-const UNPRINTED_BUNDLE_FIELDS = [
-  ['the bundle', (schema) => schema, 'financialTracker'],
-  ['the bundle', (schema) => schema, 'photos'],
-  ['the bundle', (schema) => schema, 'pullQuotes'],
-  ['the bundle', (schema) => schema, 'voice_self_check'],
-  ['a sidebar entry', (schema) => schema.properties?.evidenceCards?.items, 'owner'],
-  ['a sidebar entry', (schema) => schema.properties?.evidenceCards?.items, 'placement'],
-  ['a sidebar entry', (schema) => schema.properties?.evidenceCards?.items, 'content'],
-  ['a photo block', (schema) => (schema.properties?.sections?.items?.properties?.content?.items?.oneOf || [])
-    .find((branch) => branch?.properties?.type?.const === 'photo'), 'characters'],
-  ['the hero image', (schema) => schema.properties?.heroImage, 'characters']
-];
+const BUNDLE_PLACES = Object.freeze({
+  bundle: {
+    where: 'the bundle',
+    schemaOf: (schema) => schema,
+    objectsOf: (bundle) => [bundle],
+    keyOf: () => 'bundle'
+  },
+  metadata: {
+    where: "the bundle's metadata",
+    schemaOf: (schema) => schema.properties?.metadata,
+    objectsOf: (bundle) => [bundle.metadata],
+    keyOf: () => 'metadata'
+  },
+  byline: {
+    where: 'the byline',
+    schemaOf: (schema) => schema.properties?.byline,
+    objectsOf: (bundle) => [bundle.byline],
+    keyOf: () => 'byline'
+  },
+  sidebarEntry: {
+    where: 'a sidebar entry',
+    schemaOf: (schema) => schema.properties?.evidenceCards?.items,
+    objectsOf: (bundle) => (Array.isArray(bundle.evidenceCards) ? bundle.evidenceCards : []),
+    keyOf: (entry) => (typeof entry.tokenId === 'string' ? entry.tokenId.trim() : '')
+  },
+  photoBlock: {
+    where: 'a photo block',
+    schemaOf: (schema) => (schema.properties?.sections?.items?.properties?.content?.items?.oneOf || [])
+      .find((branch) => branch?.properties?.type?.const === 'photo'),
+    objectsOf: (bundle) => (Array.isArray(bundle.sections) ? bundle.sections : [])
+      .flatMap((section) => (section && Array.isArray(section.content) ? section.content : []))
+      .filter((block) => block && block.type === 'photo'),
+    keyOf: (block) => photoKey(block.filename)
+  },
+  heroImage: {
+    where: 'the hero image',
+    schemaOf: (schema) => schema.properties?.heroImage,
+    objectsOf: (bundle) => [bundle.heroImage],
+    keyOf: (hero) => photoKey(hero.filename)
+  }
+});
 
 /**
- * The schema the article writer is shown in <SCHEMA> (phase 18, R13): the full ContentBundle
- * schema with UNPRINTED_BUNDLE_FIELDS removed, derived here so the two cannot drift. A pure
- * function: it returns a copy and leaves `schema` as it is. The SDK call (ai-nodes.js), the
- * validator (schema-validator.js) and the template read the full schema, so a bundle that holds
- * a removed field still validates.
+ * Every field of the ContentBundle the article writer is not shown, each as [its place in
+ * BUNDLE_PLACES, its name] (phase 18, R13; run 2b, R23): every field the generation
+ * instruction's six items do not name. The one list the writer's schema (writerBundleSchemaOf),
+ * the previous article a rework is shown (bundleAsShown) and the carry (carryUnshownFields) read.
+ *
+ * - The bundle's money tracker, which the page prints from the ledger; its top-level photos, pull
+ *   quotes and voice self-check, which nothing prints; and its revision history, which the server
+ *   writes after each rework.
+ * - The metadata's version and story date: the server stamps the story date.
+ * - The byline's location and date, which the page does not print.
+ * - A sidebar entry's owner, placement and content, which the sidebar does not print (the article
+ *   stop's sidebar editor writes the owner).
+ * - The characters of a photo block and of the hero image.
+ *
+ * The full schema keeps each as optional, for the validator, the template, the desk and the stored
+ * bundle.
+ */
+const UNSHOWN_BUNDLE_FIELDS = Object.freeze([
+  ['bundle', 'financialTracker'],
+  ['bundle', 'photos'],
+  ['bundle', 'pullQuotes'],
+  ['bundle', 'voice_self_check'],
+  ['bundle', '_revisionHistory'],
+  ['metadata', 'version'],
+  ['metadata', 'storyDate'],
+  ['byline', 'location'],
+  ['byline', 'date'],
+  ['sidebarEntry', 'owner'],
+  ['sidebarEntry', 'placement'],
+  ['sidebarEntry', 'content'],
+  ['photoBlock', 'characters'],
+  ['heroImage', 'characters']
+].map((entry) => Object.freeze(entry)));
+
+/** A plain object: not null, not an array. */
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+/** The names UNSHOWN_BUNDLE_FIELDS lists at one place. */
+function unshownNamesAt(place) {
+  return UNSHOWN_BUNDLE_FIELDS.filter(([at]) => at === place).map(([, name]) => name);
+}
+
+/**
+ * The article writer's schema (phase 18, R13; run 2b, R23): the full ContentBundle schema less
+ * UNSHOWN_BUNDLE_FIELDS, derived here so the two cannot drift. It is the schema printed in the
+ * writer's <SCHEMA> and the schema the SDK is given for the article call and its rework (ai-nodes.js
+ * generateContentBundle, articleReworkCall), so the printed copy and the tool always agree. A
+ * pure function: it returns a copy and leaves `schema` as it is. The validator (schema-validator.js)
+ * and the template read the full schema, so a stored bundle that holds a field left out here still
+ * validates.
  *
  * It fails loud, naming the field, when a field it removes is missing from `schema` (the schema
  * changed and the list did not follow) or is required where it sits (a required field the writer
- * is not shown would fail every bundle). No property removed is the target of a "$ref", since
- * the schema holds none, so the copy stays valid JSON Schema.
+ * cannot write would fail every bundle). No property removed is the target of a "$ref", since the
+ * schema holds none, so the copy stays valid JSON Schema. It adds no keyword, so the SDK's
+ * sanitizing (lib/llm/client.js sanitizeSchemaForSdk) treats it as it treats the full schema.
  *
  * @param {Object} schema - the full ContentBundle schema
- * @returns {Object} the printed schema
+ * @returns {Object} the writer's schema
  */
-function printedBundleSchemaOf(schema) {
-  const printed = JSON.parse(JSON.stringify(schema));
-  UNPRINTED_BUNDLE_FIELDS.forEach(([where, objectOf, name]) => {
-    const object = objectOf(printed);
+function writerBundleSchemaOf(schema) {
+  const trimmed = JSON.parse(JSON.stringify(schema));
+  UNSHOWN_BUNDLE_FIELDS.forEach(([place, name]) => {
+    const { where, schemaOf } = BUNDLE_PLACES[place];
+    const object = schemaOf(trimmed);
     if (!object || !object.properties || !Object.prototype.hasOwnProperty.call(object.properties, name)) {
-      throw new Error(`printedBundleSchemaOf: the ContentBundle schema has no "${name}" on ${where} to leave out of the article writer's <SCHEMA>`);
+      throw new Error(`writerBundleSchemaOf: the ContentBundle schema has no "${name}" on ${where} to leave out of the article writer's schema`);
     }
     if (Array.isArray(object.required) && object.required.includes(name)) {
-      throw new Error(`printedBundleSchemaOf: "${name}" on ${where} is required, so the article writer's <SCHEMA> cannot leave it out`);
+      throw new Error(`writerBundleSchemaOf: "${name}" on ${where} is required, so the article writer's schema cannot leave it out`);
     }
     delete object.properties[name];
   });
-  return printed;
+  return trimmed;
 }
 
-/** The article writer's printed schema, built once at load, so a schema it cannot trim fails the server's start. */
-const PRINTED_BUNDLE_SCHEMA = printedBundleSchemaOf(contentBundleSchema);
+/**
+ * The article writer's schema, built once at load, so a schema it cannot trim fails the server's
+ * start, and the SDK is handed one object (lib/llm/client.js memoizes its sanitized copy by the
+ * object).
+ */
+const WRITER_BUNDLE_SCHEMA = writerBundleSchemaOf(contentBundleSchema);
+
+/**
+ * A ContentBundle as the article writer is shown it (run 2b, R23): a copy less every field in
+ * UNSHOWN_BUNDLE_FIELDS, wherever it sits. What a rework prints as the previous article
+ * (ai-nodes.js articleReworkCall), in the shape the writer writes. The bundle it is given is
+ * untouched; anything that is no object passes through.
+ *
+ * @param {Object} bundle
+ * @returns {Object}
+ */
+function bundleAsShown(bundle) {
+  if (!isPlainObject(bundle)) return bundle;
+  const shown = JSON.parse(JSON.stringify(bundle));
+  Object.entries(BUNDLE_PLACES).forEach(([place, { objectsOf }]) => {
+    const names = unshownNamesAt(place);
+    objectsOf(shown).filter(isPlainObject).forEach((object) => names.forEach((name) => { delete object[name]; }));
+  });
+  return shown;
+}
+
+/**
+ * The fields the article writer is not shown, carried from the previous article into the
+ * reworked one (run 2b, R23): a rework writes into the writer's schema, so it returns none of
+ * them, and the stored bundle keeps each. For each place in BUNDLE_PLACES, an object of the
+ * reworked article is paired with the object of the previous article its key names (a sidebar
+ * entry by its document id, a photo block and the top photo by filename; objects that repeat a
+ * key pair in their order), and each field UNSHOWN_BUNDLE_FIELDS lists there is copied where the
+ * reworked object lacks it. An object the previous article did not hold gets nothing, and a field
+ * the reworked article holds stays as it is.
+ *
+ * It runs in the rework (ai-nodes.js reviseContentBundle) on the call's output, before code puts
+ * back the director's edits (settleEdits) and before validation, so a field the director wrote at
+ * the desk that the writer is not shown, a sidebar entry's owner, survives an automatic pass and a
+ * send-back. A pure function: both articles it is given are untouched, and a reworked article that
+ * is no object passes through.
+ *
+ * @param {Object|null} previous - the article the rework started from, in the full shape
+ * @param {Object|null} reworked - the rework's output, in the writer's shape
+ * @returns {Object|null} a copy of `reworked` with the carried fields
+ */
+function carryUnshownFields(previous, reworked) {
+  if (!isPlainObject(reworked)) return reworked;
+  const out = JSON.parse(JSON.stringify(reworked));
+  if (!isPlainObject(previous)) return out;
+  Object.entries(BUNDLE_PLACES).forEach(([place, { objectsOf, keyOf }]) => {
+    const names = unshownNamesAt(place);
+    const waiting = new Map();
+    objectsOf(previous).filter(isPlainObject).forEach((object) => {
+      const key = keyOf(object);
+      if (key) waiting.set(key, [...(waiting.get(key) || []), object]);
+    });
+    objectsOf(out).filter(isPlainObject).forEach((object) => {
+      const key = keyOf(object);
+      const queue = key ? waiting.get(key) : null;
+      const from = queue && queue.length > 0 ? queue.shift() : null;
+      if (!from) return;
+      names.forEach((name) => {
+        if (object[name] === undefined && from[name] !== undefined) object[name] = JSON.parse(JSON.stringify(from[name]));
+      });
+    });
+  });
+  return out;
+}
+
+/**
+ * The story map as the article writer and its rework are shown it (phase 18, run 2b, R20): a copy
+ * of the map with no beat's `kind`, and each beat under `leftOut` by its id and its title (its
+ * "move") alone. The kind is the retired form of a beat, which pulled the draft toward a scene,
+ * then the evidence; a struck beat's synopsis and evidence would hand back what the director took
+ * out. The map the stop stores, the stamp, the fact check, the judge and the page read the map
+ * whole; this copy is only what <STORY_MAP> prints. The map it is given is untouched; anything
+ * that is no map passes through, and so does a left-out entry that is no object.
+ *
+ * @param {Object|null} map - the map as the article reads it (ai-nodes.js articleMapOf)
+ * @returns {Object|null}
+ */
+function mapAsShown(map) {
+  if (!isPlainObject(map)) return map;
+  const shown = JSON.parse(JSON.stringify(map));
+  const withoutKind = (beat) => {
+    if (!isPlainObject(beat)) return beat;
+    const { kind: _kind, ...rest } = beat;
+    return rest;
+  };
+  if (Array.isArray(shown.sections)) {
+    shown.sections = shown.sections.map((section) => (isPlainObject(section) && Array.isArray(section.beats)
+      ? { ...section, beats: section.beats.map(withoutKind) }
+      : section));
+  }
+  if (Array.isArray(shown.leftOut)) {
+    shown.leftOut = shown.leftOut.map((beat) => {
+      if (!isPlainObject(beat)) return beat;
+      const titled = {};
+      if (beat.id !== undefined) titled.id = beat.id;
+      if (beat.move !== undefined) titled.move = beat.move;
+      return titled;
+    });
+  }
+  return shown;
+}
 
 class PromptBuilder {
   /**
@@ -642,10 +827,13 @@ class PromptBuilder {
    * Returns the roster section string for the current theme/characters/pronouns.
    * Single source of truth for the 4 identical generateRosterSection call sites (CR-7).
    *
+   * @param {Object} [options]
+   * @param {boolean} [options.withCharacterContext=true] - false prints the roster without the
+   *   character context the builder holds (phase 18, run 2b, R22: the article writer's form)
    * @returns {string}
    */
-  _rosterSection() {
-    return generateRosterSection(this.themeName, this.canonicalCharacters, this.characterData,
+  _rosterSection({ withCharacterContext = true } = {}) {
+    return generateRosterSection(this.themeName, this.canonicalCharacters, withCharacterContext ? this.characterData : null,
       this.sessionConfig?.rosterPronouns, this.sessionConfig?.roster, this.sessionConfig?.journalistFirstName);
   }
 
@@ -942,7 +1130,8 @@ ${loadRuleSet('outline', { theme: this.themeName }).craft}`;
    * @param {Object|null} directorNotes - Director observations for article grounding
    * @param {Object|null} narrativeTensions - Programmatic contradictions from surfaceContradictions node
    * @param {Object} options - { gateNotes, evidenceBundle, directorCorrections, photoDescriptions,
-   *   photos }
+   *   photos, schema }: `schema` is the one the call is given, printed in <SCHEMA>; the writer's
+   *   (WRITER_BUNDLE_SCHEMA) when absent
    * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
    */
   async buildArticlePrompt(settledWeave, map, shellAccounts = [], sessionFacts = null, directorNotes = null, narrativeTensions = null, options = {}) {
@@ -964,6 +1153,11 @@ ${loadRuleSet('outline', { theme: this.themeName }).craft}`;
    * 3, 3.2: the integrator's placement ruling). The roster prints here alone (M20: the user
    * prompt's <RULES> carried a second copy).
    *
+   * Phase 18, run 2b (R22): the roster without the character context, the model's digest of the
+   * documents. The article writer has the documents themselves in the record, and the digest
+   * carried the documents' pronouns, which the roster overrides. The judges' roster keeps it
+   * (evaluator-nodes.js renderJudgeRosterSection).
+   *
    * @returns {Promise<string>}
    * @throws {Error} for a theme with no story map (lib/map.js mapSchemaFor), such as the
    *   parked detective (R1): the article writer writes from the map, and the article
@@ -974,7 +1168,7 @@ ${loadRuleSet('outline', { theme: this.themeName }).craft}`;
     mapSchemaFor(this.themeName);
     return `${systemPromptOpening(this.themeName, 'article', this.sessionConfig)}
 
-${this._rosterSection()}`;
+${this._rosterSection({ withCharacterContext: false })}`;
   }
 
   /**
@@ -1030,11 +1224,18 @@ ${this._rosterSection()}`;
    *
    * The instruction asks only for the fields the article prints. The schema keeps
    * the rest as optional (HY1, the integrator's ruling): the article stop's sidebar
-   * editor writes a sidebar entry's owner. Phase 18 (R13): the schema printed in <SCHEMA>
-   * is the full one without those fields (printedBundleSchemaOf), so the instruction no
-   * longer lists them to leave out; the SDK is given the full schema. The money tracker prints itself from the ledger (M2). An
-   * evidence reference is described as the template prints it, a caption naming a
-   * document (M1).
+   * editor writes a sidebar entry's owner. Phase 18 (R13; run 2b, R23): the schema printed in
+   * <SCHEMA> is the writer's (WRITER_BUNDLE_SCHEMA: the full one less every field the
+   * instruction's six items do not name), and it is the schema the SDK is given for the call, so
+   * the instruction lists no field to leave out. A rework passes the schema its call is given in
+   * options.schema (ai-nodes.js articleReworkCall: with the changed-edits field on a send-back
+   * that carries the director's edits), so the copy it prints is the tool's. The money tracker
+   * prints itself from the ledger (M2). An evidence reference is described as the template
+   * prints it, a caption naming a document (M1).
+   *
+   * Phase 18, run 2b (R20): <STORY_MAP> prints the map as the writer is shown it (mapAsShown):
+   * no beat's kind, and each left-out beat by its id and title. The cards line, the top photo
+   * and the photos read the map they are given, whole.
    *
    * Phase 3 (3.9; T13, the integrator's ruling): the article places every photo the
    * director has not excluded, so the writer is given every kept photo
@@ -1093,7 +1294,7 @@ ${tensions.map(sentence => `- ${sentence}`).join('\n')}
 
 <${STORY_MAP_TAG}>
 ${STORY_MAP_LABEL}
-${JSON.stringify(map, null, 2)}
+${JSON.stringify(mapAsShown(map), null, 2)}
 </${STORY_MAP_TAG}>
 
 ${ARTICLE_TASK}
@@ -1134,7 +1335,7 @@ These are the fields the article prints, and the money tracker prints itself fro
 The ContentBundle's shape: field names, types, enum values and required fields.
 
 \`\`\`json
-${JSON.stringify(PRINTED_BUNDLE_SCHEMA, null, 2)}
+${JSON.stringify(options.schema || WRITER_BUNDLE_SCHEMA, null, 2)}
 \`\`\`
 </SCHEMA>
 </GENERATION_INSTRUCTION>
@@ -1207,8 +1408,16 @@ module.exports = {
   buildDirectorGuidanceSection,
   // Brief 4.7b: the tag the article writer prints the story map in
   STORY_MAP_TAG,
-  // Phase 18 (R13): the schema the article writer is shown, from the full one
-  printedBundleSchemaOf,
+  // Phase 18, run 2b (R23): the article writer's one shape, from the full schema by one list:
+  // the schema printed and given to the SDK, the previous article a rework is shown, and the
+  // carry of the fields the writer is not shown into a reworked article
+  UNSHOWN_BUNDLE_FIELDS,
+  writerBundleSchemaOf,
+  WRITER_BUNDLE_SCHEMA,
+  bundleAsShown,
+  carryUnshownFields,
+  // Run 2b (R20): the story map as the article writer is shown it
+  mapAsShown,
   filterGateNotes,
   buildReportingModeBlock,
   // Brief 4.13b: the opening of every writer's and judge's system prompt, which the weave

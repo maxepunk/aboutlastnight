@@ -27,16 +27,20 @@ const { CHECKPOINT_TYPES } = require('../checkpoint-helpers');
 // classifier the nodes' retry policy reads too (graph.js LLM_RETRY).
 const { isTransientError } = require('../../llm/retry');
 const { SchemaValidator } = require('../../schema-validator');
+// Phase 18, run 2b (R23): the article writer's one shape, the previous article as it is shown,
+// and the carry of the fields it is not shown into a reworked article.
 const {
   createPromptBuilder,
   buildDirectorGuidanceSection,
-  filterGateNotes
+  filterGateNotes,
+  WRITER_BUNDLE_SCHEMA,
+  bundleAsShown,
+  carryUnshownFields
 } = require('../../prompt-builder');
 const {
   carriedEdits, settleEdits, standingAfterSendBack, SEND_BACK_PASS, CHANGED_EDITS_KEY, MAP_TOP_PHOTO, isCut, sessionPhotoNames,
   standingAfterPass
 } = require('../../hand-edit-diff');
-const contentBundleSchema = require('../../schemas/content-bundle.schema.json');
 // Phase 4 (brief 4.6): the map's schema for the theme (its slots), and the hero its top
 // photo names; the settled weave, which the map writer reads first, as its task. Phase 17, fix
 // wave 3: the one rule that holds the map's headline, and the settled angle whose headline the
@@ -1659,8 +1663,10 @@ function articleMapOf(state) {
  *
  * Brief 4.7b (spec 6.1): the settled weave first (settledWeaveOf, 4.5's renderer), then the
  * map as the article reads it (articleMapOf), where the approved outline was passed until
- * phase 4. The arc selection's guidance (`_outlineGuidance`) went with its last readers,
- * the writer and its rework (R4).
+ * phase 4. Phase 18, run 2b (R19): the settled weave without the evidence under its threads,
+ * since the map holds the evidence the map writer chose for each beat; the builder prints the
+ * map as the writer is shown it (prompt-builder.js mapAsShown, R20). The arc selection's
+ * guidance (`_outlineGuidance`) went with its last readers, the writer and its rework (R4).
  *
  * Phase 3 (3.9; T13, the integrator's ruling): `options.photos` is every photo the
  * article places, every session photo less the photos the director excluded: the hero
@@ -1695,7 +1701,7 @@ function articleWriterInputs(state) {
     ...buildAvailablePhotos(state, heroImage, whiteboardFilenameOf(state))
   ];
   return [
-    settledWeaveOf(state),
+    settledWeaveOf(state, { withEvidence: false }),
     map,
     state.shellAccounts || [],  // Deterministic shell account data for financial summary
     // Session facts for the non-roster character guardrail (RC3) and the verdict (brief 2.2)
@@ -1719,14 +1725,15 @@ function articleWriterInputs(state) {
  * built from the writer's own inputs (articleWriterInputs: the settled weave, the map as
  * the article reads it, the money, the session facts, the director's notes, the narrative
  * tensions, and the standing notes, the record, the input-review corrections, the photo
- * descriptions and the photos it places), its output held to the content bundle's schema.
+ * descriptions and the photos it places), its output held to the article writer's schema, the one
+ * its prompt prints (prompt-builder.js WRITER_BUNDLE_SCHEMA; phase 18, run 2b, R23).
  * Code stamps the map's headline, deck and top photo into the draft (stampFromMap; R7). A
  * thread that already holds a bundle (a resume) passes through with no call.
  *
  * @param {Object} state - the writer's inputs, and the director's standing edits on the map,
  *   which the stamp reads
  * @param {Object} config - Graph config: the SDK client, the PromptBuilder and an optional
- *   configurable.contentBundleSchema
+ *   configurable.contentBundleSchema, which tests pass in the writer's schema's place
  * @returns {Object} the stamped draft (contentBundle), the director's lines the stamp
  *   records as the article stop's standing edits (_articleHandEdits, null when the map
  *   carries none of them), and currentPhase; currentPhase alone when a bundle is in hand
@@ -1750,7 +1757,7 @@ async function generateContentBundle(state, config) {
     prompt: userPrompt,
     systemPrompt,
     model: 'opus',
-    jsonSchema: config?.configurable?.contentBundleSchema || contentBundleSchema,
+    jsonSchema: config?.configurable?.contentBundleSchema || WRITER_BUNDLE_SCHEMA,
     disableTools: true
   });
 
@@ -1958,48 +1965,29 @@ async function reviseContentBundle(state, config) {
     // rejection instead of this node's failure path (task 4.14e: articleReworkFailed), which
     // keeps the article the rework started from and leaves the run resumable.
 
-    // Spec 2026-09-19 §4.3: the director's edits ride along on EVERY pass of the round.
-    // This node never clears them; the gate does, on approve. F1 (spec 2026-10-02
-    // section 7): the edits the version this pass starts from carries, by id.
-    const handEdits = carriedEdits(state._articleHandEdits, previousContentBundle);
-    const sendBack = Boolean(state._articleFeedback);
+    const call = await articleReworkCall(state, promptBuilder);
+    const handEdits = call.edits;
+    const sendBack = call.sendBack;
 
-    // Build revision context using centralized helper (DRY)
-    const { contextSection, previousOutputSection } = buildRevisionContextDRY({
-      phase: 'article',
-      revisionCount,
-      // Brief 2.3: a send back's banner names the round it opens, as the stop shows it (task
-      // 4.12c: the stop's round, the one rule).
-      round: stopRoundOf(CHECKPOINT_TYPES.ARTICLE, state),
-      validationResults: state.validationResults,
-      previousOutput: previousContentBundle,
-      humanFeedback: state._articleFeedback || null,
-      handEdits
-    });
-
-    // Spec §5.3 [I10]: the note being acted on is already in the prompt as HUMAN
-    // FEEDBACK; on an evaluator-driven pass the slot is null and nothing is excluded.
-    // The gate narrows the match to THIS stop's rejection note (phase 1 brief 1.1):
-    // an approval note reusing the same sentence must survive.
-    const gateNotes = filterGateNotes(state.directorGateNotes, state._articleFeedback, 'article');
-
-    const revisionPrompt = await buildArticleRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes);
-    const systemPrompt = await buildArticleRevisionSystemPrompt(promptBuilder);
-
-    // The full schema (Fix 3). F1: a send-back that carries the director's edits returns
-    // the edits it changed, through a schema built from the stored one; the list is taken
-    // out before storing.
-    const { output: revised, reasons } = takeChangedEdits(await sdk({
-      prompt: revisionPrompt,
-      systemPrompt,
+    // F1: a send-back that carries the director's edits returns the edits it changed, through
+    // the writer's schema with the changed-edits field; the list is taken out before storing.
+    const { output: returned, reasons } = takeChangedEdits(await sdk({
+      prompt: call.prompt,
+      systemPrompt: call.systemPrompt,
       model: 'opus',  // Commit 8.25: Upgraded from sonnet for quality
       disableTools: true,
-      jsonSchema: sendBack && handEdits.length > 0 ? reworkSchemaWithChangedEdits(contentBundleSchema) : contentBundleSchema,
-      label: `Article revision ${revisionCount}`
+      jsonSchema: call.jsonSchema,
+      label: call.label
     }));
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log(`[reviseContentBundle] Complete in ${duration}s`);
+
+    // Phase 18, run 2b (R23): the rework wrote into the writer's schema, so code carries each
+    // field the writer is not shown from the article the rework started from (a sidebar entry's
+    // owner the director wrote at the desk among them), before the director's edits are put back
+    // and before the bundle is stored and validated.
+    const revised = returned ? carryUnshownFields(previousContentBundle, returned) : returned;
 
     // FA (spec 2026-10-02 section 7): after an automatic pass, code puts back any of the
     // director's edits the pass changed, field by field; a send-back's rework is left as
@@ -2197,6 +2185,61 @@ async function buildArticleRevisionSystemPrompt(promptBuilder) {
 }
 
 /**
+ * The article's rework call, the one place it is built (phase 18, run 2b), as the map's is
+ * (mapReworkCall): reviseContentBundle sends it, and scripts/render-prompts.js renders it. From
+ * the article the rework starts from (`_previousContentBundle`), the director's standing edits it
+ * carries, the evaluation or the director's note, the round, and the standing notes without the
+ * note being acted on.
+ *
+ * R23: one shape. The call's schema is the article writer's (prompt-builder.js
+ * WRITER_BUNDLE_SCHEMA), with the changed-edits field on a send-back that carries the director's
+ * edits (reworkSchemaWithChangedEdits), and the prompt's <SCHEMA> prints that same object, so the
+ * printed copy and the tool agree. The previous article prints in the writer's shape
+ * (bundleAsShown), while the revision context reads it whole, so <HAND_EDITS> still lists an edit
+ * the director made to a field the writer is not shown, and no finding located in the director's
+ * text reaches the rework.
+ *
+ * @param {Object} state
+ * @param {Object} promptBuilder - the PromptBuilder the writer used
+ * @returns {Promise<{prompt: string, systemPrompt: string, jsonSchema: Object, edits: Object[],
+ *   before: Object, sendBack: boolean, label: string}>}
+ */
+async function articleReworkCall(state, promptBuilder) {
+  const revisionCount = state.articleRevisionCount || 0;
+  const before = state._previousContentBundle;
+  // Spec 2026-09-19 §4.3: the director's edits ride along on EVERY pass of the round.
+  // This node never clears them; the gate does, on approve. F1 (spec 2026-10-02
+  // section 7): the edits the version this pass starts from carries, by id.
+  const edits = carriedEdits(state._articleHandEdits, before);
+  const sendBack = Boolean(state._articleFeedback);
+  const contextOptions = {
+    phase: 'article',
+    revisionCount,
+    // Brief 2.3: a send back's banner names the round it opens, as the stop shows it (task
+    // 4.12c: the stop's round, the one rule).
+    round: stopRoundOf(CHECKPOINT_TYPES.ARTICLE, state),
+    validationResults: state.validationResults,
+    previousOutput: before,
+    humanFeedback: state._articleFeedback || null,
+    handEdits: edits
+  };
+  // Build revision context using centralized helper (DRY), from the article whole.
+  const { contextSection } = buildRevisionContextDRY(contextOptions);
+  // R23: the previous article as the writer is shown it, in the context's own frame.
+  const { previousOutputSection } = buildRevisionContextDRY({ ...contextOptions, previousOutput: bundleAsShown(before) });
+
+  // Spec §5.3 [I10]: the note being acted on is already in the prompt as HUMAN
+  // FEEDBACK; on an evaluator-driven pass the slot is null and nothing is excluded.
+  // The gate narrows the match to THIS stop's rejection note (phase 1 brief 1.1):
+  // an approval note reusing the same sentence must survive.
+  const gateNotes = filterGateNotes(state.directorGateNotes, state._articleFeedback, 'article');
+  const jsonSchema = sendBack && edits.length > 0 ? reworkSchemaWithChangedEdits(WRITER_BUNDLE_SCHEMA) : WRITER_BUNDLE_SCHEMA;
+  const prompt = await buildArticleRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes, jsonSchema);
+  const systemPrompt = await buildArticleRevisionSystemPrompt(promptBuilder);
+  return { prompt, systemPrompt, jsonSchema, edits, before, sendBack, label: `Article revision ${revisionCount}` };
+}
+
+/**
  * Build revision prompt for article with full context
  *
  * Phase 2 (2.3): the article writer's user prompt (every section but its
@@ -2218,12 +2261,16 @@ async function buildArticleRevisionSystemPrompt(promptBuilder) {
  * @param {string} previousOutputSection - Formatted previous output
  * @param {Object} promptBuilder - the PromptBuilder the writer used
  * @param {Array} [gateNotes] - Standing director notes, already filtered (spec §5.3)
+ * @param {Object} [schema] - the schema the call is given, which the writer's sections print in
+ *   <SCHEMA> (phase 18, run 2b, R23; articleReworkCall); the writer's when absent
  * @returns {Promise<string>} Complete revision prompt
  * @throws {Error} when one of the writer's craft files did not load
  */
-async function buildArticleRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes = []) {
+async function buildArticleRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes = [], schema = null) {
   await promptBuilder.requirePhasePrompts('articleGeneration');
-  const writerSections = await promptBuilder.buildArticleUserSections(...articleWriterInputs(state));
+  const inputs = articleWriterInputs(state);
+  if (schema) inputs[inputs.length - 1] = { ...inputs[inputs.length - 1], schema };
+  const writerSections = await promptBuilder.buildArticleUserSections(...inputs);
   const guidanceSection = buildDirectorGuidanceSection(gateNotes);
   return `${writerSections}
 
@@ -2377,6 +2424,8 @@ module.exports = {
     buildArticleRevisionPrompt,
     // Brief 4.6: the map's rework call, which scripts/render-prompts.js renders
     mapReworkCall,
+    // Phase 18, run 2b: the article's rework call, which scripts/render-prompts.js renders too
+    articleReworkCall,
     // Brief 2.3: each reworker is built from its writer's builders and inputs.
     // scripts/render-prompts.js renders the rework system prompts through these.
     buildOutlineRevisionSystemPrompt,

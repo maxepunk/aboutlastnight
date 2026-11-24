@@ -156,6 +156,8 @@ describe('reviseContentBundle', () => {
 // takes the list out before it stores the output, so nothing after the rework meets it.
 describe('the list of changed edits lives only in the rework call (F1)', () => {
   const contentBundleSchema = require('../../../lib/schemas/content-bundle.schema.json');
+  // Phase 18, run 2b (R23): the article call's schema is the writer's, built from the stored one.
+  const { WRITER_BUNDLE_SCHEMA } = require('../../../lib/prompt-builder');
   const outlineSchema = require('../../../lib/schemas/outline.schema.json');
   const BUNDLE = {
     headline: { main: 'The Room Voted', kicker: 'NovaNews', deck: 'Nine players, one verdict' },
@@ -189,22 +191,23 @@ describe('the list of changed edits lives only in the rework call (F1)', () => {
     const sdk = sdkReturning(REWORKED);
     await reviseContentBundle(sendBack(), cfg(sdk));
     const schema = schemaOf(sdk);
-    expect(schema).not.toBe(contentBundleSchema);
+    expect(schema).not.toBe(WRITER_BUNDLE_SCHEMA);
     expect(schema.properties[CHANGED_EDITS_KEY]).toEqual(expect.objectContaining({ type: 'array' }));
     expect(schema.properties[CHANGED_EDITS_KEY].items.required).toEqual(['id', 'reason']);
     expect(schema.required).toContain(CHANGED_EDITS_KEY);
     const { [CHANGED_EDITS_KEY]: _list, ...rest } = schema.properties;
-    expect(rest).toEqual(contentBundleSchema.properties);
+    expect(rest).toEqual(WRITER_BUNDLE_SCHEMA.properties);
+    expect(WRITER_BUNDLE_SCHEMA.properties).not.toHaveProperty(CHANGED_EDITS_KEY);   // the writer's schema is untouched
     expect(contentBundleSchema.properties).not.toHaveProperty(CHANGED_EDITS_KEY);   // the stored schema is untouched
   });
 
-  it('an automatic pass, or a send-back with no edit, keeps the stored schema', async () => {
+  it("an automatic pass, or a send-back with no edit, keeps the writer's schema", async () => {
     const auto = sdkReturning(DIRECTORS);
     await reviseContentBundle(sendBack({ _articleFeedback: null, articleRevisionCount: 1 }), cfg(auto));
-    expect(schemaOf(auto)).toBe(contentBundleSchema);
+    expect(schemaOf(auto)).toBe(WRITER_BUNDLE_SCHEMA);
     const plain = sdkReturning(DIRECTORS);
     await reviseContentBundle(sendBack({ _articleHandEdits: null }), cfg(plain));
-    expect(schemaOf(plain)).toBe(contentBundleSchema);
+    expect(schemaOf(plain)).toBe(WRITER_BUNDLE_SCHEMA);
   });
 
   it('the stored bundle never carries the list; the report keeps the reason', async () => {

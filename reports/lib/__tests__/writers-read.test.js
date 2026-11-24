@@ -27,11 +27,14 @@ const cfg = (sdk) => ({ configurable: { sdkClient: sdk, theme: 'journalist' } })
 const recordingSdk = (value) => jest.fn(async () => clone(value));
 const sent = (sdk) => sdk.mock.calls[0][0];
 
-/** Phase 18, R2: each writer's own files, the brief then its own part. */
+/**
+ * Phase 18, R2: each writer's own files, the brief then its own part. Run 2b (R24): the article
+ * writer reads its own part, then the brief.
+ */
 const R2 = {
   arc: ['brief', 'job-weave'],
   outline: ['brief', 'job-map'],
-  article: ['brief', 'job-article']
+  article: ['job-article', 'brief']
 };
 
 /**
@@ -151,8 +154,9 @@ describe("R2: every writer and every rework reads the brief, then its own part, 
     'arc writer', 'arc rework, send-back', 'arc rework, reweave', 'arc rework, automatic',
     'map writer', 'map rework, send-back', 'map rework, automatic',
     'article writer', 'article rework'
-  ])("%s: <brief> then the call's <job-...>, then <DIRECTOR_GUIDANCE>", (name) => {
+  ])("%s: the call's two files in its order, together, then <DIRECTOR_GUIDANCE>", (name) => {
     const [call, { prompt }] = renders[name];
+    // The first and the second file the call reads (R2; R24 for the article call).
     const [brief, job] = R2[call];
     const opening = (tag) => prompt.search(new RegExp(`^<${tag}>$`, 'm'));
     const jobEnd = prompt.search(new RegExp(`^</${job}>$`, 'm'));
@@ -160,7 +164,7 @@ describe("R2: every writer and every rework reads the brief, then its own part, 
     expect(opening(brief)).toBeGreaterThan(-1);
     expect(guidance).toBeGreaterThan(jobEnd);
     expect(jobEnd).toBeGreaterThan(opening(job));
-    // The brief and the writer's part sit together, with nothing between them but the blank line.
+    // The two files sit together, with nothing between them but the blank line.
     const briefEnd = prompt.search(new RegExp(`^</${brief}>$`, 'm'));
     expect(prompt.slice(briefEnd, opening(job))).toBe(`</${brief}>\n\n`);
     // A writer's prompt ends on its standing notes; a rework's carries its revision block between.
@@ -171,7 +175,7 @@ describe("R2: every writer and every rework reads the brief, then its own part, 
   // the writer's own part by their tags, cites no rule by number, and ends on the length.
   it.each(['article writer', 'article rework'])("%s: the task opens on the brief and its own part and ends on the length, its lines between kept", (name) => {
     const [, { prompt }] = renders[name];
-    const opening = "Write the article. The weave above is the story the director settled at the meeting, and the story map lays it across the article's sections as the director left it at the map's stop. <brief> below says what the article has to be, and <job-article> says what is yours to decide. For this article:\n- the beats: ";
+    const opening = "Write the article. The weave above is the story the director settled at the meeting, and the story map lays it across the article's sections as the director left it at the map's stop. `<brief>` below says what the article has to be, and `<job-article>` says what is yours to decide. For this article:\n- the beats: ";
     const last = "\n- the headline and the deck: the director's own where the director has edited one, otherwise the map's, as written;\n- the length: about the map's expected length.\n";
     expect(prompt.split(opening)).toHaveLength(2);
     expect(prompt.split(last)).toHaveLength(2);

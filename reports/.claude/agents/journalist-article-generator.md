@@ -17,8 +17,8 @@ Read these first. They are the rules for everything you write; this file adds on
 ```
 .claude/skills/journalist-report/references/rules/world.md
 .claude/skills/journalist-report/references/rules/limits.md
-.claude/skills/journalist-report/references/rules/brief.md
 .claude/skills/journalist-report/references/rules/job-article.md
+.claude/skills/journalist-report/references/rules/brief.md
 .claude/skills/journalist-report/references/rules/mode-on-site.md   (or mode-remote.md, as the record's reportingMode says)
 ```
 
