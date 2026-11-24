@@ -204,20 +204,20 @@ describe('the default root, which a test can point at the stubs', () => {
  * The hash is sha256 of the file's bytes, and the length is in characters.
  */
 const RULE_FILE_PINS = {
-  world: ['9299a7a71fb44b4590213ff1cd1fdd327b73887c4e01ccf053710292ea5f113d', 5750,
-    'phase 18: the text the director settled on 2026-11-20'],
-  limits: ['a09a78ab277c2695dd6ad9e889c0b0422f698d23487b1f58160b6eb2e1d15d55', 9581,
-    'phase 18: the text the director settled on 2026-11-20'],
+  world: ['191569ff5475068322fd4d392132ef5101dc832e72de91bcac1b5018e15e3e3a', 5763,
+    'phase 18, run 2c: the group statement\'s line as the director approved it on 2026-11-24'],
+  limits: ['c1bf1bfb8ad521478cc781c3ffbe64e45641d267c19dd828c02c9a35cdd3102f', 9601,
+    'phase 18, run 2c: the money and whose account it is, as the director approved them on 2026-11-24'],
   'mode-on-site': ['8fbacd078d0c52df7185128d1408c090cc6f769fca1d44997545eed7bbc559bd', 1012,
     'phase 18: the text the director settled on 2026-11-20'],
   'mode-remote': ['e0c7db4180d5595bc8f7048347c443e311c264b690347e933638642af72e2e5a', 749,
     'phase 18: the text the director settled on 2026-11-20'],
-  brief: ['958c5057e9e21d8608cdff1dea3772052946d43e1392c0b27546b48a08eba43b', 9730,
-    'phase 18: the text the director settled on 2026-11-20'],
+  brief: ['82d921383dd5ffc33ff59075a6f5f061caa6ca750df2e7c063ab1fc4e96e019e', 9696,
+    'phase 18, run 2c: how the two fit and Nova, as the director approved them on 2026-11-24'],
   'job-weave': ['1560ccbdacc48d7a63fde9eba916f80d0ceb6f5ff3ba67f71b111ed2038f0de7', 5209,
     'phase 18: the text the director settled on 2026-11-20'],
-  'job-map': ['ce98c6fcd3cd1e9ed2d1b487cd6d2f0d2100d737bacf9e9592131aa3dde6f498', 5065,
-    'phase 18: the text the director settled on 2026-11-20'],
+  'job-map': ['e7dae3ffb35ee921b54abd2fcfde0176e805bdb239d92673a802f2ea7667f8e0', 5401,
+    'phase 18, run 2c: each connection on one beat, and the headings, as the director approved them on 2026-11-24'],
   'job-article': ['ff2d6d0fa5a762e1d091d61c1ac428646cfea549da14318fad97ddef49095e53', 2942,
     'phase 18: the text the director settled on 2026-11-20']
 };
