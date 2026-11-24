@@ -674,14 +674,15 @@ Two decisions of the director's on 2026-11-24, each a small slice.
 
 **What the director sees.**
 - Each mark labelled "Fact check, advisory" has a button, "Add to note". Pressing it adds one line to the note box: the mark's words as the desk shows them, then the piece it sits beside, in the words the desk already uses to name a piece. The director can edit the line. While the note holds that line, the button reads "In the note" and does nothing. No other kind of mark has the button.
-- Under the note box's existing line, when the desk holds at least one such mark, this line: `Send back acts on this note, and on any mark labelled "Fact check" or "The judge could not fix this". It leaves a "Fact check, advisory" mark alone. Fix that one yourself here, or press its "Add to note" button to ask the writer for it.`
+- Under the note box's existing line, when the desk holds at least one mark labelled "Fact check", "The judge could not fix this" or "Fact check, advisory", this line: `Send back acts on this note, and on the marks labelled "Fact check" or "The judge could not fix this". It leaves a "Fact check, advisory" mark alone: fix that one yourself here, or press its "Add to note" button to ask the writer for it.`
+- The desk's line about the director's own edits, which shows when the desk holds an edit, changes. Now: `Your hand edits are sent with this note. The writer is told to keep them.` Built: `Your hand edits are sent with this note. The writer is told to keep them, so a mark on a piece you have edited is not acted on either. Fix it yourself.`
 
 **Layers.**
 - The logic in a dual-export module, pure and node-tested: the note line for a mark, the note with that line added, whether the note holds it, and whether the scope line shows.
 - `console/components/checkpoints/Article.js`: the button in a mark's row and the line under the note box, as a thin consumer. A press changes the note box as typing does, so it disarms an armed send-back.
 - `console/console.css`: the button, in the desk's existing manner.
 
-**Before building, check the line is true.** Trace what a director's send-back at the article shows its rework (`lib/workflow/nodes/node-helpers.js`, and where `ai-nodes.js` builds the article's rework): the must-fix findings of the last evaluation, and no suggestion. Then check that every mark the desk labels "Fact check" or "The judge could not fix this" is among those findings, in each case the desk can show them. If one is not, stop and return NEEDS_CONTEXT with the case: the line must not promise what the rework is not shown.
+**What the first builder traced (2026-11-24), which the two lines now say.** A send-back at the desk always carries a note, so it is a director's round: the rework is shown the note, then the must-fix findings, and no suggestion. Every mark labelled "Fact check" or "The judge could not fix this" is among those findings, with one exception. Once the director edits a piece at the desk, the piece is the director's text, and a finding that quotes three or more words of it is withheld from the rework (`withoutDirectorsFindings` in `lib/workflow/nodes/node-helpers.js`): the director's edits are final. The mark stays beside the piece while the quoted words do, or folds under "Possibly resolved by your edits". The second line above covers that case. Nothing in the pipeline changes for it.
 
 **Tests.** The pure functions: a mark beside a paragraph, one beside a card, one beside no piece; a line added once and not twice; an edited note; a desk with no advisory mark shows no line.
 
