@@ -650,3 +650,121 @@ describe('4.10d: a failed truth criterion with no notes says what failed, by its
     expect(guardDirectorEdits({ evaluation, criteria, edits: [], output: null }).kept).toEqual(['T5: The bonus runs to the wrong account. Pay it to the seller.']);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 18, run 2f (R41): the guard reads a limit's name as its code. The article judge is told
+// to open a concern about one of the director's edits "with the edit's id and then the limit it
+// concerns", and a judge may write the limit by its name, as its own list of the limits gives it
+// (LIMIT_CODES). Read only by code, such a concern covered no criterion: the criterion it was
+// about became a must-fix line under its codes, and a rework was sent about the director's own
+// line. A name is read whole, so the comma inside one is no break between two limits, and the
+// limit on Nova taking no side is read with or without the clause its entry adds.
+// ═══════════════════════════════════════════════════════════════════════════
+describe("R41: the guard reads a limit's name as its code", () => {
+  const { LIMIT_CODES, _testing: { guardDirectorEdits, getPhaseCriteria, judgedEdits } } = require('../../../lib/workflow/nodes/evaluator-nodes');
+  const nameOf = (code) => LIMIT_CODES.find((limit) => limit.code === code).name;
+  const NOTES = 'One of the lines says more than its source does.';
+
+  /**
+   * The guard's reading of a verdict that failed `keys` with notes that quote nothing, beside one
+   * concern about the director's closing (E2) that opens with `opening`.
+   */
+  const guarded = (phase, keys, opening) => {
+    const state = articleState();
+    return guardDirectorEdits({
+      evaluation: {
+        ready: false, structuralPassed: false, overallScore: 0.3, structuralIssues: [],
+        criteriaScores: Object.fromEntries(keys.map((key) => [key, { score: 0.3, notes: NOTES, fix: 'Say less.' }])),
+        advisoryWarnings: [`${DIRECTOR_EDIT_PREFIX}E2: ${opening} the closing says more than the notes do.`]
+      },
+      criteria: getPhaseCriteria(phase, 'journalist'),
+      edits: judgedEdits('article', state),
+      output: state.contentBundle
+    });
+  };
+  /** What a covered criterion leaves: nothing to fix, nothing holding, and no notes or fix for a rework. */
+  const covered = (guard, keys) => ({
+    kept: guard.kept, holding: guard.holding, ready: guard.ready,
+    scores: keys.map((key) => guard.criteriaScores[key])
+  });
+  const COVERED = (keys) => ({ kept: [], holding: [], ready: true, scores: keys.map(() => ({ score: 0.3 })) });
+
+  /** Every limit a criterion scores, at each judge: [phase, criterion, code, name]. */
+  const SCORED = ['arcs', 'article'].flatMap((phase) => Object.entries(getPhaseCriteria(phase, 'journalist'))
+    .flatMap(([key, criterion]) => criterion.rules.map((code) => [phase, key, code, nameOf(code)])));
+
+  it('the table holds every limit a criterion scores: all but the head count, at the article', () => {
+    const article = SCORED.filter(([phase]) => phase === 'article').map(([, , code]) => code);
+    expect([...article].sort()).toEqual(LIMIT_CODES.map((limit) => limit.code).filter((code) => code !== 'T10').sort());
+  });
+
+  it.each(SCORED)('the %s judge: a concern that names %s by %s as "%s" covers it, as its code does', (phase, key, code, name) => {
+    const byCode = covered(guarded(phase, [key], `${code}:`), [key]);
+    expect(byCode).toEqual(COVERED([key]));
+    expect(covered(guarded(phase, [key], `${name}:`), [key])).toEqual(byCode);
+  });
+
+  it('a name is read in any case, and before a full stop as the list of the limits prints it', () => {
+    expect(covered(guarded('article', ['verdictTruth'], 'the verdict:'), ['verdictTruth'])).toEqual(COVERED(['verdictTruth']));
+    expect(covered(guarded('article', ['verdictTruth'], 'The verdict.'), ['verdictTruth'])).toEqual(COVERED(['verdictTruth']));
+    // With its code after it in brackets, or a dash where the colon would be.
+    expect(covered(guarded('article', ['verdictTruth'], 'The verdict (T2):'), ['verdictTruth'])).toEqual(COVERED(['verdictTruth']));
+    expect(covered(guarded('article', ['verdictTruth'], 'The verdict -'), ['verdictTruth'])).toEqual(COVERED(['verdictTruth']));
+    // And after its code, as the judge's list prints each limit: the code alone is read, as before.
+    expect(covered(guarded('article', ['verdictTruth'], 'T2 The verdict:'), ['verdictTruth'])).toEqual(COVERED(['verdictTruth']));
+  });
+
+  it('a name that holds a comma is one limit: the comma is no break between two', () => {
+    // "Characters, never the players" is T11, which playersTruth scores.
+    expect(covered(guarded('article', ['playersTruth'], 'Characters, never the players:'), ['playersTruth'])).toEqual(COVERED(['playersTruth']));
+    // "Nova takes no side, with the part about this session" is T8 whole, comma and "with" included.
+    expect(covered(guarded('article', ['novaPositionTruth'], 'Nova takes no side, with the part about this session:'), ['novaPositionTruth']))
+      .toEqual(COVERED(['novaPositionTruth']));
+  });
+
+  it("the limit on Nova taking no side is read by its own lead-in too, without the clause its entry adds", () => {
+    expect(nameOf('T8')).toBe('Nova takes no side, with the part about this session');
+    expect(covered(guarded('article', ['novaPositionTruth'], 'Nova takes no side:'), ['novaPositionTruth'])).toEqual(COVERED(['novaPositionTruth']));
+  });
+
+  it('two limits named in a row are both read, each by its name', () => {
+    const both = ['verdictTruth', 'playersTruth'];
+    expect(covered(guarded('article', both, 'The verdict and Pronouns:'), both)).toEqual(COVERED(both));
+    expect(covered(guarded('article', both, 'T2, T9:'), both)).toEqual(COVERED(both));
+    const withComma = ['novaPositionTruth', 'playersTruth'];
+    expect(covered(guarded('article', withComma, 'Nova takes no side, Pronouns:'), withComma)).toEqual(COVERED(withComma));
+    expect(covered(guarded('article', withComma, 'Nova takes no side, with the part about this session, Characters, never the players:'), withComma))
+      .toEqual(COVERED(withComma));
+  });
+
+  it("a concern that names one limit covers that limit's criterion and no other", () => {
+    const guard = guarded('article', ['verdictTruth', 'moneyTruth'], 'The verdict:');
+    expect(guard.kept).toEqual([`T5: ${NOTES} Say less.`]);
+    expect(guard.holding).toEqual(['moneyTruth']);
+    expect(guard.ready).toBe(false);
+    expect(guard.criteriaScores.verdictTruth).toEqual({ score: 0.3 });
+    expect(guard.criteriaScores.moneyTruth.fix).toBe('Say less.');
+  });
+
+  it('a concern that opens with no limit, or with words that only begin like one, or that names one further in, covers nothing, as before', () => {
+    const uncovered = { kept: [`T13: ${NOTES} Say less.`], holding: ['photosTruth'], ready: false };
+    for (const opening of ['', 'Photoshoots:', 'Photos of the party show too much:', 'About Photos:']) {
+      const guard = guarded('article', ['photosTruth'], opening);
+      expect([opening, { kept: guard.kept, holding: guard.holding, ready: guard.ready }]).toEqual([opening, uncovered]);
+    }
+  });
+
+  it('through the article judge: the concern reaches the stop, no rework is sent, and the rework reads no notes of it', async () => {
+    const concern = `${DIRECTOR_EDIT_PREFIX}E2: What can be stated as fact: "${CLOSING}" states Alex's motive as fact.`;
+    const result = await evaluateArticle(articleState(), cfg(judging({
+      ready: false, structuralPassed: false, overallScore: 0.3, confidence: 'high', structuralIssues: [],
+      criteriaScores: { evidenceTruth: { score: 0.3, notes: 'The closing states a motive as fact.', fix: 'Attribute it.' } },
+      advisoryWarnings: [concern]
+    })));
+    expect(result.evaluationHistory.ready).toBe(true);
+    expect(result.evaluationHistory.structuralIssues).toEqual([]);
+    expect(result.evaluationHistory.advisoryWarnings).toEqual([concern]);
+    expect(result.validationResults.structuralIssues).toEqual([]);
+    expect(result.validationResults.criteriaScores).toEqual({ evidenceTruth: { score: 0.3, type: 'structural' } });
+  });
+});

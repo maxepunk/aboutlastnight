@@ -595,6 +595,65 @@ function opensWithName(finding, key) {
 }
 
 /**
+ * Each way a judge may write a limit by name where a concern opens with one (phase 18, run 2f,
+ * R41): its name as LIMIT_CODES gives it and, where the name adds a clause after ", with" to the
+ * limit's own lead-in (the entry for Nova taking no side, which adds the part about this session),
+ * the lead-in alone, as limits.md prints it. In lower case, the longest first, so a name is read
+ * whole before a shorter one it begins with, and the comma inside a name is never a break between
+ * two limits.
+ */
+const LIMIT_NAME_FORMS = LIMIT_CODES
+  .flatMap(({ code, name }) => [...new Set([name, name.split(', with ')[0]])].map((words) => ({ code, words: words.toLowerCase() })))
+  .sort((a, b) => b.words.length - a.words.length);
+
+/**
+ * What follows a limit's name where a finding opens with it: the end, a mark of punctuation (a
+ * hyphen or a dash among them), or the word that joins it to the next. So "The money trail" is
+ * not the limit "The money".
+ */
+const AFTER_LIMIT_NAME = /^\s*(?:$|[:.;,(\[\-\u{2013}\u{2014}&/]|and\b)/u;
+
+/** What stands between two limits a finding opens with, as LEADING_RULE_IDS reads it between two codes (node-helpers.js). */
+const BETWEEN_LIMIT_NAMES = /^\s*(?:,|&|\/|and\b)\s*/;
+
+/**
+ * The codes of the limits a finding opens with by name ("The verdict: ...", "Sold memories and
+ * Pronouns: ..."), in any case, or none (R41).
+ *
+ * @param {*} finding
+ * @returns {string[]}
+ */
+function leadingLimitNames(finding) {
+  let rest = String(finding == null ? '' : finding).replace(/^\s+/, '').toLowerCase();
+  const codes = [];
+  for (;;) {
+    const named = LIMIT_NAME_FORMS.find(({ words }) => rest.startsWith(words) && AFTER_LIMIT_NAME.test(rest.slice(words.length)));
+    if (!named) break;
+    codes.push(named.code);
+    rest = rest.slice(named.words.length);
+    const between = BETWEEN_LIMIT_NAMES.exec(rest);
+    if (!between) break;
+    rest = rest.slice(between[0].length);
+  }
+  return codes;
+}
+
+/**
+ * The limits a concern about one of the director's edits says it concerns (R41): the codes it opens
+ * with (leadingRuleIds, the one reading of a code) and the codes of the limits it opens with by
+ * name. The article judge is told to open such a concern with the edit's id "and then the limit it
+ * concerns", and may write the limit by the name its own list gives; read by code alone, that
+ * concern covered no criterion, and a rework was sent about the director's own line. Only the
+ * guard's cover reads a name: a must-fix line opens with its codes, as the judges are told.
+ *
+ * @param {*} finding - a concern, past its prefix and its edit ids (concernFinding)
+ * @returns {string[]}
+ */
+function concernLimitCodes(finding) {
+  return [...new Set([...leadingRuleIds(finding), ...leadingLimitNames(finding)])];
+}
+
+/**
  * The verdict guard (F1, completed by FA): an edit is the final word on its text, so a
  * finding about the director's text is the director's to weigh, never an automatic
  * pass's task. It decides what reaches the stop, what reaches the rework and whether the
@@ -620,7 +679,8 @@ function opensWithName(finding, key) {
  *   place, which no rework may change.
  * - A criterion whose notes or fix quote the director's text keeps them from the rework
  *   (final review, finding 1), and one that failed joins the concerns unless a concern
- *   already covers it: one under its rule ids or its name or, for a criterion with no
+ *   already covers it: one under its rule ids, written by code or by the limit's name (run 2f,
+ *   R41; concernLimitCodes), or under the criterion's own name or, for a criterion with no
  *   rule ids, one about the same edit.
  * - A criterion a concern covers keeps its notes and fix from the rework, and holds the
  *   output only while a structural issue under its rule ids remains (FA, requirement 5).
@@ -725,8 +785,9 @@ function guardDirectorEdits({ evaluation, criteria, edits, output, record = [] }
     const finding = concernFinding(concern) || '';
     if (opensWithName(finding, key)) return true;
     const rules = rulesOf(key);
+    // R41: a concern names its limit by code or by name (concernLimitCodes).
     return rules.length > 0
-      ? leadingRuleIds(finding).some((id) => rules.includes(id))
+      ? concernLimitCodes(finding).some((id) => rules.includes(id))
       : concernEditIds(concern).some((id) => (quoting.get(key) || []).includes(id));
   };
   const written = [...moved, ...advisoriesOut.filter((advisory) => !forTheRework(advisory))];
