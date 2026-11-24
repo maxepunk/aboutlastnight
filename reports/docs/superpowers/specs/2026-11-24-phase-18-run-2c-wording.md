@@ -298,3 +298,37 @@ Approved: `the working notes kept during the investigation`
 - What a piece of evidence holds. The spec's non-goals keep it for after the next session, if that session's draft still prints the evidence wholesale.
 - The small line above the headline, until the director gives its words.
 - The check that each connection lands on a beat, a new field for a person's tie, the judges' scores, the typing notes in the game's documents, and the reading of the accusation: each stays as designed.
+
+## Part 9. Four rewordings after the build (approved 2026-11-24)
+
+Run 2c's reviewers named every reader of each new line and found four that were right for one reader and loose for another. The director approved these rewordings.
+
+### The label over the sales a model paired with the notes
+
+Now: `A model (Opus) paired each observation below, quoted from the director's notes, with ledger sales it judged to match. Each pairing is the model's reading, not something the notes state: where it differs from the notes or the rest of the record, the record decides.`
+
+Approved: `A model paired each observation below, quoted from the director's notes, with the sales in the ledger it judged to match. Each pairing is the model's guess, not something the notes state. Where the notes or the ledger point another way, they decide.`
+
+### Where pronouns come from
+
+In the list of names. Now: `A name marked with a pronoun, or marked as having none given, was played in this session. The rest were not played.`
+
+Approved: `A name marked with a pronoun, or marked as having none given, was played in this session, and the pronoun is the one the director's roster gives. The rest were not played.`
+
+In the label over the summary of the characters. Now: `Take pronouns from the roster.`
+
+Approved: `Take pronouns from the list of names.`
+
+### What the settled angle's lines are, for the article writer
+
+Now: `The headline is printed as it stands. Every other line here was written for the director to decide by, the lines the director changed included. They say what the article argues. None of them is a sentence for the article.`
+
+Approved: `The headline is printed as it stands. The other lines here, the director's own among them, say what the article argues. None of them is a sentence for the article.`
+
+### The label over the sentences about Blake
+
+Now: `every one that mentions Blake.`
+
+Approved: `every one that mentions Blake, by name or as the Valet.`
+
+Stays: every other word of that label.

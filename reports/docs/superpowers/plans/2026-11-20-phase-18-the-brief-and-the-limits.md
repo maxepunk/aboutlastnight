@@ -700,3 +700,29 @@ Two decisions of the director's on 2026-11-24, each a small slice.
 | S | Opus 5.5, medium | Opus 5.5, medium | a small page change with one claim that must be traced before it is printed |
 
 S runs beside run 2c, since it touches only the console. R runs after slice O merges, since both touch the generation instruction and the writer's schema.
+
+---
+
+## Run 2e: four rewordings and the leftovers (added 2026-11-24)
+
+Run 2c's reviewers found four approved lines that were right for one reader and loose for another. The director approved a rewording of each. They are the wording doc's part 9.
+
+### Brief T: the four rewordings
+
+**Intent.** The four lines read true for every reader they are printed to.
+
+**Layers.**
+- `lib/prompt-renderers/derived-labels.js`: the label over the paired sales, the last sentence of the label over the summary of the characters, and the first sentence of the label over the sentences about Blake.
+- `lib/prompt-builder.js`: the line about played characters in the list of names.
+- `lib/prompt-renderers/settled-weave.js`: the sentences for the article writer.
+- Left from run 2c: `<SLOTS>` fails loud for a slot with no description; the article builder's unused argument for the sentences about Blake goes, with its call sites; the removed-phrase fixture no longer strips a block no article prompt holds; `docs/architecture/map.md` names the kind strip where it now lives, and `director-words.md` describes the labels as built.
+
+**Tests.** Each approved line word for word; the tests that held the old words moved.
+
+**Invariants.** Nothing else a model reads changes. The theme with no pronouns still drops the whole line about played characters.
+
+**Verification.** Render all eleven prompts for 111326 and 101826 and read each changed line in every prompt that prints it.
+
+**Done.** The approved lines stand in the renders word for word, the suite is green, the moved pins carry their reasons.
+
+Seats: builder Opus 5.5 at medium, reviewer Opus 5.5 at medium.
