@@ -565,11 +565,19 @@ const REPO = path.join(__dirname, '..', '..');
  *   it. The generation instruction's fourth item no longer names the headline's kicker (-17), and
  *   the kicker joins UNSHOWN_BUNDLE_FIELDS, so it leaves the schema printed in <SCHEMA> (-145):
  *   article-journalist 26655 -> 26493 (-162). The outline and arc pins do not move.
+ * - Phase 18, run 2e, slice T, the four rewordings the director approved on 2026-11-24 (the
+ *   wording doc's part 9). The list of names' line on who played says the pronoun is the one the
+ *   director's roster gives (+56, every writer); the summary of the characters' label sends
+ *   pronouns to the list of names (+7, the weave writer); the article writer's sentences on the
+ *   settled angle's lines say the other lines, the director's own among them, say what the article
+ *   argues (-58). The fixture prints no paired sales and no sentences about Blake to these writers,
+ *   so those two labels move nothing here: outline-journalist 24626 -> 24682 (+56),
+ *   article-journalist 26493 -> 26491 (-2), arcs-journalist 12768 -> 12831 (+63).
  */
 const PINNED = {
-  'outline-journalist': ['86480e58bbbf46336ccd9a6f72a3d86d9c0929d261a753588783aa7f5790dc59', 24626],
-  'article-journalist': ['f9cfbfcec60b6d4c4bb765f796463ec350fe66dc28cfae86cad429291a8b33c0', 26493],
-  'arcs-journalist': ['916799e5ff606ce5d3b753c42e0982ae47bd0ec897f2a37b479557026b22ed52', 12768]
+  'outline-journalist': ['c0825972cee10d05b92ea1657ee8ce566217cff353c9744aef4b9a1d8ea9bb28', 24682],
+  'article-journalist': ['5f601dc66a47e6f59a08b455ac07058478b0a8028d386f94b6a46f278e4e77d4', 26491],
+  'arcs-journalist': ['bab64787b2a486d00780f3c18c6d4766eef3383d43d85cdb04e328c5c2fc8e56', 12831]
 };
 
 describe('the writers send exactly what they sent before the reworkers were built from them', () => {

@@ -10,18 +10,22 @@
  * One wording per kind of material, shared by every prompt that carries it. Phase 18, run 2c
  * (the wording doc's parts 4 and 5): the labels over the quote bank, the epilogue, the summary of
  * the characters and the sentences about Blake take the approved lines, in the limits' manner.
+ * Run 2e (the wording doc's part 9): the label over the paired sales takes its approved line, the
+ * summary's label sends pronouns to the list of names, and the Blake label names the Valet too.
  */
 
 const DERIVED_LABELS = {
   /**
    * characterData, from extractCharacterData (Haiku). Run 2c: its pronouns are the documents',
-   * which the roster overrides, so the label says to take pronouns from the roster. The weave
-   * writer and the two judges print it; the article writer reads no summary (run 2b, R22).
+   * which the roster overrides, so the label says where pronouns come from. Run 2e: it names the
+   * block by what it is called in the prompt, the list of names (prompt-builder.js ROSTER_OPENING),
+   * whose heading no longer says "roster". The weave writer and the two judges print it; the
+   * article writer reads no summary (run 2b, R22).
    */
   characterContext:
     'A model made this summary from the documents in the record. Where it differs from a document, ' +
     "the document decides. Its pronouns are the documents', which are often not this session's. " +
-    'Take pronouns from the roster.',
+    'Take pronouns from the list of names.',
 
   /**
    * narrativeTensions, from surfaceContradictions (code, no model). Since phase 3
@@ -35,10 +39,12 @@ const DERIVED_LABELS = {
    * Phase 18, run 2c (the wording doc's part 4): the label says what the sentences are for, the
    * check on who was seen making a deal, and that being listed does not make them more important.
    * The weave writer (and its rework) is the one reader: it prints them under its Blake heading,
-   * after the notes. The article writer and its rework no longer read the block.
+   * after the notes. The article writer and its rework no longer read the block. Run 2e (part 9):
+   * the first sentence says a sentence that names only the Valet is gathered too, as
+   * surfaceContradictions gathers it (contradiction-nodes.js: "blake" or "valet").
    */
   narrativeTensions:
-    "Code gathered these sentences from the director's notes above: every one that mentions Blake. " +
+    "Code gathered these sentences from the director's notes above: every one that mentions Blake, by name or as the Valet. " +
     'A memory is sold to Blake, so these are where the notes record who was seen making a deal. ' +
     'They are listed again for that check only. Being listed here does not make them more important to the story.',
 
@@ -57,13 +63,13 @@ const DERIVED_LABELS = {
   /**
    * <TRANSACTION_LINKS>, from enrichDirectorNotes (Opus). Phase 3 (3.6): a link joins
    * one of the director's observations to ledger sales, and that join is the model's
-   * reading of the notes, never something the notes state (T4). Run 2c gives no wording for
-   * this label, so it keeps its own.
+   * reading of the notes, never something the notes state (T4). Phase 18, run 2e (the wording
+   * doc's part 9): a pairing is the model's guess, and where the notes or the ledger point
+   * another way, they decide.
    */
   transactionLinks:
-    'A model (Opus) paired each observation below, quoted from the director\'s notes, with ledger ' +
-    'sales it judged to match. Each pairing is the model\'s reading, not something the notes state: ' +
-    'where it differs from the notes or the rest of the record, the record decides.',
+    "A model paired each observation below, quoted from the director's notes, with the sales in the ledger it judged to match. " +
+    "Each pairing is the model's guess, not something the notes state. Where the notes or the ledger point another way, they decide.",
 
   /**
    * <EPILOGUE>, from enrichDirectorNotes (Opus). Phase 3 (3.6): the sentences are the

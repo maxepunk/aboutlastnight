@@ -57,8 +57,9 @@ describe('contradiction data in arc prompt', () => {
     const prompt = buildWeavePrompt(baseState({ narrativeTensions: STORED }));
     const section = prompt.slice(prompt.indexOf("### Blake and the Valet in the director's notes"), prompt.indexOf('### Session Roster'));
     expect(section).toContain(DERIVED_LABELS.narrativeTensions);
-    // Run 2c (the wording doc's part 4): the weave writer keeps the block, under the new label.
-    expect(section).toContain("### Blake and the Valet in the director's notes\nCode gathered these sentences from the director's notes above: every one that mentions Blake. ");
+    // Run 2c (the wording doc's part 4): the weave writer keeps the block, under the new label;
+    // run 2e (part 9): the label's first sentence says the Valet is gathered too.
+    expect(section).toContain("### Blake and the Valet in the director's notes\nCode gathered these sentences from the director's notes above: every one that mentions Blake, by name or as the Valet. ");
     expect(section).toContain(`- ${BLAKE_SENTENCE}`);
     expect(prompt).not.toContain('transparency-vs-burial');
     expect(prompt).not.toContain('$155,000');

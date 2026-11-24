@@ -402,11 +402,11 @@ describe('R19: the option that leaves out the evidence under the threads', () =>
     const weave = directors();
     const whole = introOf(renderSettledWeave(weave, []));
     const without = introOf(renderSettledWeave(weave, [], { withEvidence: false }));
-    expect(without).toBe("The story the director settled at the story meeting: the angle they picked, as they left it, with the director's answers to the questions. A line that ends in [the director's change ...] holds a change the director made at the meeting, named by its id. Each answer is the director's words, word for word. The threads in the story come in the order the angle tells them. The threads the angle leaves out come after them, by name. WHERE IT ENDS UP is Nova's answer to the QUESTION. FROM THE DIRECTOR'S NOTES, when it is there, is the director's own read of the session, which this angle rests on. The headline is printed as it stands. Every other line here was written for the director to decide by, the lines the director changed included. They say what the article argues. None of them is a sentence for the article.");
+    expect(without).toBe("The story the director settled at the story meeting: the angle they picked, as they left it, with the director's answers to the questions. A line that ends in [the director's change ...] holds a change the director made at the meeting, named by its id. Each answer is the director's words, word for word. The threads in the story come in the order the angle tells them. The threads the angle leaves out come after them, by name. WHERE IT ENDS UP is Nova's answer to the QUESTION. FROM THE DIRECTOR'S NOTES, when it is there, is the director's own read of the session, which this angle rests on. The headline is printed as it stands. The other lines here, the director's own among them, say what the article argues. None of them is a sentence for the article.");
     expect(whole).toBe(without.replace(
       'The threads in the story come in the order the angle tells them.',
       'The threads in the story come in the order the angle tells them, and under each is its evidence, one piece a line: whether it supports the thread or cuts against it, its sources, and what it shows.'
-    ).replace(' The headline is printed as it stands. Every other line here was written for the director to decide by, the lines the director changed included. They say what the article argues. None of them is a sentence for the article.', ''));
+    ).replace(" The headline is printed as it stands. The other lines here, the director's own among them, say what the article argues. None of them is a sentence for the article.", ''));
   });
 
   it('prints the evidence by default, and with the option set to true', () => {
@@ -430,7 +430,7 @@ describe("Run 2c: the intro says what the settled angle's lines are, to every re
   /** The intro line, the one after the tag. */
   const introOf = (text) => text.split('\n')[1];
   const SHARED = "WHERE IT ENDS UP is Nova's answer to the QUESTION. FROM THE DIRECTOR'S NOTES, when it is there, is the director's own read of the session, which this angle rests on.";
-  const FOR_THE_ARTICLE = 'The headline is printed as it stands. Every other line here was written for the director to decide by, the lines the director changed included. They say what the article argues. None of them is a sentence for the article.';
+  const FOR_THE_ARTICLE = "The headline is printed as it stands. The other lines here, the director's own among them, say what the article argues. None of them is a sentence for the article.";
 
   it('ends the intro on the two shared sentences for every reader: the map writer, its rework and the article judge read it whole', () => {
     const whole = introOf(renderSettledWeave(directors(), []));

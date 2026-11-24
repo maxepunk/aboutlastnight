@@ -263,15 +263,17 @@ describe("renderDirectorEnrichmentBlock: the director's notes, unguessed (phase 
     expect(bank).not.toContain('\u2014');
   });
 
-  it("labels the transaction links as the model's reading, with no \"pre-linked\" claim", () => {
+  // Phase 18, run 2e (the wording doc's part 9): the label calls each pairing the model's guess and
+  // names no model; its words are held whole in derived-labels.test.js.
+  it("labels the transaction links as the model's guess, with no \"pre-linked\" claim", () => {
     const out = renderDirectorEnrichmentBlock({
       rawProse: PROSE,
       transactionReferences: [{ excerpt: 'Remi was not available for comment after the investigation.', linkedTransactions: [{ timestamp: '10:13 AM', amount: '$400,000', sellingTeam: 'RW' }], confidence: 'low' }]
     });
     const links = block(out, 'TRANSACTION_LINKS');
     expect(links).toContain(`<TRANSACTION_LINKS>\n${DERIVED_LABELS.transactionLinks}\n`);
-    expect(DERIVED_LABELS.transactionLinks).toMatch(/model \(Opus\)/);
-    expect(DERIVED_LABELS.transactionLinks).toMatch(/reading/);
+    expect(DERIVED_LABELS.transactionLinks).toMatch(/^A model paired/);
+    expect(DERIVED_LABELS.transactionLinks).toMatch(/the model's guess/);
     expect(links).not.toMatch(/pre-linked|burial transactions/);
     expect(links).not.toContain('\u2014');
   });

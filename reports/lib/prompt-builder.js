@@ -119,10 +119,12 @@ const PRONOUN_NOT_GIVEN = 'pronoun not given';
  *   prints;
  * - ROSTER_PLAYED, after it where the theme prints pronouns: a played character is marked with
  *   its pronoun or PRONOUN_NOT_GIVEN ("marked as having none given"), and the rest print bare;
+ *   run 2e (the wording doc's part 9): it says the pronoun is the one the director's roster gives,
+ *   since the summary of the characters sends pronouns here (DERIVED_LABELS.characterContext);
  * - ROSTER_NPC_HEADING, over the game's own characters, each with its canon pronoun or none.
  */
 const ROSTER_OPENING = 'Every character of the game, first name and then the full name the article prints. A surname that is not on this list is invented, so use these.';
-const ROSTER_PLAYED = 'A name marked with a pronoun, or marked as having none given, was played in this session. The rest were not played.';
+const ROSTER_PLAYED = "A name marked with a pronoun, or marked as having none given, was played in this session, and the pronoun is the one the director's roster gives. The rest were not played.";
 const ROSTER_NPC_HEADING = "The game's own characters, who are never played. Where a pronoun is given here, it is fixed:";
 
 /**

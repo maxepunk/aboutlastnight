@@ -34,24 +34,34 @@ describe('derived-material labels', () => {
     );
     expect(DERIVED_LABELS.characterContext).toBe(
       'A model made this summary from the documents in the record. Where it differs from a document, the document decides. ' +
-      "Its pronouns are the documents', which are often not this session's. Take pronouns from the roster."
+      "Its pronouns are the documents', which are often not this session's. Take pronouns from the list of names."
     );
   });
 
   // Run 2c (the wording doc's part 4): the label over the sentences about Blake, word for word.
   it('the label over the sentences about Blake is the approved line', () => {
     expect(DERIVED_LABELS.narrativeTensions).toBe(
-      "Code gathered these sentences from the director's notes above: every one that mentions Blake. " +
+      "Code gathered these sentences from the director's notes above: every one that mentions Blake, by name or as the Valet. " +
       'A memory is sold to Blake, so these are where the notes record who was seen making a deal. ' +
       'They are listed again for that check only. Being listed here does not make them more important to the story.'
     );
   });
 
-  it('labels the transaction links for what they are: the model\'s pairing of an observation with sales', () => {
-    // A transaction link joins one of the director's observations to a sale: the
-    // join is the model's reading.
-    expect(DERIVED_LABELS.transactionLinks).toMatch(/observation/);
-    expect(DERIVED_LABELS.transactionLinks).toMatch(/sale/);
-    expect(DERIVED_LABELS.transactionLinks).toMatch(/reading/);
+  // Run 2e (the wording doc's part 9): the label over the sales a model paired with the notes,
+  // word for word. A pairing is the model's guess; the notes or the ledger decide.
+  it('the label over the paired sales is the approved line', () => {
+    expect(DERIVED_LABELS.transactionLinks).toBe(
+      "A model paired each observation below, quoted from the director's notes, with the sales in the ledger it judged to match. " +
+      "Each pairing is the model's guess, not something the notes state. Where the notes or the ledger point another way, they decide."
+    );
+  });
+
+  // Run 2e: with the label over the paired sales reworded, no label names the model that made
+  // it, and none says "the record decides" (docs/architecture/director-words.md says so).
+  it('no label names the model that made it, or says the record decides', () => {
+    for (const label of Object.values(DERIVED_LABELS)) {
+      expect(label).not.toMatch(/\((?:Opus|Haiku|Sonnet)\)/);
+      expect(label).not.toMatch(/the record decides/);
+    }
   });
 });

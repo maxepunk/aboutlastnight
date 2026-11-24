@@ -236,12 +236,13 @@ const THREADS_SENTENCE = Object.freeze({
  *   writer, its rework and the article's judge): which line is the answer to the question, and what
  *   "from the director's notes" is;
  * - `forTheArticle`, after them in the form without the evidence, the one the article writer and
- *   its rework read: the headline prints as it stands, and every other line is the director's to
- *   decide by, not a sentence for the article.
+ *   its rework read: the headline prints as it stands, and the other lines, the director's own
+ *   among them (their changes, their answers, their read of the session), say what the article
+ *   argues and are no sentence for the article (run 2e, the wording doc's part 9).
  */
 const LINES_SENTENCES = Object.freeze({
   shared: "WHERE IT ENDS UP is Nova's answer to the QUESTION. FROM THE DIRECTOR'S NOTES, when it is there, is the director's own read of the session, which this angle rests on.",
-  forTheArticle: 'The headline is printed as it stands. Every other line here was written for the director to decide by, the lines the director changed included. They say what the article argues. None of them is a sentence for the article.'
+  forTheArticle: "The headline is printed as it stands. The other lines here, the director's own among them, say what the article argues. None of them is a sentence for the article."
 });
 
 /**

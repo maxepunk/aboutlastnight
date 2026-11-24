@@ -19,7 +19,7 @@ const CANONICAL = { Vic: 'Vic Kingsley', Mel: 'Mel Nilsson' };
 
 /** Run 2c (the wording doc's part 5): the heading over the names, and the one over the game's own characters. */
 const NAMES_HEADING = 'Every character of the game, first name and then the full name the article prints. A surname that is not on this list is invented, so use these.';
-const PLAYED = 'A name marked with a pronoun, or marked as having none given, was played in this session. The rest were not played.';
+const PLAYED = "A name marked with a pronoun, or marked as having none given, was played in this session, and the pronoun is the one the director's roster gives. The rest were not played.";
 const NPC_HEADING = "The game's own characters, who are never played. Where a pronoun is given here, it is fixed:";
 
 describe('generateRosterSection — NPC pronoun line', () => {

@@ -58,7 +58,7 @@ describe('generateRosterSection (journalist)', () => {
   // or with none given, was played, and the rest were not; the line on a name with no pronoun went.
   it('prints no pronoun for a canonical character not on this session\'s roster, and the heading says why', () => {
     expect(linesOf(section)).toContain('- Jamie → Jamie Park');
-    expect(section).toContain('A name marked with a pronoun, or marked as having none given, was played in this session. The rest were not played.');
+    expect(section).toContain("A name marked with a pronoun, or marked as having none given, was played in this session, and the pronoun is the one the director's roster gives. The rest were not played.");
     expect(section).not.toMatch(/no pronoun .* not on this session's roster/i);
   });
 
