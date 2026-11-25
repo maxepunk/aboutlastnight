@@ -530,7 +530,25 @@ const REMOVED_PHRASES = [
   // investigation runs the day after the party; and C8's last sentence says each line the article
   // quotes is word for word, where it read as print every line the map places.
   'there that night',
-  'The article carries each line word for word'
+  'The article carries each line word for word',
+
+  // Phase 18 (R12; brief G3, R56): the retired wording, so it cannot come back in a writer's
+  // instructions, and the tags of the retired truth rules and craft files ('<craft-' finds every
+  // one the pattern above names). Then run 2h's leftovers: the retired preamble of the notes from
+  // the stops, the weave writer's old list labels, and the map task's old pointer at the
+  // meeting's note (R57). R12's "in story terms" and "the room's verdict" join once the skill
+  // (.claude/skills/journalist-report, .claude/agents) no longer carries them: the integrator adds
+  // them after run 3's slices merge.
+  'the reporting-mode block',
+  'the mode block',
+  'CRAFT GUIDANCE',
+  'exposer',
+  '<truth-rules>',
+  '<craft-',
+  'Standing notes the director gave at earlier stops',
+  'ROSTER PCs',
+  'NON-ROSTER PCs',
+  'the approval note marked arc-selection'
 ];
 
 /** Blocks that hold the director's words or the record, whole. */
@@ -580,7 +598,9 @@ const GATE_NOTE_LINE = /^- \[[^\]\n]+\] /m;
  * (DIRECTOR_NOTE_LABEL) to where the context's next block begins (directorNoteEnd). Run 2c (R36)
  * took away the NOTE line that used to end it, so the end is read by node-helpers' own rule.
  */
-const { DIRECTOR_NOTE_LABEL, directorNoteEnd } = require('../../workflow/nodes/node-helpers');
+const {
+  DIRECTOR_NOTE_LABEL, directorNoteEnd, leadingRuleIds
+} = require('../../workflow/nodes/node-helpers');
 const SEND_BACK_HEAD = `${DIRECTOR_NOTE_LABEL}\n`;
 
 /**
@@ -691,6 +711,38 @@ function stripModelOutputJson(text) {
   return out.join('\n');
 }
 
+/**
+ * The headings a judge's findings print under in a rework (node-helpers.js buildRevisionContext):
+ * its ISSUES_HEADING for the must-fix lines, and SHOULD CONSIDER for the suggestions. A code
+ * check's lines print under the check's own label (CODE_CHECKS), so they are never under these.
+ */
+const FINDINGS_HEADINGS = new Set(['ISSUES TO ADDRESS:', 'SHOULD CONSIDER:']);
+const FINDING_LINE = /^ {2}- (.*)$/;
+
+/**
+ * Each judge's finding a rework carries taken out, its "  -" kept (phase 18, brief G3). A finding
+ * opens with the codes of the limits it is about (leadingRuleIds), which the rework reads as the
+ * limits' names (withLimitNames): a line under FINDINGS_HEADINGS that opens with either is the
+ * judge's. Any other line there, a fact check's among them, is written by code and stays. The
+ * block runs to the rule over the next block, a tag, or a heading of its own.
+ */
+function stripJudgeFindings(text) {
+  // Read when a render is scanned, as withLimitNames reads it: evaluator-nodes.js requires
+  // node-helpers.js at its top.
+  const { LIMIT_CODES } = require('../../workflow/nodes/evaluator-nodes');
+  const isJudges = (finding) => leadingRuleIds(finding).length > 0
+    || LIMIT_CODES.some((limit) => finding.startsWith(limit.name));
+  const lines = text.split('\n');
+  let inFindings = false;
+  for (let i = 0; i < lines.length; i += 1) {
+    if (FINDINGS_HEADINGS.has(lines[i])) { inFindings = true; continue; }
+    if (/^(?:═|<)|^[A-Z][A-Z' ]*:$/.test(lines[i])) { inFindings = false; continue; }
+    const finding = inFindings && lines[i].match(FINDING_LINE);
+    if (finding && isJudges(finding[1])) lines[i] = '  -';
+  }
+  return lines.join('\n');
+}
+
 /** Each whiteboard reading's values taken out, its labels kept. */
 function stripWhiteboardReadings(text) {
   const lines = text.split('\n');
@@ -761,6 +813,7 @@ function instructionText(render) {
   text = stripModelOutputJson(text);
   text = stripWhiteboardReadings(text);
   text = stripTensionSentences(text);
+  text = stripJudgeFindings(text);
   text = text.replace(/(The director's description[^:\n]*:).*$/gm, '$1');
   return text;
 }
