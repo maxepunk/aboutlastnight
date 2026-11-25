@@ -1300,8 +1300,9 @@ ${loadRuleSet('outline', { theme: this.themeName }).craft}`;
    *
    * Phase 18, run 2b (R22): the roster without the character context, the model's digest of the
    * documents. The article writer has the documents themselves in the record, and the digest
-   * carried the documents' pronouns, which the roster overrides. The judges' roster keeps it
-   * (evaluator-nodes.js renderJudgeRosterSection).
+   * carried the documents' pronouns, which the roster overrides. Since run 2h the judges' roster
+   * prints without it too (evaluator-nodes.js renderJudgeRosterSection, `withCharacterContext:
+   * false`).
    *
    * @returns {Promise<string>}
    * @throws {Error} for a theme with no story map (lib/map.js mapSchemaFor), such as the

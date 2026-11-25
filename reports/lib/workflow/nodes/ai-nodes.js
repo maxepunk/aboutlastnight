@@ -1699,9 +1699,9 @@ function articleWriterInputs(state) {
 /**
  * The article writer's first draft (phase 4, brief 4.7b; spec 6.1): one call, its prompt
  * built from the writer's own inputs (articleWriterInputs: the settled weave, the map as
- * the article reads it, the money, the session facts, the director's notes, the sentences about
- * Blake, which it no longer prints, and the standing notes, the record, the input-review
- * corrections, the photo descriptions and the photos it places), its output held to the article
+ * the article reads it, the money, the session facts, the director's notes, the standing notes,
+ * the record, the input-review corrections, the photo descriptions and the photos it places;
+ * the sentences about Blake left them in runs 2c and 2e), its output held to the article
  * writer's schema, the one its prompt prints (prompt-builder.js WRITER_BUNDLE_SCHEMA; phase 18,
  * run 2b, R23).
  * Code stamps the map's headline, deck, section headings and top photo into the draft
