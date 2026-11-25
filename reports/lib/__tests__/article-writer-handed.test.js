@@ -10,8 +10,8 @@
  *   map whole.
  * - The article writer's system prompt, and its rework's, without the character digest (R22). The
  *   judges keep their roster as it was.
- * - The article writer reads its own part before the brief (R24); the weave and the map keep the
- *   brief first.
+ * - The article writer reads its own part before the brief (R24). Run 2h (R45) reverses it: the
+ *   article writer reads the brief, then its own part, as the weave and the map writers do.
  *
  * The real nodes run on the rework fixture with the real PromptBuilder and a recording stand-in
  * for the model. Invented names and text: the repo is public.
@@ -212,21 +212,21 @@ describe("R22: the article writer's system prompt holds no character digest", ()
   });
 });
 
-describe('R24: the article writer reads its own part before the brief', () => {
-  it("lists job-article before the brief for the article call, and keeps the brief first for the weave's and the map's", () => {
-    expect(RULE_SET_CALLS.article).toEqual(['job-article', 'brief']);
+describe('R45: the article writer reads the brief, then its own part, as the other two writers do', () => {
+  it('lists the brief before job-article for the article call, as for the weave and the map', () => {
+    expect(RULE_SET_CALLS.article).toEqual(['brief', 'job-article']);
     expect(RULE_SET_CALLS.arc).toEqual(['brief', 'job-weave']);
     expect(RULE_SET_CALLS.outline).toEqual(['brief', 'job-map']);
   });
 
-  it('prints <job-article> before <brief>, after the schema and before the standing notes, in the writer and its rework', async () => {
+  it('prints <brief> before <job-article>, after the schema and before the standing notes, in the writer and its rework', async () => {
     const state = articleState({ directorGateNotes: [{ gate: 'outline', kind: 'approval', round: 1, text: 'Keep it.', at: 't' }] });
     const { writer, rework } = await articleCalls(state);
     [writer.prompt, rework.prompt].forEach((prompt) => {
       const at = (marker) => prompt.indexOf(marker);
-      expect(at('\n</SCHEMA>\n')).toBeLessThan(at('\n<job-article>\n'));
-      expect(at('\n<job-article>\n')).toBeLessThan(at('\n<brief>\n'));
-      expect(at('\n</brief>')).toBeLessThan(at('\n<DIRECTOR_GUIDANCE>\n'));
+      expect(at('\n</SCHEMA>\n')).toBeLessThan(at('\n<brief>\n'));
+      expect(at('\n<brief>\n')).toBeLessThan(at('\n<job-article>\n'));
+      expect(at('\n</job-article>')).toBeLessThan(at('\n<DIRECTOR_GUIDANCE>\n'));
     });
   });
 });

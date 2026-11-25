@@ -87,9 +87,9 @@ describe('4.7b: the article writer reads the settled weave, then the map', () =>
       '<GENERATION_INSTRUCTION>',
       '<SCHEMA>',
       // Each section by the line that opens it (phase 18, R3): where the craft files sat, the
-      // article writer's own part, then the brief (run 2b, R24).
-      '\n<job-article>\n',
+      // brief, then the article writer's own part (run 2h, R45).
       '\n<brief>\n',
+      '\n<job-article>\n',
       '\n<DIRECTOR_GUIDANCE>\n'
     ].map((marker) => [marker, user.indexOf(marker)]);
     order.forEach(([marker, at]) => expect(`${marker}: ${at >= 0}`).toBe(`${marker}: true`));

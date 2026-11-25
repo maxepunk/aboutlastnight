@@ -33,14 +33,13 @@ const JOURNALIST = { theme: 'journalist' };
 const CORE_FILES = ['world', 'limits'];
 /**
  * R2: each call's own files, after the core. Each writer reads the brief and its own part; the
- * judges read neither (the spec's section 1). The weave and the map writers read the brief first;
- * the article writer reads its own part first (run 2b, R24), knowing which of the brief's work
- * the map already did.
+ * judges read neither (the spec's section 1). Every writer reads the brief first, then its own
+ * part, as the spec's sections 1 and 3 give it (run 2h, R45, reversing run 2b's R24).
  */
 const CALL_FILES = {
   arc: ['brief', 'job-weave'],
   outline: ['brief', 'job-map'],
-  article: ['job-article', 'brief'],
+  article: ['brief', 'job-article'],
   'judge-arc': [],
   'judge-article': []
 };
@@ -211,20 +210,20 @@ describe('the default root, which a test can point at the stubs', () => {
 const RULE_FILE_PINS = {
   world: ['191569ff5475068322fd4d392132ef5101dc832e72de91bcac1b5018e15e3e3a', 5763,
     'phase 18, run 2c: the group statement\'s line as the director approved it on 2026-11-24'],
-  limits: ['c1bf1bfb8ad521478cc781c3ffbe64e45641d267c19dd828c02c9a35cdd3102f', 9601,
-    'phase 18, run 2c: the money and whose account it is, as the director approved them on 2026-11-24'],
+  limits: ['c46d70bc7eccabcf18bba1d43eebd1a59851d73f93077431124a2668740db5c2', 9692,
+    'phase 18, run 2h: the sentence on "we" for a session where Nova was in the warehouse, as the director approved it on 2026-11-24'],
   'mode-on-site': ['8fbacd078d0c52df7185128d1408c090cc6f769fca1d44997545eed7bbc559bd', 1012,
     'phase 18: the text the director settled on 2026-11-20'],
   'mode-remote': ['e0c7db4180d5595bc8f7048347c443e311c264b690347e933638642af72e2e5a', 749,
     'phase 18: the text the director settled on 2026-11-20'],
-  brief: ['82d921383dd5ffc33ff59075a6f5f061caa6ca750df2e7c063ab1fc4e96e019e', 9696,
-    'phase 18, run 2c: how the two fit and Nova, as the director approved them on 2026-11-24'],
+  brief: ['4a092808793901714d8e2b02a5548a0c8b1223b9d0b2450275246ade4aff6351', 9715,
+    'phase 18, run 2h: the evidence the argument needs, in "Nova", as the director approved it on 2026-11-24'],
   'job-weave': ['1560ccbdacc48d7a63fde9eba916f80d0ceb6f5ff3ba67f71b111ed2038f0de7', 5209,
     'phase 18: the text the director settled on 2026-11-20'],
-  'job-map': ['e7dae3ffb35ee921b54abd2fcfde0176e805bdb239d92673a802f2ea7667f8e0', 5401,
-    'phase 18, run 2c: each connection on one beat, and the headings, as the director approved them on 2026-11-24'],
-  'job-article': ['ff2d6d0fa5a762e1d091d61c1ac428646cfea549da14318fad97ddef49095e53', 2942,
-    'phase 18: the text the director settled on 2026-11-20']
+  'job-map': ['0b689f706af16dea27253433a59a202e3516141e6bdf9ffe142b6730bff12f1c', 5417,
+    "phase 18, run 2h: a section's heading says what the section is about and does not give away what it finds, as the director approved it on 2026-11-24"],
+  'job-article': ['6dbb8d529b0ada6b065c6a27242069e30192bd3defb4cc2675671fd7b786cfd5', 3068,
+    "phase 18, run 2h: what a card's headline and a sidebar entry's lines say, as the director approved it on 2026-11-24"]
 };
 
 describe('the rule files', () => {

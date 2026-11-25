@@ -39,12 +39,11 @@ const CORE_FILES = ['world', 'limits'];
 
 /**
  * Each call's own files, after the core (phase 18, R2; the spec's sections 1 and 3): each
- * writer reads the brief and its own part. The weave writer's part is `job-weave`, the map
- * writer's `job-map` and the article writer's `job-article`. The weave and the map writers read
- * the brief first, since their parts open on "The brief above". The article writer reads its own
- * part first (run 2b, R24): it says the map already did the brief's work on the steps, so the
- * writer reads the brief knowing which of its work is left. A reworker passes its writer's
- * call, so it reads what its writer reads. The judges read the world, the limits and the part
+ * writer reads the brief, then its own part, right after it. The weave writer's part is
+ * `job-weave`, the map writer's `job-map` and the article writer's `job-article`. The article
+ * writer read its own part first for a while (run 2b, R24); run 2h (R45) reversed that, so all
+ * three read the brief first, as the spec gives it. A reworker passes its writer's call, so it
+ * reads what its writer reads. The judges read the world, the limits and the part
  * about this session alone: they write no notes on the writing, so they read neither the
  * brief nor a writer's part (the story meeting's fact check, brief 4.4; the article judge,
  * brief 4.7a).
@@ -56,7 +55,7 @@ const CORE_FILES = ['world', 'limits'];
 const RULE_SET_CALLS = Object.freeze({
   arc: ['brief', 'job-weave'],
   outline: ['brief', 'job-map'],
-  article: ['job-article', 'brief'],
+  article: ['brief', 'job-article'],
   'judge-arc': [],
   'judge-article': []
 });

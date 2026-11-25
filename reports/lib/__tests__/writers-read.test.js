@@ -28,13 +28,13 @@ const recordingSdk = (value) => jest.fn(async () => clone(value));
 const sent = (sdk) => sdk.mock.calls[0][0];
 
 /**
- * Phase 18, R2: each writer's own files, the brief then its own part. Run 2b (R24): the article
- * writer reads its own part, then the brief.
+ * Phase 18, R2: each writer's own files, the brief then its own part, the article writer's too
+ * (run 2h, R45, reversing run 2b's R24).
  */
 const R2 = {
   arc: ['brief', 'job-weave'],
   outline: ['brief', 'job-map'],
-  article: ['job-article', 'brief']
+  article: ['brief', 'job-article']
 };
 
 /**
@@ -156,7 +156,7 @@ describe("R2: every writer and every rework reads the brief, then its own part, 
     'article writer', 'article rework'
   ])("%s: the call's two files in its order, together, then <DIRECTOR_GUIDANCE>", (name) => {
     const [call, { prompt }] = renders[name];
-    // The first and the second file the call reads (R2; R24 for the article call).
+    // The first and the second file the call reads (R2; R45).
     const [brief, job] = R2[call];
     const opening = (tag) => prompt.search(new RegExp(`^<${tag}>$`, 'm'));
     const jobEnd = prompt.search(new RegExp(`^</${job}>$`, 'm'));

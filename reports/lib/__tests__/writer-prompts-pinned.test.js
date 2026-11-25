@@ -580,10 +580,13 @@ const REPO = path.join(__dirname, '..', '..');
  *   outline-journalist 24682 -> 25089 (+407). The article writer's form prints no HEADLINE line
  *   (-60), and its intro ends on the two approved sentences (-44): article-journalist
  *   26491 -> 26387 (-104). The arc pin does not move.
+ * - Phase 18, run 2h, slice W (R45), the article writer reads <brief>, then <job-article>, as the
+ *   other two writers do: article-journalist moves by hash alone (26387). The rule files are stubs
+ *   here, so their copy moves no pin.
  */
 const PINNED = {
   'outline-journalist': ['da9211561dceb5552b9134f26bbd8fdf5320dab2269fd854b33a9b9f306360ad', 25089],
-  'article-journalist': ['78c720b6397d4ea68490256e98979506fd1db8f75d2b6aa1cad8ef04358ec141', 26387],
+  'article-journalist': ['523eec76d52728a1ab3197e07c37b8b1e0c5d005d6cee11f4173b5809abc0850', 26387],
   'arcs-journalist': ['bab64787b2a486d00780f3c18c6d4766eef3383d43d85cdb04e328c5c2fc8e56', 12831]
 };
 
