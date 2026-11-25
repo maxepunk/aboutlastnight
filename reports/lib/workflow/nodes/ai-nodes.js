@@ -47,7 +47,7 @@ const {
 // photo names; the settled weave, which the map writer reads first, as its task. Phase 17, fix
 // wave 3: the one rule that holds the map's headline, and the settled angle whose headline the
 // first map carries.
-const { mapSchemaFor, topPhotoOf, holdHeadline } = require('../../map');
+const { mapSchemaFor, topPhotoOf, holdHeadline, mapDirectorsShare } = require('../../map');
 const { settledAngleOf, isWeave } = require('../../weave');
 const { settledWeaveOf, settledMarksOf } = require('../../prompt-renderers/settled-weave');
 // Brief 4.13: the map's and the article's reworks open with their theme's rework identity.
@@ -1961,9 +1961,10 @@ function stepMatch(steps, i, field) {
  *   section's heading (`sections[#<slot>].heading`), the places the stamp records them at;
  * - its text is the line the map, as the article reads it (articleMapOf), gives at that place, a
  *   heading from the first section of the map under the section's slot, as the stamp takes it;
- * - the director did not write or change that line: no standing edit of the map's that the map
- *   carries (carriedEdits, the reading the stamp used before run 2f) is at the map's headline, its
- *   deck, a section's heading or a section the director added whole; and, for the headline, the
+ * - the director did not write or change that line: the director's share of the map, read from
+ *   the standing edits the map carries (lib/map.js mapDirectorsShare over carriedEdits), holds no
+ *   rewrite of the map's headline or its deck, no rewrite of that section's heading and no section
+ *   the director added whole under that slot; and, for the headline, the
  *   settled angle's headline the map carries is not one the director changed at the story meeting
  *   (settledMarksOf, its `pitch:headline` line; the map's headline is the settled angle's,
  *   lib/map.js holdHeadline, unless a send-back of the map rewrote it).
@@ -1980,15 +1981,16 @@ function linesApprovedOnMap(edits, state) {
   const map = list.length > 0 ? articleMapOf(state) : null;
   if (!map) return [];
 
-  // The lines of the map the director wrote or changed: 'headline', 'deck', or 'heading:<slot>'.
+  // The lines of the map the director wrote or changed: 'headline', 'deck', or 'heading:<slot>',
+  // read from the director's share of the map (lib/map.js mapDirectorsShare), the one reading the
+  // map's checks and its page use: a field of the map they rewrote, a section they added whole, a
+  // section's heading they rewrote. The share leaves out a cut.
+  const share = mapDirectorsShare(carriedEdits(state._outlineHandEdits, state.outline));
   const theirs = new Set();
-  carriedEdits(state._outlineHandEdits, state.outline).forEach((edit) => {
-    if (isCut(edit) || !Array.isArray(edit.at)) return;
-    const steps = edit.at;
-    const head = stepKey(steps, 0);
-    if (steps.length === 1 && (head === 'headline' || head === 'deck')) theirs.add(head);
-    const slot = head === 'sections' ? stepMatch(steps, 1, 'slot') : null;
-    if (slot !== null && (steps.length === 2 || (steps.length === 3 && stepKey(steps, 2) === 'heading'))) theirs.add(`heading:${slot}`);
+  ['headline', 'deck'].forEach((field) => { if (Object.prototype.hasOwnProperty.call(share.fields, field)) theirs.add(field); });
+  Object.keys(share.sections).forEach((slot) => theirs.add(`heading:${slot}`));
+  Object.keys(share.sectionFields).forEach((key) => {
+    if (key.endsWith('.heading')) theirs.add(`heading:${key.slice(0, -'.heading'.length)}`);
   });
   const weave = state.weave;
   const settled = isWeave(weave) ? settledAngleOf(weave) : null;
