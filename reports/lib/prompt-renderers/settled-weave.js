@@ -419,5 +419,8 @@ module.exports = {
   MEETING_CHANGE_PREFIX,
   meetingChangeId,
   // Piece 3 (brief 3C): the director's changes the settled weave shows
-  settledChangesOf
+  settledChangesOf,
+  // Phase 18, run 2i (R59): each line of the settled angle the director changed, which tells the
+  // article's judge whether the map's headline is the director's (ai-nodes.js linesApprovedOnMap)
+  settledMarksOf
 };

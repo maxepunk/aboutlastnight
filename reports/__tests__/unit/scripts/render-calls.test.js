@@ -104,6 +104,21 @@ describe.each(['journalist'])('%s: a judge with the director\'s edits sends what
     expect(rendered.userPrompt).toContain('E1 (section "the-story", paragraph): "Then the paternity test came back, and the room went quiet."');
     expectSent(sdk.mock.calls[0][0], rendered);
   });
+
+  // Phase 18, run 2i (R58): the judge splits the standing lines the real stamp recorded by the state
+  // it is given (ai-nodes.js linesApprovedOnMap), so the script, which passes the same state and
+  // edits, renders the two lists the node sends.
+  test('the article judge, on a draft the stamp made', async () => {
+    const { _testing: nodes } = require('../../../lib/workflow/nodes/ai-nodes');
+    const base = { ...reworkFixtureState(theme), evaluationHistory: [], articleApproved: false, articleRevisionCount: REVISION_CAPS.ARTICLE };
+    const { contentBundle, edits } = nodes.stampFromMap(clone(PREVIOUS_BUNDLE), base);
+    const state = { ...base, contentBundle, _articleHandEdits: edits };
+    const sdk = recordingSdk(() => VERDICT);
+    await evaluateArticle(clone(state), cfg(sdk, theme));
+    const rendered = await renderJudge(calls, state, 'article');
+    expect(rendered.userPrompt).toContain('THE LINES THE DIRECTOR APPROVED ON THE MAP (final as approved):');
+    expectSent(sdk.mock.calls[0][0], rendered);
+  });
 });
 
 // 4.5: after a director's round at the story meeting, the weave's fact check reads the

@@ -48,8 +48,8 @@ const {
 // wave 3: the one rule that holds the map's headline, and the settled angle whose headline the
 // first map carries.
 const { mapSchemaFor, topPhotoOf, holdHeadline } = require('../../map');
-const { settledAngleOf } = require('../../weave');
-const { settledWeaveOf } = require('../../prompt-renderers/settled-weave');
+const { settledAngleOf, isWeave } = require('../../weave');
+const { settledWeaveOf, settledMarksOf } = require('../../prompt-renderers/settled-weave');
 // Brief 4.13: the map's and the article's reworks open with their theme's rework identity.
 const { identityLineOf } = require('../../theme-config');
 const {
@@ -1852,8 +1852,10 @@ function isBlankLine(value) {
  * `headline.deck`, `sections[#<slot>].heading`). So the fixes' machinery reads each as the
  * director's, with no rule of its own: an automatic pass that changes one gets it put back
  * (settleEdits), a judge's finding located in one is a concern for the desk and holds no rework
- * (guardDirectorEdits), every rework and the article's judge are listed it among the director's
- * edits, and a send-back's rework may change one where the director's note asks, saying why. A
+ * (guardDirectorEdits), every rework is listed it among the director's edits, and a send-back's
+ * rework may change one where the director's note asks, saying why. The article's judge is listed
+ * each one too, by its id, but a line a writer wrote and the director only approved prints apart
+ * from the director's edits, since it is not the director's words (run 2i; linesApprovedOnMap). A
  * line the director retypes at the desk takes the stamped one's place at the next send-back, as
  * any later edit does. Until run 2f only a line the director had written or changed on the map
  * was recorded, and no heading was stamped or held at all.
@@ -1930,6 +1932,90 @@ function stampFromMap(bundle, state) {
     without.heroImage = rest;
   }
   return { contentBundle: stamped, edits: standingAfterSendBack(null, without, stamped, 'bundle') };
+}
+
+/** The key of a step on an edit's path, or null for an element's step. */
+function stepKey(steps, i) {
+  return steps[i] && typeof steps[i] === 'object' && 'key' in steps[i] ? steps[i].key : null;
+}
+
+/** An element's step on an edit's path, matched by `field`: the field's text trimmed, or null. */
+function stepMatch(steps, i, field) {
+  const step = steps[i];
+  if (!step || typeof step !== 'object' || 'key' in step || !step.match || typeof step.match !== 'object') return null;
+  const value = step.match[field];
+  return value === undefined || value === null ? null : String(value).trim();
+}
+
+/**
+ * Which of the article stop's standing lines are lines of the map that a writer wrote and the
+ * director approved with the map (phase 18, run 2i, R59; the director's choice of 2026-11-24: such
+ * a line is final, and it is not the director's words). The lock (stampFromMap, R40) records the
+ * map's headline, its deck and each section's heading at the article stop whoever wrote them, so
+ * the standing edits alone no longer tell the director's own lines from the lines they approved.
+ * The article's judge lists the two kinds apart (evaluator-nodes.js renderJudgeDirectorEdits), and
+ * nothing else reads this: who may change a line is as before (R60).
+ *
+ * A standing line is approved on the map when all three hold:
+ * - its place is the headline (`headline.main`), the line under it (`headline.deck`) or a
+ *   section's heading (`sections[#<slot>].heading`), the places the stamp records them at;
+ * - its text is the line the map, as the article reads it (articleMapOf), gives at that place, a
+ *   heading from the first section of the map under the section's slot, as the stamp takes it;
+ * - the director did not write or change that line: no standing edit of the map's that the map
+ *   carries (carriedEdits, the reading the stamp used before run 2f) is at the map's headline, its
+ *   deck, a section's heading or a section the director added whole; and, for the headline, the
+ *   settled angle's headline the map carries is not one the director changed at the story meeting
+ *   (settledMarksOf, its `pitch:headline` line; the map's headline is the settled angle's,
+ *   lib/map.js holdHeadline, unless a send-back of the map rewrote it).
+ * Every other standing line is the director's own, and so is any line this cannot read: no map, an
+ * edit with no steps, a place it does not know, a cut, or a text that differs from the map's.
+ *
+ * @param {Object[]} edits - the article's standing edits as the judge is listed them (evaluator-nodes.js judgedEdits)
+ * @param {Object} state - reads the map (`outline`), its standing edits (`_outlineHandEdits`), the
+ *   weave and its standing edits (`_weaveHandEdits`), and the leave-out list through articleMapOf
+ * @returns {Object[]} the approved lines among `edits`, in their order; changes neither the edits nor the state
+ */
+function linesApprovedOnMap(edits, state) {
+  const list = Array.isArray(edits) ? edits : [];
+  const map = list.length > 0 ? articleMapOf(state) : null;
+  if (!map) return [];
+
+  // The lines of the map the director wrote or changed: 'headline', 'deck', or 'heading:<slot>'.
+  const theirs = new Set();
+  carriedEdits(state._outlineHandEdits, state.outline).forEach((edit) => {
+    if (isCut(edit) || !Array.isArray(edit.at)) return;
+    const steps = edit.at;
+    const head = stepKey(steps, 0);
+    if (steps.length === 1 && (head === 'headline' || head === 'deck')) theirs.add(head);
+    const slot = head === 'sections' ? stepMatch(steps, 1, 'slot') : null;
+    if (slot !== null && (steps.length === 2 || (steps.length === 3 && stepKey(steps, 2) === 'heading'))) theirs.add(`heading:${slot}`);
+  });
+  const weave = state.weave;
+  const settled = isWeave(weave) ? settledAngleOf(weave) : null;
+  if (settled && typeof map.headline === 'string' && typeof settled.angle.headline === 'string'
+    && settled.angle.headline.trim() === map.headline.trim()
+    && settledMarksOf(weave, carriedEdits(state._weaveHandEdits, weave)).byLine.has('pitch:headline')) {
+    theirs.add('headline');
+  }
+
+  // The map's line at a standing line's place: `{line, text}`, or null for any other place.
+  const mapSections = new Map();
+  (Array.isArray(map.sections) ? map.sections : []).forEach((section) => {
+    if (section && typeof section.slot === 'string' && !mapSections.has(section.slot.trim())) mapSections.set(section.slot.trim(), section);
+  });
+  const mapLineAt = (steps) => {
+    if (steps.length === 2 && stepKey(steps, 0) === 'headline' && stepKey(steps, 1) === 'main') return { line: 'headline', text: map.headline };
+    if (steps.length === 2 && stepKey(steps, 0) === 'headline' && stepKey(steps, 1) === 'deck') return { line: 'deck', text: map.deck };
+    const slot = steps.length === 3 && stepKey(steps, 0) === 'sections' && stepKey(steps, 2) === 'heading' ? stepMatch(steps, 1, 'id') : null;
+    const section = slot ? mapSections.get(slot) : null;
+    return section ? { line: `heading:${slot}`, text: section.heading } : null;
+  };
+
+  return list.filter((edit) => {
+    if (!edit || typeof edit !== 'object' || !Array.isArray(edit.at) || isCut(edit) || typeof edit.after !== 'string') return false;
+    const place = mapLineAt(edit.at);
+    return Boolean(place) && !theirs.has(place.line) && !isBlankLine(place.text) && edit.after.trim() === place.text.trim();
+  });
 }
 
 /**
@@ -2464,6 +2550,9 @@ module.exports = {
   articleWriterInputs,
   // Brief 4.7b: the map as the article writer, its rework and its stamp read it
   articleMapOf,
+  // Phase 18, run 2i (R59): which standing lines of the article a writer wrote and the director
+  // approved on the map, which the article's judge lists apart from the director's edits
+  linesApprovedOnMap,
   isPhotoExcluded,
   // Brief 4.6: the photos kept for the article, which the map checks and the stop count
   keptPhotoFilenames,

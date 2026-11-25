@@ -256,7 +256,9 @@ describe('R40: the lines on the approved map are locked at the article', () => {
       expect(after.edits.map((edit) => edit.id)).toEqual(['E1', 'E2', 'E4', 'E5']);
     });
 
-    it('are listed to a rework and to the judge among the director\'s edits, each by its id, its place and its text', async () => {
+    // Run 2i (R58): the judge lists them apart from the director's edits, as lines the director
+    // approved on the map; a rework is listed them among the director's edits, as before.
+    it('are listed to a rework among the director\'s edits, and to the judge as lines approved on the map, each by its id, its place and its text', async () => {
       const { state, contentBundle, _articleHandEdits } = await stamped();
       const LISTED = [
         `E1 (headline, main): "${MAP.headline}"`,
@@ -271,6 +273,8 @@ describe('R40: the lines on the approved map are locked at the article', () => {
       });
       expect(contextSection).toContain(`\n\n${LISTED}\n</HAND_EDITS>`);
       const judge = judges.buildEvaluationUserPrompt('article', state, { factCheck: null, directorEdits: judges.judgedEdits('article', state) });
+      expect(judge).toContain(`THE LINES THE DIRECTOR APPROVED ON THE MAP (final as approved):\n`);
+      expect(judge).not.toContain("THE DIRECTOR'S EDITS (");
       expect(judge).toContain(`\n\n${LISTED}\n\nTHE FACT CHECK ON THIS BUNDLE`);
     });
   });

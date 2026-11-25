@@ -113,10 +113,15 @@ function block(text, tag) {
   return text.slice(open, close);
 }
 
-/** The list of the director's edits the article's judge was sent, from its heading to the fact check's. */
-function judgesEdits(prompt) {
-  const open = prompt.indexOf("THE DIRECTOR'S EDITS (record: the director's own text");
+/**
+ * The list of the lines the director approved on the map that the article's judge was sent, from its
+ * heading to the fact check's (run 2i, R58): a line the map gives and the director did not write is
+ * listed there, apart from the director's edits, which the prompt then does not print.
+ */
+function judgesApprovedLines(prompt) {
+  const open = prompt.indexOf('THE LINES THE DIRECTOR APPROVED ON THE MAP (final as approved):');
   expect(open).toBeGreaterThanOrEqual(0);
+  expect(prompt).not.toContain("THE DIRECTOR'S EDITS (");
   return prompt.slice(open, prompt.indexOf('THE FACT CHECK ON THIS BUNDLE', open));
 }
 
@@ -187,11 +192,12 @@ describe('R40: the lines on the approved map, through the article stage', () => 
     ]);
     expect(standing(stop.values)).toEqual(LOCKED);
 
-    // The first write's prompt holds no list of edits; the judge is listed the four, and nothing else is new in its prompt.
+    // The first write's prompt holds no list of edits; the judge is listed the four as lines the
+    // director approved on the map (run 2i), and nothing else is new in its prompt.
     const [writer] = sdk.calls('content-bundle');
     expect(writer.prompt).not.toContain('<HAND_EDITS>');
     const [judge] = sdk.calls('judge');
-    expect(judgesEdits(judge.prompt)).toContain(`\n\n${LISTED}\n\n`);
+    expect(judgesApprovedLines(judge.prompt)).toContain(`\n\n${LISTED}\n\n`);
 
     // Nothing is wrong, so the desk holds no mark, no line beside any piece and no record of a pass.
     expect(stop.data.lastEvaluation.ready).toBe(true);
@@ -353,8 +359,8 @@ describe('R40: the lines on the approved map, through the article stage', () => 
     ]);
     // The judge that read the new article was listed the lines it still carries, and not the headline the rework replaced.
     const lastJudge = sdk.calls('judge').pop();
-    expect(judgesEdits(lastJudge.prompt)).toContain(`\n\n${LISTED.split('\n').slice(1).join('\n')}\n\n`);
-    expect(judgesEdits(lastJudge.prompt)).not.toContain('E1 (headline, main)');
+    expect(judgesApprovedLines(lastJudge.prompt)).toContain(`\n\n${LISTED.split('\n').slice(1).join('\n')}\n\n`);
+    expect(lastJudge.prompt).not.toContain('E1 (headline, main)');
   });
 
   it('on a map where the director edited the headline, their headline is the line recorded there, as before, beside the lines they approved', async () => {
@@ -365,5 +371,14 @@ describe('R40: the lines on the approved map, through the article stage', () => 
     const { stop } = await toArticle(sdk, left);
     expect(stop.values.contentBundle.headline.main).toBe(DIRECTORS_HEADLINE);
     expect(standing(stop.values)).toEqual([['E1', 'headline.main', DIRECTORS_HEADLINE], ...LOCKED.slice(1)]);
+    // Run 2i (R58): the judge is listed the director's headline among the director's edits, and the
+    // three lines they approved after it, in the list of their own.
+    const [judge] = sdk.calls('judge');
+    const own = judge.prompt.indexOf("THE DIRECTOR'S EDITS (record: the director's own text");
+    const approved = judge.prompt.indexOf('THE LINES THE DIRECTOR APPROVED ON THE MAP (final as approved):');
+    expect(own).toBeGreaterThanOrEqual(0);
+    expect(approved).toBeGreaterThan(own);
+    expect(judge.prompt.slice(own, approved)).toContain(`\n\nE1 (headline, main): "${DIRECTORS_HEADLINE}"\n\n`);
+    expect(judge.prompt.slice(approved, judge.prompt.indexOf('THE FACT CHECK ON THIS BUNDLE'))).toContain(`\n\n${LISTED.split('\n').slice(1).join('\n')}\n\n`);
   });
 });

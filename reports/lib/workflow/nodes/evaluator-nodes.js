@@ -63,10 +63,11 @@ const { DIRECTOR_WORDS_SOURCES, directorWordsTexts } = require('../../director-w
 // whose money summary both judges print, 3.9 and run 2b), the one rule for a kept photo (the
 // 4b fix batch), and the whiteboard's filename (task 4c-fix). ARC_NOTES_LABEL is the arc
 // writer's label for the director's notes, which both judges print as their notes heading
-// (one source, fix 3.4b; the article judge since run 2b, R28).
+// (one source, fix 3.4b; the article judge since run 2b, R28). Phase 18, run 2i (R59): the one
+// reading of which standing lines a writer wrote and the director approved on the map.
 const { ARC_NOTES_LABEL } = require('./arc-specialist-nodes');
 const {
-  buildSessionFacts, articleWriterInputs, getPromptBuilder, isPhotoExcluded, whiteboardFilenameOf
+  buildSessionFacts, articleWriterInputs, getPromptBuilder, isPhotoExcluded, whiteboardFilenameOf, linesApprovedOnMap
 } = require('./ai-nodes');
 // Phase 4 (brief 4.4): the weave the fact check judges, the mark it leaves on it, and
 // the meeting's approval it skips on. Brief 4.5: the weave as the fact check judges it
@@ -1505,6 +1506,12 @@ ${advisory.text}`;
 }
 
 /**
+ * The heading of the article judge's second list (phase 18, run 2i, R58; the run 2c wording doc's
+ * part 11): the lines of the map a writer wrote and the director approved (renderJudgeDirectorEdits).
+ */
+const APPROVED_ON_MAP_HEADING = 'THE LINES THE DIRECTOR APPROVED ON THE MAP (final as approved):';
+
+/**
  * The director's edits in the judged output (F1; spec 2026-10-02 section 7), for the
  * article judge, right after the output it judges: each by
  * id, with its place and the director's text, or for a cut the text removed; under a
@@ -1520,11 +1527,20 @@ ${advisory.text}`;
  * (WEAVE_EDIT_LINES_GUIDE): it judges the writer's text, and a breach in a change of the
  * director's is a concern for the meeting, under the change's id.
  *
+ * Phase 18, run 2i (R58; the run 2c wording doc's part 11): at the article the standing lines print
+ * as two lists. A line the director wrote, cut or moved stays under the director's edits, in that
+ * block's words. A line of the map a writer wrote and the director approved (`approved`, from
+ * ai-nodes.js linesApprovedOnMap) prints after it under APPROVED_ON_MAP_HEADING: final as approved,
+ * and not the director's words. Each list prints only when it holds a line, each line through
+ * formatEditLines, and a concern about either kind opens with DIRECTOR_EDIT_PREFIX and the line's
+ * id. The weave's block takes no such list.
+ *
  * @param {Object[]|undefined} edits - judgedEdits
  * @param {'arcs'|'article'} phase
+ * @param {Object[]} [approved] - the article only: the lines among `edits` approved on the map
  * @returns {string}
  */
-function renderJudgeDirectorEdits(edits, phase) {
+function renderJudgeDirectorEdits(edits, phase, approved = []) {
   const list = Array.isArray(edits) ? edits : [];
   if (list.length === 0) return '';
   if (phase === 'arcs') {
@@ -1533,12 +1549,25 @@ The lines below are the director's changes to the weave above. ${WEAVE_EDIT_LINE
 
 ${formatEditLines(list)}`;
   }
+  const approvedIds = new Set((Array.isArray(approved) ? approved : []).map((edit) => edit && edit.id));
+  const own = list.filter((edit) => !approvedIds.has(edit.id));
+  const onMap = list.filter((edit) => approvedIds.has(edit.id));
   const output = 'the content bundle above';
   const example = `${DIRECTOR_EDIT_PREFIX}E1: T1: <the concern>`;
-  return `THE DIRECTOR'S EDITS (record: the director's own text, each final as the director left it):
+  const blocks = [];
+  if (own.length > 0) {
+    blocks.push(`THE DIRECTOR'S EDITS (record: the director's own text, each final as the director left it):
 Each edit below is text the director wrote into ${output}, text they cut from it (marked cut), or a block they moved (marked moved). ${EDIT_LINES_GUIDE} An edit is the final word on its text, so score each criterion, and write each structural issue, on the writer's text alone. Where you disagree with an edit, or would bring back a cut or a removed sentence, write the concern in advisoryWarnings, opening with the edit's id and then the limit it concerns, as in: ${example}.
 
-${formatEditLines(list)}`;
+${formatEditLines(own)}`);
+  }
+  if (onMap.length > 0) {
+    blocks.push(`${APPROVED_ON_MAP_HEADING}
+A writer wrote each line below, and the director approved it with the map. The article prints it as given, and no rework changes it. It is not the director's words, so no other sentence of the article stands on it. Where one breaks a limit, write the concern in advisoryWarnings, opening with the line's id and then the limit it concerns, as in: ${DIRECTOR_EDIT_PREFIX}E2: T1: <the concern>.
+
+${formatEditLines(onMap)}`);
+  }
+  return blocks.join('\n\n');
 }
 
 /**
@@ -1667,7 +1696,10 @@ const NOVA_WAS = Object.freeze({ remote: 'outside the warehouse', 'on-site': 'in
  * @returns {string} User prompt
  */
 function buildEvaluationUserPrompt(phase, state, options = {}) {
-  const directorEditsSection = renderJudgeDirectorEdits(options.directorEdits, phase);
+  // Phase 18, run 2i (R58, R59): at the article, the standing lines a writer wrote and the director
+  // approved on the map print in a list of their own, read from the same edits and the state.
+  const approvedOnMap = phase === 'article' ? linesApprovedOnMap(options.directorEdits, state) : [];
+  const directorEditsSection = renderJudgeDirectorEdits(options.directorEdits, phase, approvedOnMap);
   const afterJudged = directorEditsSection ? `${directorEditsSection}\n\n` : '';
   switch (phase) {
     case 'arcs': {
