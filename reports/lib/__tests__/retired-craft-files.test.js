@@ -149,18 +149,20 @@ describe('the retired journalist craft files', () => {
     });
   });
 
-  it.each(Object.entries(AGENT_CALLS))('%s lists exactly the rule files the %s call reads', (agent, call) => {
+  // The two agents with no call read world.md alone. The four call agents' lists are held by the
+  // test after this one, which derives them from RULE_SET_CALLS once.
+  it.each(Object.entries(AGENT_CALLS).filter(([, call]) => call === null).map(([agent]) => agent))('%s lists world.md alone', (agent) => {
     const text = fs.readFileSync(path.join(REPO, '.claude', 'agents', agent), 'utf8');
     const listed = [...text.matchAll(/references\/rules\/([a-z-]+)\.md/g)].map((match) => match[1]);
-    expect(listed).toEqual(call ? ['world', 'limits', ...RULE_SET_CALLS[call], 'mode-on-site'] : ['world']);
-    if (call) expect(text).toContain('mode-remote.md');
+    expect(listed).toEqual(['world']);
   });
 
   /**
    * Phase 18, run 3 (brief G1): an agent that reads a call's files reads them from one fenced list
    * under its "## Rules" heading, one path a line, in the call's order, the mode file last with its
    * alternative on the same line. No rule file's path is named outside that list, so the list is the
-   * whole of what the agent is told to read; its prose names its own part by file name alone.
+   * whole of what the agent is told to read, and exactly the rule files its call reads; its prose
+   * names its own part by file name alone.
    */
   it.each(Object.entries(AGENT_CALLS).filter(([, call]) => call !== null))('%s reads the %s call\'s files from one fenced list under its Rules heading', (agent, call) => {
     const text = fs.readFileSync(path.join(REPO, '.claude', 'agents', agent), 'utf8');

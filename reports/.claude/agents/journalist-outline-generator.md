@@ -26,7 +26,7 @@ Read these first, in this order. They say what you plan and write and how; this 
 
 From `data/<session-id>/`:
 - `analysis/weave.json`: the weave, whose settled angle is your task: the angle `picked` names, or angle 1 when nothing is picked. Read its headline, story, question, why it lands and where it ends up; its threads in the order it lists them, each with its evidence; the weave's other threads, which it leaves out, by name alone; and the connections that join two of its threads, each with its evidence. The other angles are the meeting's, and you read none of them. `fromYourNotes` belongs to angle 1, so it is yours only when angle 1 is the settled angle. The director's answers sit on their questions; `directorChanges` lists each change the director made at the meeting, by its id, and a thread the director added there has no evidence yet;
-- `analysis/evidence-bundle.json`: the record, whose documents are its exposed memories and its paper evidence, with the ledger, the investigation's timeline, the photos with the director's descriptions and the session's facts: when the investigation ran (`timeOfDay`), Nova's first name for the session and each guest reporter, when the session has any;
+- `analysis/evidence-bundle.json`: the record, whose documents are the memories that were made public (its `exposedMemories`) and its paper evidence, with the ledger, the investigation's timeline, the photos with the director's descriptions and the session's facts: when the investigation ran (`timeOfDay`), Nova's first name for the session and each guest reporter, when the session has any;
 - `inputs/director-notes.json`: the director's words, the notes and every stop note;
 - on a send-back, also `analysis/article-outline.json`, the version the rework starts from.
 
@@ -43,7 +43,7 @@ Lay the settled angle across the article's sections: the story map the article g
 - What the record cannot carry goes in `gapNote`, the one line at the top, in plain words: a part of the story, or a change the director made at the meeting, named by its name without quotation marks. A player you cannot place and a connection you see that the settled angle lacks go there too. `gapNote` holds the `line` and the `players` it raises, by name.
 - Set `expectedLength` from what the map holds.
 
-The console's code checks the players, the photos, the cards, the threads, the connections, each beat's evidence and the page's length on both counts. The skill has no such check, so check each of them yourself, as `job-map.md` and `limits.md` set them out, before you write the file. A player named in `gapNote`'s `players` counts as raised.
+The console's code checks the players, the photos, the cards, the threads, the connections, each beat's evidence and the page's length on both counts. The skill has no such check, so check each of them yourself before you write the file: the players, the photos, the cards, the threads and the connections as `job-map.md` and `limits.md` set them out, each piece of evidence against the record (its sources are in the record, and a quotation is word for word), and the page's length against the bounds above. A player named in `gapNote`'s `players` counts as raised.
 
 On a send-back, the latest send-back note for the map decides how much of the previous version you keep. Each line the director wrote into the map, a synopsis among them, and each order they set in a section stay as they left them unless the structural change the note asks for means one no longer fits.
 

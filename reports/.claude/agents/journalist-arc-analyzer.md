@@ -25,7 +25,7 @@ Read these first, in this order. They say what you write and how; this file adds
 ## Input
 
 From `data/<session-id>/`:
-- `analysis/evidence-bundle.json`: the record, whose documents are its exposed memories and its paper evidence, with the ledger, the investigation's timeline and the session's facts: when the investigation ran (`timeOfDay`), Nova's first name for the session and each guest reporter, when the session has any;
+- `analysis/evidence-bundle.json`: the record, whose documents are the memories that were made public (its `exposedMemories`) and its paper evidence, with the ledger, the investigation's timeline and the session's facts: when the investigation ran (`timeOfDay`), Nova's first name for the session and each guest reporter, when the session has any;
 - `inputs/director-notes.json`: the director's words, the notes and every stop note;
 - for a round from the story meeting, also `analysis/weave.json`, the weave as the director left it there.
 
