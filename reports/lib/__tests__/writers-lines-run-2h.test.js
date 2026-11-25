@@ -8,7 +8,8 @@
  *   action's word read from the map the judges' block reads;
  * - the weave writer's list of who was played;
  * - the line over the map for the article writer, the list of section names after it, and the map
- *   as the article writer is shown it, with no gapNote and no dropped (R50);
+ *   as the article writer is shown it, with no gapNote and no dropped (R50), and no weaveChanges
+ *   (the final review's item 1);
  * - one word of the map's schema, and Blake's full name in the journalist theme (R51).
  *
  * The real nodes run on the rework fixture with the real PromptBuilder and a recording stand-in
@@ -51,11 +52,12 @@ const SECTION_NAMES = [
   '- closing: the closing'
 ].join('\n');
 
-/** The map the article reads, with a gap note and a dropped section, as a stored map may hold. */
+/** The map the article reads, with a gap note, a dropped section and a change to the weave, as a stored map may hold. */
 const mapWithNotes = () => ({
   ...clone(MAP),
   gapNote: { line: 'The record holds nothing Sarah did.', players: ['Sarah'] },
-  dropped: [{ slot: 'thePlayers', reason: 'Everyone appears above.' }]
+  dropped: [{ slot: 'thePlayers', reason: 'Everyone appears above.' }],
+  weaveChanges: [{ source: 'note', change: 'The ledger beat now opens the closing.' }]
 });
 
 const MEETING_NOTES = [
@@ -281,26 +283,32 @@ describe('R50: the line over the map, the names of its sections, and the map as 
     mapSlotsOf('journalist').forEach((slot) => expect(renders['map writer'].prompt).toContain(`\n- ${slot.key}: ${slot.description}\n`));
   });
 
-  it('the map as shown holds no gapNote and no dropped; the stored map keeps both, and every other field', () => {
+  // The final review's item 1: weaveChanges, the map writer's list of what it changed to fit in
+  // the director's changes at the meeting, is a note of the same kind, off the copy too.
+  it('the map as shown holds no gapNote, no dropped and no weaveChanges; the stored map keeps all three, and every other field', () => {
     const stored = mapWithNotes();
     const before = clone(stored);
     const shown = mapAsShown(stored);
     expect(shown).not.toHaveProperty('gapNote');
     expect(shown).not.toHaveProperty('dropped');
+    expect(shown).not.toHaveProperty('weaveChanges');
     expect(stored).toEqual(before);
-    const { gapNote: _g, dropped: _d, ...rest } = before;
+    expect(stored.weaveChanges).toEqual([{ source: 'note', change: 'The ledger beat now opens the closing.' }]);
+    const { gapNote: _g, dropped: _d, weaveChanges: _w, ...rest } = before;
     expect(Object.keys(shown).sort()).toEqual(Object.keys(rest).sort());
     expect(shown.headline).toEqual(before.headline);
     expect(state.outline).toEqual(mapWithNotes());
   });
 
-  it("the article writer's prompt holds neither note to the director", () => {
+  it("the article writer's prompt holds none of the map's notes to the director", () => {
     ['article writer', 'article rework'].forEach((name) => {
       const prompt = renders[name].prompt;
       const map = prompt.slice(prompt.indexOf(`<${STORY_MAP_TAG}>`), prompt.indexOf(`</${STORY_MAP_TAG}>`));
       expect(map).not.toContain('"gapNote"');
       expect(map).not.toContain('"dropped"');
+      expect(map).not.toContain('"weaveChanges"');
       expect(map).not.toContain('The record holds nothing Sarah did.');
+      expect(prompt).not.toContain('The ledger beat now opens the closing.');
     });
   });
 });

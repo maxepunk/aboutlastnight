@@ -604,10 +604,15 @@ const REPO = path.join(__dirname, '..', '..');
  *   stopNotePlaceOf and stopNoteActionOf). The fixture's note at the meeting is a rejection, so the
  *   task's clause does not print; the schema's line for a change's source in <SCHEMA> carries the
  *   pointer (+7): outline-journalist 25578 -> 25585. The article and arc pins do not move.
+ * - Phase 18, the final review's item 1, the map as shown (mapAsShown) holds no weaveChanges, the
+ *   map writer's list of what it changed to fit in the director's changes at the meeting, a note to
+ *   the director like gapNote and dropped (R50). The fixture's map lists none, so its empty list
+ *   leaves <STORY_MAP> (-22): article-journalist 27267 -> 27245. The outline and arc pins do not
+ *   move.
  */
 const PINNED = {
   'outline-journalist': ['1c2c5d57f9d868f857a6e4fbe83e9349c8f8416626ab327b4f7899aa463bf3d8', 25585],
-  'article-journalist': ['1af0ba0f57746a4a0b9a08481feca2c661f24b3384256752fb5247ec80c7f16f', 27267],
+  'article-journalist': ['a9cb7b2d5b00a57d7a108efe6df94c78b49db513e5042ea8c3f11eaed715f27d', 27245],
   'arcs-journalist': ['6456b789025a9e9d9dbb85d62947735299b005fa5064bbcd17dd5fd95f0c0da5', 13038]
 };
 

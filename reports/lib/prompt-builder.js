@@ -517,8 +517,8 @@ function systemPromptOpening(theme, call, sessionConfig) {
  * a connection's beat is where the article shows its two threads meeting; a piece that cuts against
  * a beat is a caution or a disagreement; a photo whose moment is outside the story sits where its
  * people appear, unexplained; and "leftOut" is the one note the line names, since the map as shown
- * holds no gapNote and no dropped (mapAsShown, R50). The names of the sections follow the line
- * (sectionNamesLines).
+ * holds no gapNote and no dropped (mapAsShown, R50), and no weaveChanges (the final review's item
+ * 1). The names of the sections follow the line (sectionNamesLines).
  * It names the record in words, never by its tag, as lib/evidence.js's piece descriptions do: the
  * map prints above the record, and the prompt's readers take the first <RECORD> for the record.
  */
@@ -917,12 +917,15 @@ function mapWithoutBeatKinds(map) {
 
 /**
  * The story map as the article writer and its rework are shown it (phase 18, run 2b, R20; run 2c,
- * R31; run 2h, R50): the map with no beat's kind (mapWithoutBeatKinds), then each beat under
- * `leftOut` cut to its id and its title (its "move") alone, since a struck beat's synopsis and
- * evidence would hand back what the director took out, and without `gapNote` and `dropped`, the
- * map's notes to the director, which would hand the writer a lead the director has not settled
- * into the story. The map the stop stores, the stamp, the checks, the judge and the page read the
- * map whole; this copy is only what <STORY_MAP> prints. The map it is given is untouched; anything
+ * R31; run 2h, R50; the final review's item 1): the map with no beat's kind (mapWithoutBeatKinds),
+ * then each beat under `leftOut` cut to its id and its title (its "move") alone, since a struck
+ * beat's synopsis and evidence would hand back what the director took out, and without `gapNote`,
+ * `dropped` and `weaveChanges`, the map's notes to the director. The first two would hand the
+ * writer a lead the director has not settled into the story; `weaveChanges`, the map writer's list
+ * of what it changed to fit in the director's changes at the meeting, holds short map lines (a
+ * beat's working title) the writer is told nothing about and could print. The map the stop stores,
+ * the stamp, the checks, the fact check, the judge and the page read the map whole; this copy is
+ * only what <STORY_MAP> prints. The map it is given is untouched; anything
  * that is no map passes through, and so does a left-out entry that is no object.
  *
  * @param {Object|null} map - the map as the article reads it (ai-nodes.js articleMapOf)
@@ -933,6 +936,7 @@ function mapAsShown(map) {
   const shown = mapWithoutBeatKinds(map);
   delete shown.gapNote;
   delete shown.dropped;
+  delete shown.weaveChanges;
   if (Array.isArray(shown.leftOut)) {
     shown.leftOut = shown.leftOut.map((beat) => {
       if (!isPlainObject(beat)) return beat;
