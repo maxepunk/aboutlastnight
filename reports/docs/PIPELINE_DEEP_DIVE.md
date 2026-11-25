@@ -29,7 +29,7 @@ This document provides a comprehensive understanding of the post-game report gen
 
 **The Report** is a post-game gift delivered via the pipeline's theme system:
 
-- **Journalist theme** (`state.theme = 'journalist'`): Nova, the NovaNews reporter (who Nova is: `world.md`), writes an investigative article in the first person, about 1,500 words (`craft-voice.md`, `craft-telling.md`), with NovaNews branding.
+- **Journalist theme** (`state.theme = 'journalist'`): Nova, the NovaNews reporter (who Nova is: `world.md`), writes an investigative article in the first person, about 1,500 words at most (`job-map.md`, `job-article.md`), with NovaNews branding.
 - **Detective theme** (`state.theme = 'detective'`): Detective Anondono files an official case report (~750 words, third-person investigative voice, single-column case file format).
 
 Both themes share one 44-node LangGraph pipeline with 11 checkpoints, and since phase 4 the detective is parked (R1): it starts no session until it has its own files for the story meeting, the map and the article. What a theme decides lives in its files: `theme-config.js` (its NPCs, map slots, rules folder and identity lines), `rule-set.js` (each theme's rule set, read from the folder its config names; the journalist's: see [Prompt Reference Files](#prompt-reference-files)), `theme-loader.js` (the image calls' prompt files from `.claude/skills/{theme}-report/`), and `templates/{theme}/` (Handlebars layouts). `reports/docs/architecture/prompts.md`, "Adding a new theme", lists them.
@@ -69,9 +69,9 @@ Each session has a subset of these characters (typically 8-16 players). Token ID
 
 | NPC | Token Prefix | Role |
 |-----|--------------|------|
-| **Marcus Blackwood** | mab | The man whose death the room investigates (T15). Host of the party. Founder of NeurAI. |
+| **Marcus Blackwood** | mab | The man whose death the room investigates (the fixed facts, `limits.md`). Host of the party. Founder of NeurAI. |
 | **[Firstname] Nova** | — | The NovaNews reporter who writes the article (`world.md`). Players turn memories in to Nova to EXPOSE them. First name is configurable per session (often "Cassandra"), and every writer and judge is told it in the roster section's Nova line. |
-| **Blake / Valet** | — | Manages operations at NeurAI; Marcus called Blake his Valet (T15). Works the room, making the deals that BURY memories (`world.md`; the money and the buyer: T5). |
+| **Blake / Valet** | — | Manages operations at NeurAI; Marcus called Blake his Valet (the fixed facts). Works the room, making the deals that BURY memories (`world.md`; the money and the buyer: "The money" in `limits.md`). |
 
 ### Character Sheets
 
@@ -128,27 +128,27 @@ Nova's article is NOT just a factual record. It reflects:
 
 ## Three-Layer Evidence Model
 
-What the article can do with each layer is the rule set's, stated once: `world.md` ("What each memory became", "The record and the timeline") and `truth-rules.md`. Each layer below says what the game left and where its rules live.
+What the article can do with each layer is the rule set's, stated once: `world.md` ("What became of each memory", "What you are given, and what it is in the story") and `limits.md`. The code's words for the layers are "exposed" and "buried"; the rule files and the writers say "made public" and "sold". Each layer below says what the game left and where its rules live.
 
 ### Layer 1: EXPOSED (Full Reportability)
 
 **Game Reality**: Player scanned token → chose "EXPOSE" → the memory's summary went up on the Evidence Board, Nova has the full memory, and the evidence log has its time and the name on the turn-in.
 
-**Rules**: `world.md` ("Exposed"); in `truth-rules.md`, T1 (evidence decides how a claim is written), T6 (exposers are anonymous unless named) and T12 (words are exact); cards are C9 in `craft-cards.md`.
+**Rules**: `world.md` ("Made public"); in `limits.md`, "What can be stated as fact", "Who made a memory public" and "Quotes are exact"; cards are the article writer's own part, `job-article.md`.
 
 ### Layer 2: BURIED (Observable Patterns Only)
 
 **Game Reality**: Player scanned token → chose "BURY" → the memory was sold to be erased. Nova's ledger has the sale's time, amount and account, never which memory, and the record view prints a buried memory only as that sale on the investigation's timeline (`lib/prompt-renderers/record-view.js`).
 
-**Rules**: `world.md` ("Buried", the ledger, an account); in `truth-rules.md`, T3 (buried memories never appear as evidence), T4 (an account is the seller's chosen destination and name), T5 (the buyer pays the seller) and T7 (the stages and the clock).
+**Rules**: `world.md` ("Sold", the ledger, an account); in `limits.md`, "Sold memories", "Whose account it is", "The money" and "Three stretches of time".
 
 ### Layer 3: CONTEXT (Director Notes = the Director's Observations)
 
 **Game Reality**: The director watched the session and writes it into the notes: the room's scenes and lines, the deliberation, often the director's own read of the session, and the epilogue. The players' whiteboard and the director's accusation text come in beside the notes.
 
-**The director's words** are one list (`lib/director-words.js` `DIRECTOR_WORDS_SOURCES`; spec 2026-10-09 section 3): the notes, the corrections at the input review, the accusation, the answers at the story meeting, and every note sent at a stop with approve, reweave or send-back. What a note says happened, or rules about the record, is record; a direction it gives is written as Nova's reading (T1). The writers read the notes at the stops as standing notes in `<DIRECTOR_GUIDANCE>`. Both judges print them in `<DIRECTOR_STOP_NOTES>`, read from `directorGateNotes` whole, the note a rework is acting on included, with "None." when there is none; the evidence check (a piece may cite one under `notes`), the article fact check and the verdict guard read the whole list. "From your notes" at the story meeting still quotes the session notes and corrections alone.
+**The director's words** are one list (`lib/director-words.js` `DIRECTOR_WORDS_SOURCES`; spec 2026-10-09 section 3): the notes, the corrections at the input review, the accusation, the answers at the story meeting, and every note sent at a stop with approve, reweave or send-back. What a note says happened, or rules about the record, is record; a direction it gives is written as Nova's reading ("What can be stated as fact"). The writers read the notes at the stops as standing notes in `<DIRECTOR_GUIDANCE>`, each marked with its stop and action, `[the map, approved]`. Both judges print them in `<DIRECTOR_STOP_NOTES>`, read from `directorGateNotes` whole, the note a rework is acting on included, with "None." when there is none; the evidence check (a piece may cite one under `notes`), the article fact check and the verdict guard read the whole list. "From your notes" at the story meeting still quotes the session notes and corrections alone.
 
-**Rules**: in `truth-rules.md`, T1 (evidence decides how a claim is written), T2 (the verdict is the group's negotiated official story), T7 (the stages and the clock) and T13 (photos and the whiteboard); the director's lines are C8 in `craft-material.md`, weighed by the arc writer and chosen by the map. What Nova could witness is the session's reporting mode block (`mode-on-site.md` or `mode-remote.md`, through `buildReportingModeBlock` in `lib/prompt-builder.js`).
+**Rules**: in `limits.md`, "What can be stated as fact", "The verdict", "Three stretches of time" and "Photos"; the notes print under one label in every prompt (`DIRECTOR_NOTES_LABEL`): they are Nova's notes and thinking, not text for the article, and only a line they quote a person as saying is one the article can quote. What Nova could witness is the part about this session (`mode-on-site.md` or `mode-remote.md` in a `<this-session>` tag, through `buildReportingModeBlock` in `lib/prompt-builder.js`).
 
 ---
 
@@ -189,8 +189,8 @@ What the article can do with each layer is the rule set's, stated once: `world.m
 │              PHASE 2: THE WEAVE AND THE STORY MEETING (Opus)                │
 │  One call pitches the weave: two or three angles over one set of threads,   │
 │  the connections where the threads touch and the questions, each line in    │
-│  story terms with the evidence that tells it underneath                     │
-│  Code checks it; one fact check scores the truth rules. The page at most    │
+│  plain words with the evidence that tells it underneath                     │
+│  Code checks it; one fact check scores the limits. The page at most         │
 │  450 words with any angle open: the writer's own words held to 450 less     │
 │  what code prints, never under 350                                          │
 │  OUTPUT: the weave; the director picks an angle and settles it              │
@@ -200,16 +200,16 @@ What the article can do with each layer is the rule set's, stated once: `world.m
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │              PHASE 3: THE MAP (Opus writer, code checks)                    │
 │  The settled angle laid across the theme's slots, each section's beats in   │
-│  the article's order; each beat a move in story terms with a one-sentence   │
-│  summary, its evidence underneath. A corkboard of at most 450 words as it   │
-│  opens and 750 with every summary open, the writer held to each             │
+│  the article's order, each section's step; each beat a move in plain words  │
+│  with a one-sentence summary, its evidence underneath. A corkboard of at    │
+│  most 550 words as it opens and 850 with every summary open                 │
 └─────────────────────────────────────────────────────────────────────────────┘
             │
             ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │              PHASE 4: ARTICLE GENERATION (Opus)                             │
-│  Reads the whole rule set: the world, the truth rules, all 8 craft files    │
-│  Nova's voice: C12 in craft-voice.md; words that never print: T14           │
+│  Reads the world and the limits, then the brief and its own part            │
+│  The map's headline, deck and headings are the director's lines             │
 │  Writes one story the map plans, each beat in the map's order, as its       │
 │  summary says, where it has one, drawing on its evidence; the fact check,   │
 │  then a truth-only judge; the director finishes the article at the desk     │
@@ -340,25 +340,26 @@ What the article can do with each layer is the rule set's, stated once: `world.m
 **Nodes**: `analyzeArcs` (graph name; the function `analyzeArcsPlayerFocusGuided`), `validateArcs` (`validateArcStructure`, the weave checks), `evaluateArcs` (the fact check), `checkpointArcSelection` (the story meeting), and the rework, `incrementArcRevision` then `reviseArcs` (phase 4, briefs 4.4 and 4.5; spec section 4)
 **Files**: `lib/workflow/nodes/arc-specialist-nodes.js`, `lib/weave.js` (the weave's shape and its checks), `lib/meeting.js` (the meeting's payloads and what it shows)
 
-**The arc writer** writes one weave in one call: two or three angles, each a story the article could tell, over one shared set of threads, from which the director picks one and settles it at the story meeting before anything is planned (phase 4b, piece 3; spec `docs/superpowers/specs/2026-10-06-meeting-as-angles.md`). When the director's notes end with their own read of the session, angle 1 is that read worked up as a pitch, and the others are the strongest alternatives the session offers; otherwise every angle is the writer's, the strongest first (C1). The record and everything else supply the threads, their evidence and what complicates each story. Since phase 4b (piece 1; spec `docs/superpowers/specs/2026-10-05-story-level-and-evidence.md`) each thread and connection is a line in story terms, with the evidence that tells it underneath: the director reads the lines, and the evidence travels to the map writer and on to the article writer, which draws on it for what each move needs and cites what it uses. The lens work C16 sets out reaches the weave as the angles, each a different way the threads make a story, and as the evidence, each piece marked as supporting its line or cutting against it.
+**The arc writer** writes one weave in one call: two or three angles, each a story the article could tell, over one shared set of threads, from which the director picks one and settles it at the story meeting before anything is planned (phase 4b, piece 3; spec `docs/superpowers/specs/2026-10-06-meeting-as-angles.md`). When the director's notes end with their own read of the session, angle 1 is that read worked up as a pitch, and the others are the strongest alternatives the session offers; otherwise every angle is the writer's, the strongest first (the weave writer's own part, `job-weave.md`). The record and everything else supply the threads, their evidence and what complicates each story. Since phase 4b (piece 1; spec `docs/superpowers/specs/2026-10-05-story-level-and-evidence.md`) each thread and connection is a line in plain words, with the evidence that tells it underneath: the director reads the lines, and the evidence travels to the map writer and on to the article writer, which draws on it for what each move needs and cites what it uses. The brief's work on the question and its steps reaches the weave as the angles, each a different way the threads make a story, and as the evidence, each piece marked as supporting its line or cutting against it.
 
-**Prompt Structure** (recency bias: rules LAST). The system prompt is the theme's identity line, the mode block, the world and the truth rules (`systemPromptOpening`, from `loadRuleSet('arc', {theme})`), then the writer's role. The user prompt (`buildWeaveSections`):
+**Prompt Structure** (recency bias: rules LAST). The system prompt is the theme's identity line, the part about this session (`<this-session>`), the world and the limits (`systemPromptOpening`, from `loadRuleSet('arc', {theme})`), then the writer's role. The user prompt (`buildWeaveSections`):
 
 ```
 OUTPUT FORMAT: the weave's fields
-SECTION 1: WHAT THE ROOM CONCLUDED
+SECTION 1: WHAT THE PLAYERS CONCLUDED
   - The accusation, with the director's account of it word for word
   - The whiteboard: a model's reading of the photo, context only
-  - The director's notes and corrections: the record for the room, under T1
+  - The director's notes and corrections, under the one label over the notes
   - Blake and the Valet in the director's notes (when the notes name them)
   - The investigation focus, the session roster with when the investigation
-    ran and each guest reporter, when the session has any, the character
-    categories, the roster with pronouns and the character context
+    ran and each guest reporter, when the session has any, who was played
+    ("Played in this session", "The game's own characters", "Not played in
+    this session"), the roster with pronouns and the summary of the characters
 SECTION 2: THE RECORD (every exposed document, then the investigation's timeline),
   then the Sources a piece of evidence may name: the document ids,
   "ledger", "evidence-log" and "notes"
-SECTION 3: THE WEAVE (WEAVE_TASK: C1, C16 and C15, by pointer)
-SECTION 4: CRAFT GUIDANCE (story, form, material, judgement, questions, voice)
+SECTION 3: THE WEAVE (WEAVE_TASK, pointing at <job-weave>)
+SECTION 4: THE BRIEF AND YOUR PART (<brief>, then <job-weave>)
 <DIRECTOR_GUIDANCE> (the standing notes)
 ```
 
@@ -372,11 +373,11 @@ SECTION 4: CRAFT GUIDANCE (story, form, material, judgement, questions, voice)
     // ends: where it ends up, its convergence; threads: the ids of the threads it tells, in its order
   fromYourNotes,                 // the director's own words angle 1 rests on, only when angle 1 is their read
   threads: [{ id, name, line, verdict?, evidence }],
-    // a name that says what happened, with its people, and one line in story terms
-    // verdict: true on the thread that carries the room's verdict, which every angle tells
+    // a name that says what happened, with its people, and one line in plain words
+    // verdict: true on the thread that carries the verdict, which every angle tells
   connections: [{ id, joins, line, kind, evidence }],  // kind: person | moment | document | line, kept underneath and never printed
   questions: [{ id, kind, about, question, changes, thread? }],
-    // kind: player | pronoun | figure (C15); thread: the thread its answer changes, or none for the pitch
+    // kind: player | pronoun | figure (job-weave.md); thread: the thread its answer changes, or none for the pitch
   picked                         // the director's: the id of the angle they sent on (none: angle 1), written by the meeting's gate
 }
 
@@ -388,7 +389,7 @@ SECTION 4: CRAFT GUIDANCE (story, form, material, judgement, questions, voice)
   // stance: supports | cuts-against; card: on a beat's piece only, the card's document
 ```
 
-A thread the director adds at the meeting has no evidence: the map writer finds its evidence, or names the thread in its gap note, in story terms, when the record cannot carry it (piece 1's spec, 5.3). Every reader after the meeting reads the settled angle through one helper, `lib/weave.js` `settledAngleOf`: the picked angle with its threads in its order, the threads it leaves out, and the connections between its threads. No later writer reads the other angles. The evidence is never the director's edit: `lib/hand-edit-diff.js` leaves it out of every diff and mark.
+A thread the director adds at the meeting has no evidence: the map writer finds its evidence, or names the thread in its gap note, in plain words, when the record cannot carry it (piece 1's spec, 5.3). Every reader after the meeting reads the settled angle through one helper, `lib/weave.js` `settledAngleOf`: the picked angle with its threads in its order, the threads it leaves out, and the connections between its threads. No later writer reads the other angles. The evidence is never the director's edit: `lib/hand-edit-diff.js` leaves it out of every diff and mark.
 
 **The checks and the fact check**, before the meeting (spec 4.5): code checks the weave, free (see Arc Validation Routing below), and a failed check sends it back for one rework in the round. Then one fact check (`evaluateArcs`, Opus) scores the truth criteria alone, reading each line against its evidence and each piece against the record: a line that says more than its evidence shows is an error of fact, and a finding about a piece is the writer's to fix (spec 6.2). Every angle is checked, not only the one open first, because the director may pick any of them. A breach gets one automatic fix, and the meeting opens with no second judge call. No note on the writing and no score reaches the meeting.
 
@@ -405,7 +406,7 @@ The director's edits are final: an automatic pass or a reweave never changes one
 
 **Nodes**: `checkpointPhotos`, `fetchSessionPhotos`, `preprocessPhotos`, `analyzePhotos`, `detectWhiteboard`, `checkpointCharacterIds`, `parseCharacterIds`, `finalizePhotoAnalyses`
 
-**Checkpoints**: `photos` (2.36, conditional - skipped when photosPath came from /start); `character-ids` (1.66, historical number), where each photo has a "Leave this photo out" box (phase 4, brief 4.2). A photo left out appears nowhere: not on the map, the page or the published folder (T13; `isPhotoExcluded`, through `lib/photo-leave-out.js`).
+**Checkpoints**: `photos` (2.36, conditional - skipped when photosPath came from /start); `character-ids` (1.66, historical number), where each photo has a "Leave this photo out" box (phase 4, brief 4.2). A photo left out appears nowhere: not on the map, the page or the published folder ("Photos" in `limits.md`; `isPhotoExcluded`, through `lib/photo-leave-out.js`).
 
 The photo branch joins at the map writer. Phase 2.4, the arc evidence packages (`buildArcEvidencePackages`), went in phase 4 (brief 4.6; R5): every writer reads the record whole, and the fact check's card sources come from it alone.
 
@@ -421,11 +422,12 @@ The photo branch joins at the map writer. Phase 2.4, the arc evidence packages (
   topPhoto,                       // the photo the article prints as its hero
   gapNote: { line, players },     // only when the record cannot carry part of the story
   sections: [{ slot, heading, job,
+    // job: the section's step, one sentence of about 25 words at most: what the reader learns there about the question; labelled "Step" on the page
     beats: [{ id, move, players, synopsis, threads, connection?, card?, kind?, evidence }],   // in the order the article tells them
       // move: the move of the story in a few plain words, its title on the map's page; threads: the ids of the settled weave's threads it carries
-      // synopsis: one sentence in story terms on what the article tells at this move, folded under the title on the page; required of the writer, optional on a beat the director adds
+      // synopsis: one sentence in plain words on what the article tells at this move, folded under the title on the page; required of the writer, optional on a beat the director adds
       // card: true when its evidence prints as a card, with one piece flagged card: true, whose source is the card's document
-      // kind: scene | receipt | line | figure, a hint to the article writer, kept underneath and never printed
+      // kind: scene | receipt | line | figure, on a map stored before phase 18's run 2b; the writer is no longer asked for it, and no writer is shown it
     photos: [{ filename, beat? }] }],
   dropped: [{ slot, reason }],
   leftOut: [/* beats considered and not used */],
@@ -434,32 +436,32 @@ The photo branch joins at the map writer. Phase 2.4, the arc evidence packages (
 }
 ```
 
-**The writer** reads the settled weave first, as its task (`settledWeaveOf`): the angle the director sent on, its headline, story, question, why it lands and where it ends up, each of its threads in its order with its evidence under it, the threads it leaves out by name, and the connections between its threads, then the theme's slots, the director's notes, the photos with code's pick for the top photo first, the record, FINANCIAL_SUMMARY, `SESSION_FACTS`, the roster with pronouns, `<SCHEMA>` and every craft file but `craft-questions.md`, telling and voice last (`loadRuleSet('outline', {theme})`), and the standing notes last. Its only prose is the deck under the settled angle's headline, which it carries word for word, and each section's heading, in Nova's voice (C5, C12); every other line stays in story terms. It writes each section's beats as moves in story terms, in the order the article will tell them (C2, C6), gives each its people, a synopsis of about 20 words, its threads and its evidence, from those threads' evidence and from the record, flags each card's document, and aims for 300 words of its own as the page opens (`MAP_WORD_AIM`) and about 250 between the synopses (`MAP_SYNOPSIS_AIM`). Code writes `heroImage` from the map's top photo.
+**The writer** reads the settled weave first, as its task (`settledWeaveOf`, in the map's form): the angle the director sent on, its headline, story, question, why it lands and where it ends up, each of its threads in its order with its evidence under it, the threads it leaves out by name, and the connections between its threads with the evidence under each, then the theme's slots (each by its name and what it stands for), the director's notes, the photos with code's pick for the top photo first, the record, FINANCIAL_SUMMARY, `SESSION_FACTS`, the roster with pronouns, `<SCHEMA>`, the brief and then the map writer's own part (`loadRuleSet('outline', {theme})`: `<brief>`, `<job-map>`), and the standing notes last. Its only prose is the deck under the settled angle's headline, which it carries word for word, and each section's heading, which the article prints; every other line stays in plain words. It writes each section's step, its `job`, one sentence of about 25 words at most on what the reader learns there about the question, and each section's beats as moves in plain words, in the order the article will tell them, gives each its people, a synopsis of about 20 words, its threads and its evidence, chosen for the step from those threads' evidence and from the record, flags each card's document, and aims for 400 words of its own as the page opens (`MAP_WORD_AIM`) and about 250 between the synopses (`MAP_SYNOPSIS_AIM`). Code writes `heroImage` from the map's top photo.
 
 **The checks** (`lib/map.js` `mapFindings`), free and in code:
 - every roster player in a beat or raised in the gap note, and every kept photo placed once;
 - each beat marked as a card flags one piece, whose source is a document in the record, and the cards number three to five (`beatCardOf` reads a beat's card from its flagged piece);
-- every thread in the settled angle lands in a beat that names it, and a thread the director added at the meeting, or flipped into the angle, may be named in the gap note instead, when the record cannot carry it, by its name, matched in any case and spacing and without its quotation marks, which the story-terms scan leaves out as the director's words; every connection between the settled angle's threads lands in a beat;
+- every thread in the settled angle lands in a beat that names it, and a thread the director added at the meeting, or flipped into the angle, may be named in the gap note instead, when the record cannot carry it, by its name, matched in any case and spacing and without its quotation marks, which the plain-words scan leaves out as the director's words; every connection between the settled angle's threads lands in a beat;
 - each of the writer's beats carries a thread, and in a section only threads the settled angle tells (`thread-outside-story`; a beat the director added or brought back is never held to it), and has evidence, and every piece names a source the record holds, with each quotation word for word in its source (`lib/evidence.js` `evidenceProblems`);
-- the writer's lines are in story terms: a beat's move and its synopsis, a section's job, the gap note's line and each weave change hold no document id the record holds, no quotation in quotation marks, no clock time and no money figure (`storyTermsProblems`); the headline, the deck and the section headings are exempt, since the article prints them;
+- the writer's lines are in plain words: a beat's move and its synopsis, a section's step, the gap note's line and each weave change hold no document id the record holds, no quotation in quotation marks, no clock time and no money figure (`storyTermsProblems`); the headline, the deck and the section headings are exempt, since the article prints them;
 - each weave change named by its source, and no two beats under one id;
-- the page's length, counted by `wordsShown` on two pages (`MAP_PAGES`): as it opens, every synopsis and every other fold closed, the writer's own words are held to the larger of 300 and 450 less what the page prints that the writer did not write, such as the settled story and the counts (`MAP_WORD_AIM`, `MAP_WORD_BOUND`); with every synopsis open, to the larger of 550 and 750 less that page's overhead (`MAP_SYNOPSIS_AIM`, `MAP_OPEN_WORD_BOUND`). A photo prints no words on the page, so its description is in neither. Each page past its allowance is its own failure, saying which page ran long. The rule is `lib/word-count.js` `pageLengthOf`, which the meeting keeps with its own bound and floor (450 and 350).
+- the page's length, counted by `wordsShown` on two pages (`MAP_PAGES`): as it opens, every synopsis and every other fold closed, the writer's own words are held to the larger of 400 and 550 less what the page prints that the writer did not write, such as the settled story and the counts (`MAP_WORD_AIM`, `MAP_WORD_BOUND`); with every synopsis open, to the larger of 650 and 850 less that page's overhead (`MAP_SYNOPSIS_AIM`, `MAP_OPEN_WORD_BOUND`). A photo prints no words on the page, so its description is in neither. Each page past its allowance is its own failure, saying which page ran long. The rule is `lib/word-count.js` `pageLengthOf`, which the meeting keeps with its own bound and floor (450 and 350).
 
-A failed check sends the map back for one automatic rework (`REVISION_CAPS.OUTLINE` is 1); a check still failing after it opens the stop, which shows it beside its line, in story terms. The director's lines and the beats they added are never a check's failure: a failure the director caused is a concern on their edit, never a rework. The director's send-back reads no check failure from before it, as the meeting's does: the checks run again on its map. No model judge reads the map.
+A failed check sends the map back for one automatic rework (`REVISION_CAPS.OUTLINE` is 1); a check still failing after it opens the stop, which shows it beside its line, in plain words. The director's lines and the beats they added are never a check's failure: a failure the director caused is a concern on their edit, never a rework. The director's send-back reads no check failure from before it, as the meeting's does: the checks run again on its map. No model judge reads the map.
 
 **The headline** is code's to hold (phase 17, fix wave 3, the director's call after the final review; `lib/map.js` `holdHeadline`), since the article prints the map's: the first map carries the settled angle's headline, the director's own where they edited it at the meeting, whatever the writer wrote, and each later pass keeps the headline of the map it started from, the director's version on a send-back. A send-back with the director's note is the one pass whose rework may write a new headline, the one the note asks for, and its prompt alone says so; the automatic passes after it in that round keep that one.
 
-**Checkpoint**: `outline` (3.25) - The map (phase 4b, pieces 1 and 4: spec 2026-10-07 sections 4 to 6): a corkboard. Under the counts (everyone placed, or "In no move" with who is not; the cards; the photos placed of those kept; the expected length), the settled story with the gap note and the settled story's threads, each a coloured dot and its name, come the top of the article and a column for each section, headed by its slot, its heading and its job. Each move is a card in the order the article tells them: its title, its people, a dot for each thread it carries, "Card" where its evidence prints as a card, its photos as thumbnails, and its summary folded behind an arrow. Selecting a card opens it in place, with its threads by name, its photos with the director's descriptions, its controls and what's behind it, its evidence; the fold of a move the director added says the article writer finds its evidence. Left out is a tray under the board. No line names a move by its id. The director edits a move's title, summary and people, moves it up, down or to another section, leaves it out or brings it back, places its photos and the top photo, by the selected card's controls or by dragging, and approves or sends the map back. The order they leave a section's moves in is the article's. The approved map is saved as `data/<id>/analysis/map.approved.json`. To change the story itself, the director goes back to the story meeting; going back to the map reopens it as the director left it, with no model call (R9), and the rollback panel says so. A photo the director has left out since the map, such as one deleted at the desk, shows on the map as left out, with no move, and the gate refuses it as a top photo the director chose; the article leaves it out (`articleMapOf`). At approve and at send-back the gate stores a photo a strike freed by itself, and moves a section the director emptied (no beat and no photo left) to the dropped list, with the line "The director emptied this section on the map." (task 4.14b). The drop stands as the director's edit: an automatic pass that puts the section back has it taken out again when it holds nothing, and one it filled stays for the director to empty again, out of the dropped list (fix round 1).
+**Checkpoint**: `outline` (3.25) - The map (phase 4b, pieces 1 and 4: spec 2026-10-07 sections 4 to 6): a corkboard. Under the counts (everyone placed, or "In no move" with who is not; the cards; the photos placed of those kept; the expected length), the settled story with the gap note and the settled story's threads, each a coloured dot and its name, come the top of the article and a column for each section, headed by its slot, its heading and its step. Each move is a card in the order the article tells them: its title, its people, a dot for each thread it carries, "Card" where its evidence prints as a card, its photos as thumbnails, and its summary folded behind an arrow. Selecting a card opens it in place, with its threads by name, its photos with the director's descriptions, its controls and what's behind it, its evidence; the fold of a move the director added says the article writer finds its evidence. Left out is a tray under the board. No line names a move by its id. The director edits a move's title, summary and people, moves it up, down or to another section, leaves it out or brings it back, places its photos and the top photo, by the selected card's controls or by dragging, and approves or sends the map back. The order they leave a section's moves in is the article's. The approved map is saved as `data/<id>/analysis/map.approved.json`. To change the story itself, the director goes back to the story meeting; going back to the map reopens it as the director left it, with no model call (R9), and the rollback panel says so. A photo the director has left out since the map, such as one deleted at the desk, shows on the map as left out, with no move, and the gate refuses it as a top photo the director chose; the article leaves it out (`articleMapOf`). At approve and at send-back the gate stores a photo a strike freed by itself, and moves a section the director emptied (no beat and no photo left) to the dropped list, with the line "The director emptied this section on the map." (task 4.14b). The drop stands as the director's edit: an automatic pass that puts the section back has it taken out again when it holds nothing, and one it filled stays for the director to empty again, out of the dropped list (fix round 1).
 
 ### Phase 4: Article Generation
 
 **Nodes**: `generateContentBundle`, `evaluateArticle` (the fact check, then the article judge), `checkpointArticle` (the desk), and the rework, `incrementArticleRevision` then `reviseContentBundle` (`lib/workflow/nodes/ai-nodes.js` and `evaluator-nodes.js`; phase 4, briefs 4.7a and 4.7b; spec section 6)
 
-**What the writer reads** (`articleWriterInputs`): the settled weave first (`settledWeaveOf`), then the map as the director left it (`<STORY_MAP>`), then its task, then PHOTOS, the record, the money, the director's notes, `SESSION_FACTS`, the instruction with its `<SCHEMA>`, the eight craft files with telling and voice last, and the standing notes last. It writes the article the map plans: one cohesive story that argues the settled angle's thesis, built on the map's headline and deck, each section's beats in the map's order and each as its synopsis says, where it has one (C2, C16), each drawing on the evidence the beat carries for what the beat needs and citing what it uses, and it reads the whole record for a scene's detail; an inline card prints the document of the piece its beat flags (C9). It adds no beat and no connection (C16). Code stamps the map's headline, deck and top photo into the first draft (`stampFromMap`, R7).
+**What the writer reads** (`articleWriterInputs`): the settled weave first, in the article writer's form (`settledWeaveOf(state, { reader: 'article' })`: no headline line and no evidence, since the map holds both), then the map as the director left it (`<STORY_MAP>`, shown without a beat's kind, the gap note or the dropped sections, `mapAsShown`), under its line and the names of the sections, then its task, then PHOTOS, the record, the money, the director's notes, `SESSION_FACTS`, the instruction with its `<SCHEMA>` (only the fields the article prints, `WRITER_BUNDLE_SCHEMA`), the brief and then the article writer's own part, and the standing notes last. It writes the article the map plans: one cohesive story that argues the settled angle's thesis, built on the map's headline and deck, each section's beats in the map's order and each as its synopsis says, where it has one, each drawing on the evidence the beat carries for what the beat needs and citing what it uses, and it reads the whole record for a scene's detail; an inline card prints the document of the piece its beat flags. It adds no beat and no connection. Code stamps the map's headline, deck, each section's heading and the top photo into the first draft, and the theme's line above the headline (`stampFromMap`, R7), and records the headline, the deck and the headings as the director's lines, whoever wrote them, since the director approved the map that carries them: no automatic pass changes them, and a judge's finding in one is a concern for the desk (the lock, phase 18; **The lock** in `reports/docs/architecture/article.md`).
 
-**The rules**: the article writer reads the whole rule set (`loadRuleSet('article', {theme})`): the world and the truth rules in its system prompt after the mode block, and all eight craft files last in its user prompt, telling and voice the last two. Nova's voice is C12 in `craft-voice.md`, which the arc writer and the map writer read too, for an angle's headline (the arc writer) and the deck and the headings (the map writer); where Nova stood is the session's mode block (`mode-on-site.md` or `mode-remote.md`) and T8; the length and the house style are C4 in `craft-telling.md`; the fiction's own words are T14, buried memories T3, and characters, not players, T11, all in `truth-rules.md`. Code checks the em-dash, the production words, Nova's pronoun, the length and the head count as advisories (`lib/content-bundle-fact-check.js`).
+**The rules**: the article writer reads its rule set (`loadRuleSet('article', {theme})`): the world and the limits in its system prompt after the part about this session, and the brief and its own part last in its user prompt. The brief, which the three writers read, says how a reporter approaches the article, with reasons, and Nova's voice is in it; where Nova stood is the part about this session (`mode-on-site.md` or `mode-remote.md`) and the limit "Nova takes no side"; the length and the house style are in the article writer's own part, `job-article.md`; the story's own words, sold memories and characters, not players, are limits in `limits.md`. Code checks the em-dash, the production words, Nova's pronoun, the length and the head count as advisories (`lib/content-bundle-fact-check.js`).
 
-**Photos** (T13): the writer is given every photo the director kept (`articleWriterInputs`, `options.photos`): the hero, the map's top photo, first, then every other photo but the whiteboard, each printed once under PHOTOS. The map places each kept photo once, beside its beat or with its people, and the article prints each where the map places it; the article judge's `photosTruth` checks every one. The hero is read once, through `topPhotoOf(articleMapOf(state))`: PHOTOS, the instruction's hero line, the stamp and the judge's PHOTOS all name it (brief 4.7c).
+**Photos** ("Photos" in `limits.md`): the writer is given every photo the director kept (`articleWriterInputs`, `options.photos`): the hero, the map's top photo, first, then every other photo but the whiteboard, each printed once under PHOTOS. The map places each kept photo once, beside its beat or with its people, and the article prints each where the map places it; the article judge's `photosTruth` checks every one. The hero is read once, through `topPhotoOf(articleMapOf(state))`: PHOTOS, the instruction's hero line, the stamp and the judge's PHOTOS all name it (brief 4.7c).
 
 **The judge**: the fact check runs first, and a structural failure under the automated budget sends the article to its rework without the judge's call; then the article judge scores the truth criteria alone (see [Evaluation & Revision Architecture](#evaluation--revision-architecture)).
 
@@ -512,7 +514,7 @@ Rules placed LAST in prompts for maximum salience:
 </RULES>
 ```
 
-For the journalist (phase 3) the rules are the rule set: the world and the truth rules sit in the system prompt right after the mode block, and the call's craft files come last in the user prompt, with only the director's standing notes (`<DIRECTOR_GUIDANCE>`) after them. Since phase 4 the judges read no craft file: they score the truth criteria alone.
+For the journalist the rules are the rule set: the world and the limits sit in the system prompt right after the part about this session, and a writer's brief and its own part come last in the user prompt, with only the director's standing notes (`<DIRECTOR_GUIDANCE>`) after them. The judges read neither the brief nor a writer's part: they score the limits alone.
 
 ### Immutable Inputs Pattern (retired)
 
@@ -558,12 +560,12 @@ ${content.trim()}
 - **Token savings**: ~560 tokens per article generation (~120 chars × 12 usages)
 - **Claude-native parsing**: XML aligns with model training data
 - **Clear boundaries**: Opening/closing tags eliminate ambiguity
-- **Cross-referencing**: Tag names enable natural references (e.g., "as C16 (`<craft-story>`) sets them out")
+- **Cross-referencing**: Tag names enable natural references (e.g., "`<job-weave>` below says what an angle, a thread and a connection are")
 - **DRY enforcement**: Single source of truth prevents rule drift
 
 **Cross-Reference System**:
-- In prompt text: an item by its id and the tag of the file that states it, as the weave writer's task (SECTION 3, `WEAVE_TASK`) does: `C16 (<craft-story>) sets out the threads`
-- In markdown docs: `` C16 (`<craft-story>`) `` (backtick-wrapped)
+- In prompt text: a part of a rule file by its name and the tag of its file (`as "<part's name>" in <tag> says`), or the tag alone, as the weave writer's task (SECTION 3, `WEAVE_TASK`) does: `<job-weave> below says what an angle, a thread and a connection are`. No rule is cited by number in anything a writer reads (phase 18)
+- In markdown docs: `` `<job-weave>` `` (backtick-wrapped)
 
 ---
 
@@ -571,10 +573,10 @@ ${content.trim()}
 
 ### The truth-only contract
 
-Since phase 4 the judges have one contract (briefs 4.4, 4.7a and 4.7c; spec 4.5 and 6.2): the story meeting's fact check and the article judge score the truth rules alone, and write no notes on the writing.
+Since phase 4 the judges have one contract (briefs 4.4, 4.7a and 4.7c; spec 4.5 and 6.2): the story meeting's fact check and the article judge score the limits alone, and write no notes on the writing. Each judge's instructions list the fifteen limits once, each by the code its findings open with and its name (`LIMIT_CODES`), say which limits none of its questions scores, what a breach is and what the director's words are.
 
-- **The truth criteria** (`TRUTH_GROUPS` in `evaluator-nodes.js`), one per group of truth rules, each structural, with no weight: `evidenceTruth` (T1, T3, T4, T6), `moneyTruth` (T5), `verdictTruth` (T2), `stagesTruth` (T7), `novaPositionTruth` (T8), `playersTruth` (T9, T11), `wordsTruth` (T12), and at the article `photosTruth` (T13) and `fictionTruth` (T14). Each asks only what its judge can check against its own prompts, so a group is worded per judge.
-- **The verdict** (`TRUTH_ONLY_EVALUATION_JSON_SCHEMA` and `truthOnlyOutputFormat`, held to the contract by `truthOnlyVerdict`): a score for each criterion; the structural issues, each opening with its rule ids and quoting the text at fault beside the record it contradicts; a criterion's `fix` only when it scores below `STRUCTURAL_PASS_SCORE` (0.8); and `revisionGuidance` only as the steps that fix the structural issues. `overallScore` is the lowest truth-criterion score. `advisoryWarnings` holds only a concern about one of the director's edits, under `DIRECTOR_EDIT_PREFIX`.
+- **The truth criteria** (`TRUTH_GROUPS` in `evaluator-nodes.js`), one per group of limits, each named here by the codes it scores, each structural, with no weight: `evidenceTruth` (T1, T3, T4, T6, T15), `moneyTruth` (T5), `verdictTruth` (T2), `stagesTruth` (T7), `novaPositionTruth` (T8), `playersTruth` (T9, T11), `wordsTruth` (T12), and at the article `photosTruth` (T13) and `fictionTruth` (T14). Each asks only what its judge can check against its own prompts, so a group is worded per judge.
+- **The verdict** (`TRUTH_ONLY_EVALUATION_JSON_SCHEMA` and `truthOnlyOutputFormat`, held to the contract by `truthOnlyVerdict`): a score for each criterion; the structural issues, each opening with its limits' codes, quoting the text at fault and saying what is wrong (what the record or the director's words show instead, or what the limit rules out), never the new sentence; and a criterion's `fix` only when it scores below `STRUCTURAL_PASS_SCORE` (0.8), as what has to change, in a few words. No numbered steps are asked for (phase 18, run 2h). A rework reads each finding with the limit's name in place of its code (`withLimitNames`). `overallScore` is the lowest truth-criterion score. `advisoryWarnings` holds only a concern about one of the director's edits, under `DIRECTOR_EDIT_PREFIX`.
 - **Ready** when no structural issue remains and no truth criterion scored below `STRUCTURAL_PASS_SCORE`, whatever the judge's own `structuralPassed`. A finding located in the director's text is a concern beside its line, never a must-fix (the verdict guard, `guardDirectorEdits`: the director's edits are final).
 - **The code checks** are the rest of the gate, free: the weave checks before the fact check, the map checks in place of a judge (no model judge reads the map), and the article's fact check before the article judge, whose structural failure under the budget skips the judge's call. The fact check's advisory checks (`FACT_CHECK_ADVISORY_ONLY`: an em-dash, a production word, a gendered pronoun for Nova, the length, the head count, the NPCs' pronouns, a leaked prompt example, and the absence stated more than once) never block: at the desk each is a mark beside its paragraph.
 - **No score shows.** No stop shows a model score since task 4.10, and no note on the writing reaches a stop or a rework.
@@ -610,19 +612,19 @@ A reweave or a send-back opens a new round and starts the budget over.
 
 ### The Weave in One Call (Commit 8.15; phase 4)
 
-**Why one call?** The room's conclusions guide everything: the story starts from the director's read and the room's verdict. Parallel specialists could not share that context (8.15), and since phase 4 the one call writes the weave alone: every later writer reads the record itself, so a write-up for each thread repeated what the next writer already had (spec 4.2). Since phase 4b the same call attaches each thread's evidence, the pieces of the record that tell it, which the map writer hands on to the beats and the article writer cites.
+**Why one call?** The players' conclusions guide everything: the story starts from the director's read and the verdict. Parallel specialists could not share that context (8.15), and since phase 4 the one call writes the weave alone: every later writer reads the record itself, so a write-up for each thread repeated what the next writer already had (spec 4.2). Since phase 4b the same call attaches each thread's evidence, the pieces of the record that tell it, which the map writer hands on to the beats and the article writer cites.
 
-**The room's verdict is a thread in every angle** (C16): the weave checks require a thread marked `verdict: true` in each angle's threads, and the meeting's gate refuses a director's version whose picked angle lacks it. The report must address what players actually concluded.
+**The verdict is a thread in every angle**: the weave checks require a thread marked `verdict: true` in each angle's threads, and the meeting's gate refuses a director's version whose picked angle lacks it. The report must address what players actually concluded.
 
 ### Arc Validation Routing (Commit 8.27; the weave checks since phase 4)
 
 **Before the fact check:** `validateArcStructure` runs the weave checks in code (`lib/weave.js` `checkWeave`, no LLM), on the writer's text alone (a thread, a field or words the director added are never a check's failure):
 - the angles: two or three, each with every field and naming only threads the weave holds, the verdict's thread among them;
 - each of the writer's threads has at least one piece of evidence that supports it, and every piece, under a thread or a connection, names a source the record holds (a document by the record view's id rule, the ledger, the evidence log or the director's notes), never a buried memory, with each quotation word for word in its source (`lib/evidence.js` `evidenceProblems`);
-- the writer's lines are in story terms: each angle's gist, story, question, why it lands and where it ends up, each thread's name and line, and each connection's line hold no document id the record holds, no quotation in quotation marks, no clock time and no money figure (`storyTermsProblems`); the director's lines, "from your notes", the verdict line, each angle's headline (the article's own printed line) and the questions are exempt;
+- the writer's lines are in plain words: each angle's gist, story, question, why it lands and where it ends up, each thread's name and line, and each connection's line hold no document id the record holds, no quotation in quotation marks, no clock time and no money figure (`storyTermsProblems`); the director's lines, "from your notes", the verdict line, each angle's headline (the article's own printed line) and the questions are exempt;
 - every connection joins two threads the weave holds;
 - every angle, thread, connection and question has an id of its own;
-- each question comes to at most 40 words across what it is about, the question and what its answer changes (`QUESTION_WORD_BOUND`; an answered question is not held to it), and a question that sits beside a thread names a thread the weave holds. One question per subject is the writer's rule (C15), not a check;
+- each question comes to at most 40 words across what it is about, the question and what its answer changes (`QUESTION_WORD_BOUND`; an answered question is not held to it), and a question that sits beside a thread names a thread the weave holds. One question per subject is the weave writer's own part (`job-weave.md`), not a check;
 - "from your notes" is the director's words, word for word (`isVerbatimIn`);
 - the writer's own words on the meeting's page stay within what it may use, the map's rule (`lib/word-count.js` `pageLengthOf`): the page, built from the writer's share of the weave and counted by `lib/stop-pages.js` `wordsShown` once per angle with that angle open, less what code prints there (the verdict with its charge and vote, the line that says the open angle is open below, the line that keeps the verdict's thread in, the labels), is held to the larger of 350 and 450 less that overhead (`MEETING_WORD_FLOOR`, `MEETING_WORD_BOUND`), so a long split vote never fails the writer. The check fails when any angle's page passes its allowance, and names the angle. Only the writer's output is held to it: the director's version is never refused for its length.
 
@@ -640,16 +642,16 @@ So no fact check is paid for on a weave the code has already found at fault and 
 
 | Category | Definition | Where it is read | Example |
 |----------|-----------|---------------|---------|
-| **Roster PCs** | Characters present at investigation | The map places each in a beat, or raises them in its gap note (the map checks; C7) | "Sarah", "Alex", "Victoria" |
-| **NPCs** | Non-player game characters | Valid, and never players | "Marcus", "Nova", "Blake", "Valet" |
-| **Non-Roster PCs** | Valid game characters NOT in session | Named only through what the record shows of them | "Sofia" (if not playing) |
+| **Roster PCs** ("Played in this session") | Characters present at investigation | The map places each in a beat, or raises them in its gap note (the map checks; the brief's "Everyone gets a place") | "Sarah", "Alex", "Victoria" |
+| **NPCs** ("The game's own characters") | Non-player game characters | Valid, and never players | "Marcus", "Nova", "Blake", "Valet" |
+| **Non-Roster PCs** ("Not played in this session") | Valid game characters NOT in session | Named only through what the record or the director's words show of them | "Sofia" (if not playing) |
 
 **Why This Matters**:
 - **Prevents false negatives**: "Sofia" appearing in evidence is not a missing player
 - **Prevents false positives**: NPCs like "Marcus" never count as players
 - **Prevents hallucinations**: a name the record does not show is no one the article can name
 
-**Implementation**: the weave writer reads the three categories in its prompt (`buildCharacterCategoriesBlock` in `arc-specialist-nodes.js`, with `getNonRosterPCs` in `node-helpers.js`: every known game character less the roster and the theme's NPCs). Coverage is the map's: its checks and its counts read each beat's players against the roster (`mapTally` in `console/outline-edit-logic.js`, over `mapRosterOf` in `lib/map.js`), and the article's fact check covers the players the map places (`placedPlayers`). A player the director leaves off the map, by an unanswered question or a strike, is the director's decision: a concern on their edit at the map, and no finding at the article.
+**Implementation**: the weave writer reads the three categories in its prompt, under the labels in brackets above (`buildCharacterCategoriesBlock` in `arc-specialist-nodes.js`, with `getNonRosterPCs` in `node-helpers.js`: every known game character less the roster and the theme's NPCs). Coverage is the map's: its checks and its counts read each beat's players against the roster (`mapTally` in `console/outline-edit-logic.js`, over `mapRosterOf` in `lib/map.js`), and the article's fact check covers the players the map places (`placedPlayers`). A player the director leaves off the map, by an unanswered question or a strike, is the director's decision: a concern on their edit at the map, and no finding at the article.
 
 ### Canonical Name Preservation (Commit 4193772)
 
@@ -659,7 +661,7 @@ So no fact check is paid for on a weave the code has already found at fault and 
 
 **On the map**: `mapRosterOf` gives each roster player the canon's full name (`canonicalCharacters`, built from Notion), and `rosterMemberOf` (`console/outline-edit-logic.js`) matches a beat's player by the first name, the first word of the name given, or the full name. So "Sarah Blackwood" and "Sarah" place the same player.
 
-**Canonical names in the prompts**: the roster section the writers and judges print (`generateRosterSection` in `lib/prompt-builder.js`) lists each character by canonical full name and tells the writer to use those names only; T1 in `truth-rules.md` says nothing is invented. The arc stage's name check, `validateRosterName`, went with its roster coverage (brief 4.4).
+**Canonical names in the prompts**: the roster section the writers and judges print (`generateRosterSection` in `lib/prompt-builder.js`) lists each character by canonical full name and says a surname not on the list is invented. The arc stage's name check, `validateRosterName`, went with its roster coverage (brief 4.4).
 
 ### disableTools Flag (Commit 4193772)
 
@@ -747,7 +749,7 @@ State persists via `MemorySaver` (in-memory) or `SqliteSaver` (persistent).
 
 ### The stages and the clock
 
-The party, the investigation and Nova's day, and the clock every logged time is printed on, are T7 in `truth-rules.md`, with the timeline in `world.md` ("The record and the timeline"). Code makes the clock: the session clock (`lib/prompt-renderers/session-clock.js`) decides once per session whether logged times print as logged or with AM for PM, and every time a prompt prints goes through it, the record view's `<investigation-timeline>` and the transaction links included. The investigation cannot begin before 5 AM: a session played from 5 PM on runs in the morning in the story, an earlier one in the afternoon. Code gives every writer and judge one line saying which, with the span of the session's sales and exposures (with the session's facts, or beside the session roster in the calls without them), and no code-built label fixes the time of day. Ledger rows the session report logged off the game's clock are lined up at the parse (see **The ledger's shift** under Phase 0).
+The party, the investigation and Nova's day, and the clock every logged time is printed on, are "Three stretches of time" in `limits.md`, with the timeline in `world.md` ("What you are given, and what it is in the story"). Code makes the clock: the session clock (`lib/prompt-renderers/session-clock.js`) decides once per session whether logged times print as logged or with AM for PM, and every time a prompt prints goes through it, the record view's `<investigation-timeline>` and the transaction links included. The investigation cannot begin before 5 AM: a session played from 5 PM on runs in the morning in the story, an earlier one in the afternoon. Code gives every writer and judge one line saying which, with the span of the session's sales and exposures (with the session's facts, or beside the session roster in the calls without them), and no code-built label fixes the time of day. Ledger rows the session report logged off the game's clock are lined up at the parse (see **The ledger's shift** under Phase 0).
 
 ---
 
@@ -759,7 +761,7 @@ The party, the investigation and Nova's day, and the clock every logged time is 
 1. Is the roster correctly parsed in `sessionConfig.roster`?
 2. Do the beats name the player as the roster does: the first name, or the canon's full name (`rosterMemberOf`)?
 3. Are NPCs (Marcus, Nova, Blake) on the roster by mistake?
-4. Does the record say anything about the player? If not, the story meeting asked a question of kind `player` (C15); with no answer, the map writer raises the player in `gapNote` (C7), which the checks count as raised.
+4. Does the record say anything about the player? If not, the story meeting asked a question of kind `player`; with no answer, the map writer raises the player in `gapNote`, which the checks count as raised.
 
 **Fix**: The map check's line names the player and the fix, and the round's one rework reads it. A player the director struck off the map is a concern on their edit, never a rework.
 
@@ -768,16 +770,16 @@ The party, the investigation and Nova's day, and the clock every logged time is 
 **Check**:
 1. Is three-layer model enforced in prompts?
 2. Is article generation receiving buried transactions (metadata only)?
-3. Does the article writer's system prompt carry `truth-rules.md` T3 (buried memories never appear as evidence)? The world and the truth rules come from `loadRuleSet('article', {theme})`, which throws naming a missing or empty rule file.
+3. Does the article writer's system prompt carry `limits.md` ("Sold memories": a sold memory appears only as its sale)? The world and the limits come from `loadRuleSet('article', {theme})`, which throws naming a missing or empty rule file.
 
-**Fix**: Check that `<RECORD>` prints a buried memory only as its sale (`lib/__tests__/buried-memory-sentinel.test.js`), and read the judges' `evidenceTruth` criterion (T3) for the line at fault.
+**Fix**: Check that `<RECORD>` prints a buried memory only as its sale (`lib/__tests__/buried-memory-sentinel.test.js`), and read the judges' `evidenceTruth` criterion (its finding opens with T3) for the line at fault.
 
 ### "The weave has no verdict thread"
 
 **Check**:
 1. Does a thread carry `"verdict": true`, and does every angle's `threads` name it?
 2. Is the accusation present in `playerFocus.accusation`, and the director's account in `sessionConfig.accusationRaw`?
-3. Is the weave writer's SECTION 1 (what the room concluded) populated?
+3. Is the weave writer's SECTION 1 (what the players concluded) populated?
 
 **Fix**: The weave check fails with a line that names the fix, and the round's one rework reads it. A check still failing after that rework reaches the meeting, which shows it; a send-back with a note asks the writer to rethink the angles.
 
@@ -785,9 +787,9 @@ The party, the investigation and Nova's day, and the clock every logged time is 
 
 **Check**:
 1. Is the rework starting from the previous version (`_previousOutline`, `_previousContentBundle`, or the weave where it is)?
-2. What did `buildRevisionContext` give the rework? Read its prompt in `llm-log/`: a criterion's notes and fix print only when it scored below `STRUCTURAL_PASS_SCORE`, and an automatic pass carries no judge `revisionGuidance` (a code check's lines still reach it, under the check's own label).
+2. What did `buildRevisionContext` give the rework? Read its prompt in `llm-log/`: the evaluation prints as its must-fix lines, each with the limit's name in place of its code, and on an automatic pass its suggestions; a failed criterion's fix prints as a must-fix line only when the evaluation lists none, and no score or criterion's name prints (a code check's lines still reach it, under the check's own label).
 3. Is the automated budget spent (`REVISION_CAPS`)? At the cap the stop opens on the escalated verdict, and at the desk each issue left is marked beside its paragraph.
-4. Is the finding about the director's own text? Then it is a concern beside the line, never a must-fix (`guardDirectorEdits`).
+4. Is the finding about the director's own text, which at the article includes the map's headline, deck and headings once the map is approved? Then it is a concern beside the line, never a must-fix (`guardDirectorEdits`).
 
 **Fix**: Check that `validationResults` is stamped with this phase (a mismatched stamp drops the whole evaluation block) and that the failing criterion's fix names the line at fault.
 
@@ -797,7 +799,7 @@ The party, the investigation and Nova's day, and the clock every logged time is 
 1. Was a photos folder supplied - at /start or at the `photos` checkpoint? (state.photosPath)
 2. Are photos analyzed in `photoAnalyses`?
 3. Are `characterDescriptions` mapped to roster?
-4. Did the director leave the photo out, with its "Leave this photo out" box at the `character-ids` stop (`leftOutPhotos`), or by deleting it at the desk? A photo left out reaches no writer or judge (T13).
+4. Did the director leave the photo out, with its "Leave this photo out" box at the `character-ids` stop (`leftOutPhotos`), or by deleting it at the desk? A photo left out reaches no writer or judge ("Photos" in `limits.md`).
 5. Does the map place it? The map checks hold every kept photo to one place, and the article prints each where the map places it. Every photo the director kept reaches the article writer through `articleWriterInputs` (`options.photos`, since 3.9).
 
 **Fix**: `fetchSessionPhotos` THROWS on a missing folder now, so a bad path shows as a run error naming the path, not as a silent zero-photo article. Check the `photos` gate's answer, then the `character-ids` approval and its leave-out boxes.
@@ -844,11 +846,11 @@ item.fullDescription || item.rawData?.fullDescription || item.content || item.su
 **Symptom**: The article mixes the party (what a memory shows) with the investigation (the room, and the sales and exposures on the investigation's timeline) in one sentence, prints a logged time off the session clock, or calls an afternoon investigation the morning.
 
 **Check**:
-1. Does the article writer's system prompt carry `truth-rules.md` T7 (the stages and the clock)?
+1. Does the article writer's system prompt carry `limits.md` ("Three stretches of time")?
 2. Does the record's `<investigation-timeline>` show the times on the session clock, and does the time-of-day line say morning or afternoon as the clock decides? The input review's ledger panel says which clock rule applied, and which ledger rows were shifted onto the game's clock.
-3. Did the judges' `stagesTruth` criterion (T7) flag the line?
+3. Did the judges' `stagesTruth` criterion (its findings open with T7) flag the line?
 
-**Fix**: The rule is T7 (`truth-rules.md`), with the timeline in `world.md`. A time on the wrong clock is fixed in `lib/prompt-renderers/session-clock.js`, which every printed time goes through.
+**Fix**: The limit is "Three stretches of time" (`limits.md`), with the timeline in `world.md`. A time on the wrong clock is fixed in `lib/prompt-renderers/session-clock.js`, which every printed time goes through.
 
 ---
 
@@ -872,23 +874,19 @@ item.fullDescription || item.rawData?.fullDescription || item.content || item.su
 
 ### Prompt Reference Files
 
-The writers and judges read the rule set of their theme (phase 3; phase 4, R14), which `lib/rule-set.js` loads from the folder the theme's config names: the journalist's is `.claude/skills/journalist-report/references/rules/`. The eight journalist craft files under `references/prompts/` that it replaced are deleted; the detective keeps its own.
+The writers and judges read the rule set of their theme (phase 3; phase 4, R14), which `lib/rule-set.js` loads from the folder the theme's config names: the journalist's is `.claude/skills/journalist-report/references/rules/`, eight files since phase 18, each the text the director settled (`docs/superpowers/specs/2026-11-20-the-brief-and-the-limits-design.md`; a copy of each is in `docs/superpowers/specs/2026-11-20-phase-18-approved-text/`). They carry no numbered items. The journalist's prompt files under `references/prompts/` that the rule set replaced are deleted; the detective keeps its own.
 
-| File | Purpose |
-|------|---------|
-| `references/rules/world.md` | The article's purpose and the world: the party, the investigation, the ledger, Nova, and what each memory became |
-| `references/rules/truth-rules.md` | T1 to T15, each with its reason: the floor |
-| `references/rules/craft-story.md` | C1, C3, C16: one thesis, how the official story was made, the threads woven toward one convergence |
-| `references/rules/craft-form.md` | C2, C5, C6, C17, C18, C19, C14: the article's form, from the opening to the closing |
-| `references/rules/craft-material.md` | C8, C7, C10, C11: the director's lines (weighed by the arc writer, chosen by the map), the players, the mechanics, the exposures |
-| `references/rules/craft-voice.md` | C12: Nova works the case in front of the reader |
-| `references/rules/craft-judgement.md` | C13: judgement on the characters, critique past them |
-| `references/rules/craft-telling.md` | C4: about 1,500 words, every sentence saying something |
-| `references/rules/craft-cards.md` | C9: cards and quote blocks |
-| `references/rules/craft-questions.md` | C15: questions to the director, at the story meeting |
-| `references/rules/mode-on-site.md`, `mode-remote.md` | The reporting-mode block: T8's mode part, what Nova could witness |
+| File | Purpose | Who reads it |
+|------|---------|--------------|
+| `references/rules/world.md` | The world: the party, the investigation, Blake, the ledger, an account, the evidence log, the group statement, Nova; what became of each memory (made public, sold, never found); what the writer is given and what each thing is in the story | Every writer and judge, first, in the system prompt (`<world>`) |
+| `references/rules/limits.md` | The fifteen limits on what the article may claim, each named by its lead-in | Every writer and judge, after the world (`<limits>`); the judges score them by code |
+| `references/rules/brief.md` | How a reporter approaches this article, with reasons: what it is, the argument, one question and the steps to its answer, the headline, the sections, the threads, everyone given a place, paragraphs, Nova, the ending | The three writers, last in the user prompt (`<brief>`) |
+| `references/rules/job-weave.md` | The weave writer's own part: the angles, the threads, the connections, the questions | The weave writer, after the brief (`<job-weave>`) |
+| `references/rules/job-map.md` | The map writer's own part: the steps, the beats and their evidence, the lines the article prints, the length | The map writer, after the brief (`<job-map>`) |
+| `references/rules/job-article.md` | The article writer's own part: following and reading the map, what is already written, cards, the sidebar and quote blocks, the length and house style, a guest reporter | The article writer, after the brief (`<job-article>`) |
+| `references/rules/mode-on-site.md`, `mode-remote.md` | The part about this session: where Nova was and what Nova saw and heard | Every writer and judge, the session's one, in a `<this-session>` tag right after the identity line |
 
-The eight craft files group C1 to C19 by the writer's job (phase 3, task 3.8). Each call reads the ones `RULE_SET_CALLS` in `lib/rule-set.js` gives it, in one order with telling and voice last, as the phase 17 spec's sections 3 and 4 set them (`docs/superpowers/specs/2026-10-18-the-writing-design.md`; the phase 4 spec's section 11 set them before, and the rule-set spec's section 8 before that).
+Each call reads the core (`CORE_FILES`: the world, then the limits) and then the files `RULE_SET_CALLS` in `lib/rule-set.js` gives it: each writer the brief, then its own part; the two judges nothing more. A rework reads what its writer reads. `lib/__tests__/rule-set.test.js` pins each file by its hash and lints the folder.
 
 ### Data Directory Structure
 
@@ -918,7 +916,7 @@ The published report goes to `outputs/report-{sessionId}.html`, with its photos 
 
 ---
 
-*Last updated: 2026-10-05 (phase 4b, piece 1: the story level, with the evidence underneath)*
+*Last updated: 2026-11-24 (phase 18: the brief and the limits)*
 *Based on codebase analysis including Commits 8.11 (hybrid curation), 8.15 (player-focus arcs), 8.24 (momentum criteria), 8.25 (outline schema), 8.26 (SRP checkpoints), 8.27 (arc validation routing), ba3f534 (XML migration), 4193772 (arc architecture), 6ffeef8 (data wiring), phase 4's briefs and phase 4b's piece 1*
 
 *Graph: 44 nodes total (see lib/workflow/graph.js for complete node list)*

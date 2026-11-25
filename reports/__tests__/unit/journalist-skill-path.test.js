@@ -520,7 +520,7 @@ describe('your words and the world (phases 14 and 15)', () => {
  *   carries word for word, and the headings, as mapTask (addendum a) gives it; the arc analyzer
  *   writes each angle's headline in the voice.
  * - The guest reporters are a list, `guestReporters`, empty when the session has none (R5).
- * - The deep dive names C12's and C4's new titles and the lists' new source.
+ * - The deep dive names the rule files it reads (since phase 18, the eight of the brief and the limits).
  * - No file says what gate 5 retires.
  */
 describe('the writing (phase 17)', () => {
@@ -581,12 +581,16 @@ describe('the writing (phase 17)', () => {
     expect(step(10)).toContain('writes the article the map plans');
   });
 
-  it("the deep dive names C12's and C4's new titles, and the lists' source in this phase", () => {
+  // Phase 18 (run 3, G2): the deep dive's rule files are the eight of phase 18, so this test, which
+  // held its rows of the old craft files, holds the new table and the weave writer's fourth section.
+  it("the deep dive names the eight rule files of phase 18 and the weave writer's brief and part", () => {
     const doc = DOCS['PIPELINE_DEEP_DIVE.md'];
-    expect(doc).toContain('| C12: Nova works the case in front of the reader |');
-    expect(doc).toContain('| C4: about 1,500 words, every sentence saying something |');
+    ['world', 'limits', 'brief', 'job-weave', 'job-map', 'job-article'].forEach((file) => {
+      expect(doc).toContain(`| \`references/rules/${file}.md\` |`);
+    });
+    expect(doc).not.toMatch(/references\/rules\/craft-|references\/rules\/truth-rules/);
     expect(doc).not.toMatch(/Each call reads the ones the phase 4 spec's section 11 gives it/);
-    expect(doc).toContain('SECTION 4: CRAFT GUIDANCE (story, form, material, judgement, questions, voice)');
+    expect(doc).toContain('SECTION 4: THE BRIEF AND YOUR PART (<brief>, then <job-weave>)');
   });
 
   it.each(Object.keys(ALL))('%s describes nothing phase 17 retires (gate 5)', (name) => {
