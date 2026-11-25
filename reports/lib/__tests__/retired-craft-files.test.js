@@ -155,6 +155,28 @@ describe('the retired journalist craft files', () => {
     expect(listed).toEqual(call ? ['world', 'limits', ...RULE_SET_CALLS[call], 'mode-on-site'] : ['world']);
     if (call) expect(text).toContain('mode-remote.md');
   });
+
+  /**
+   * Phase 18, run 3 (brief G1): an agent that reads a call's files reads them from one fenced list
+   * under its "## Rules" heading, one path a line, in the call's order, the mode file last with its
+   * alternative on the same line. No rule file's path is named outside that list, so the list is the
+   * whole of what the agent is told to read; its prose names its own part by file name alone.
+   */
+  it.each(Object.entries(AGENT_CALLS).filter(([, call]) => call !== null))('%s reads the %s call\'s files from one fenced list under its Rules heading', (agent, call) => {
+    const text = fs.readFileSync(path.join(REPO, '.claude', 'agents', agent), 'utf8');
+    const at = text.indexOf('\n## Rules\n');
+    expect(at).toBeGreaterThan(-1);
+    const end = text.indexOf('\n## ', at + 1);
+    const rules = text.slice(at, end < 0 ? text.length : end);
+    const fences = [...rules.matchAll(/\n```\n([\s\S]*?)\n```/g)];
+    expect(fences).toHaveLength(1);
+    const lines = fences[0][1].split('\n');
+    const RULES = '.claude/skills/journalist-report/references/rules/';
+    expect(lines.slice(0, -1)).toEqual(['world', 'limits', ...RULE_SET_CALLS[call]].map((name) => `${RULES}${name}.md`));
+    expect(lines[lines.length - 1]).toMatch(/^\.claude\/skills\/journalist-report\/references\/rules\/mode-on-site\.md\s+\(or mode-remote\.md, as the record's reportingMode says\)$/);
+    const outside = text.replace(fences[0][0], '');
+    expect(`${agent}: ${outside.includes('references/rules/')}`).toBe(`${agent}: false`);
+  });
 });
 
 describe("the detective's phase lists still resolve (it is parked, spec D13)", () => {
