@@ -649,7 +649,7 @@ describe('the removed-phrase fixture: the wording 3.8 retires from the rule file
   it.each([
     // The verdict labels and T2 say a no-culprit verdict names no one.
     'A verdict with no culprit, such as an overdose or an accident, names no one.',
-    "ACCUSATION: none (the room's verdict names no culprit: an accident)",
+    'ACCUSATION: none (the verdict names no culprit: an accident)',
     // Round 7's own lines.
     'Money runs from the buyer to the seller\'s chosen account. Nova suspects the buyer is NeurAI and its board, and writes it as a suspicion (T1).',
     'The game tells the players that NeurAI\'s board wants the memories gone (T5).',

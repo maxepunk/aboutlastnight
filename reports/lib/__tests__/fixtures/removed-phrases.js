@@ -536,9 +536,9 @@ const REMOVED_PHRASES = [
   // instructions, and the tags of the retired truth rules and craft files ('<craft-' finds every
   // one the pattern above names). Then run 2h's leftovers: the retired preamble of the notes from
   // the stops, the weave writer's old list labels, and the map task's old pointer at the
-  // meeting's note (R57). R12's "in story terms" and "the room's verdict" join once the skill
-  // (.claude/skills/journalist-report, .claude/agents) no longer carries them: the integrator adds
-  // them after run 3's slices merge.
+  // meeting's note (R57).
+  'in story terms',
+  "the room's verdict",
   'the reporting-mode block',
   'the mode block',
   'CRAFT GUIDANCE',

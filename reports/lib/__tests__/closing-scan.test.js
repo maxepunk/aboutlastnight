@@ -211,11 +211,9 @@ describe('the closing scan fails on a planted line', () => {
   /** The render with `line` put before <DIRECTOR_GUIDANCE>, where the pipeline's own text is. */
   const planted = (line) => render.replace(/^<DIRECTOR_GUIDANCE>$/m, `${line}\n\n<DIRECTOR_GUIDANCE>`);
 
-  // R12's "in story terms" and "the room's verdict" are not on the list yet: the skill still carries
-  // them, and the integrator adds them once it does not.
   it("R12's phrases, the retired notes preamble, the old list labels and the old pointer are on the removed list", () => {
     [
-      'the reporting-mode block', 'the mode block', 'CRAFT GUIDANCE', 'exposer', '<truth-rules>', '<craft-', 'Standing notes the director gave at earlier stops',
+      'in story terms', "the room's verdict", 'the reporting-mode block', 'the mode block', 'CRAFT GUIDANCE', 'exposer', '<truth-rules>', '<craft-', 'Standing notes the director gave at earlier stops',
       'ROSTER PCs', 'NON-ROSTER PCs', 'the approval note marked arc-selection'
     ].forEach((phrase) => expect(`${phrase}: ${REMOVED_PHRASES.includes(phrase)}`).toBe(`${phrase}: true`));
   });
