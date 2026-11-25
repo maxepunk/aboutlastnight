@@ -882,3 +882,75 @@ The director's correction from run 2c binds every seat: **judge a change by the 
 | X | Opus 5.5, medium | Opus 5.5, high |
 
 Verifier Sonnet 5.5 at medium. Fixer Opus 5.5 at high. Re-review Opus 5.5 at medium.
+
+### After run 2h
+
+Both slices are merged. The reviewer of slice W found one reader of a changed block that the integrator had missed, and it was fixed before the merge:
+
+- **R57. The pointer at the meeting's note names the mark the block prints.** The map writer's task and the map schema's line for a change's source point at the director's approval note from the story meeting. Run 2h changed how that note is marked in `<DIRECTOR_GUIDANCE>`, so the pointer reads `the note marked [the story meeting, approved] in <DIRECTOR_GUIDANCE>`, built from the two functions the block reads, and a test holds the two to one mark.
+
+---
+
+## Run 3 as it runs: three slices (added 2026-11-24)
+
+Brief G was written before runs 2b to 2h. Those runs changed what the writers are handed, what a rework is shown, what a judge is asked, the lines the director approves on the map, and the desk. So run 3 follows what is built at the phase branch's head, and Brief G is split by what each seat writes: the skill's text, the docs, and code that changes no prompt. The three own different files and run side by side.
+
+What the earlier runs left for this run is in the workspace, `surveys/for-g.md`.
+
+### Rulings for run 3
+
+- **R53. Brief G stands, read against the head.** Where Brief G names a file's content as it was before run 2b, the head decides. Its intent, invariants and out-of-scope hold for all three slices: the skill keeps its own shapes (`directorChanges`, `stopNotes`), and no pipeline prompt changes.
+- **R54. The skill's text is the one place a seat writes what a model reads.** It keeps only what is the skill's alone: where the files are, what each agent reads and in what order, and what it writes back. It says nothing about how to write, what to claim or what a line should be: the rule files say that, and an agent reads them by the lists `RULE_SET_CALLS` gives. A sentence that restates a rule file is cut, not reworded.
+- **R55. The docs describe the head.** Each doc line names what is built, with the file or function that holds it, and no rule by number. A doc under `docs/superpowers/` or `archive/` is history and is not changed.
+- **R56. The scan and R12's phrases are one slice's.** The integrator's list of removed phrases (R12) is added by slice G3 with the closing scan, so the phrases and the test that reads them arrive together.
+
+### Brief G1: the skill
+
+**Intent.** The standalone skill reads what the pipeline reads and hands its agents what the pipeline hands its writers.
+
+**Layers.** `.claude/skills/journalist-report/SKILL.md`, `references/schemas.md`, and the six agents under `.claude/agents/` (the arc analyzer, the outline generator, the article generator and the article validator, and the curator and the image analyzer, which keep reading `world.md`), with `__tests__/unit/journalist-skill-path.test.js`. The rule files are not this slice's: they are the approved text.
+
+**What follows the head.** Each agent's fenced list of rule files as `RULE_SET_CALLS` gives it. The weave task's opening, the map without a beat's kind and with a section's job as its step, the article's blocks as now offered, the line above the headline, the validator's `rule` field as a limit's code, and no rule cited by number anywhere.
+
+**Tests.** The skill-path test moves with the text. A test holds each agent's fenced list to `RULE_SET_CALLS`.
+
+**Verification.** Read each agent file and `SKILL.md` top to bottom as the agent meets it. Gate 6's grep on the skill and the agents.
+
+**Done.** The skill's agents read the eight files by the calls' lists, no line of the skill restates a rule file or cites a rule by number, and the tests are green.
+
+### Brief G2: the docs
+
+**Intent.** A reader of the docs learns what is built at the head.
+
+**Layers.** `docs/PIPELINE_DEEP_DIVE.md`, the files of `docs/architecture/`, `docs/runbook/first-run-sheet.md`, `CONTEXT.md`, `CLAUDE.md`, and the roadmap `docs/superpowers/plans/2026-09-22-roadmap.md` (the one file under `docs/superpowers/` this slice changes). `surveys/for-g.md` lists the lines the earlier runs found stale; it is a start, not the whole list. For each doc, read it against the code it describes.
+
+**Invariants.** No code and no test changes. `CLAUDE.md` stays a map: a rule in a line, the account in its `docs/architecture/` file.
+
+**Verification.** Gate 6's grep on the docs and `CLAUDE.md`. Each changed statement checked against the file or function it names.
+
+**Done.** No doc describes the old rule set, the old desk labels or a moved function as current; the roadmap's rows are as Brief G says; the grep is clean.
+
+### Brief G3: the closing scan, the comments and the harness's desk
+
+**Intent.** A test keeps rule numbers and the old words out of every writer's prompt, the comments say what the code does, and the harness prints the desk the console shows.
+
+**Layers.**
+- The closing scan test, as Brief G gives it, with R12's phrases in `lib/__tests__/fixtures/removed-phrases.js`. It also holds that no writer's or rework's user prompt carries a `this-session` block.
+- The comment sweep `surveys/for-g.md` lists. Comments only: a line a model reads is not touched.
+- `lib/stop-pages.js`: the printed desk gives each mark its place and prints the two lines under the note box, in the console's own words, read from the console's logic module and not copied.
+
+**Invariants.** No prompt's render changes: the pins in `writer-prompts-pinned.test.js` do not move. If the scan fails on a line a writer reads, stop and return NEEDS_CONTEXT naming the line: its wording is the director's.
+
+**Verification.** Render all eleven prompts for 111326 and 101826 and compare with the head's: no difference. Print the desk of a stored thread through the harness with `--resume --step` on the database copy and read it.
+
+**Done.** The scan passes on the head's prompts, the renders are unchanged, the suite is green.
+
+### Seats for run 3
+
+| Slice | Builder | Reviewer |
+|---|---|---|
+| G1 | Opus 5.5, high | Fable 5.2, high |
+| G2 | Opus 5.5, medium | Opus 5.5, medium |
+| G3 | Opus 5.5, medium | Opus 5.5, medium |
+
+Verifier Sonnet 5.5 at medium. Fixer Opus 5.5 at high. Re-review Opus 5.5 at medium.
