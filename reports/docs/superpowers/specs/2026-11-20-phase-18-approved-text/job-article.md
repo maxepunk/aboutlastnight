@@ -6,7 +6,7 @@
 
 **What is already written.** The headline, the line under it, which the map calls the deck, and each section's heading are printed exactly as the map gives them, or as the director has edited them since. Your first words are the opening.
 
-**Cards, the sidebar and quote blocks.** The map marks three to five beats whose evidence prints as a card. Print each card where its beat is told, copied from the record. The sidebar lists five to eight pieces of evidence, and every card is among them. A quote block is optional. Use one when a line someone said does more set apart than it would inside a paragraph. It is word for word and names the person who said it. Two or three in an article is usually the most that helps, with none in the opening and at most one in the closing. Nova's own lines stay in the prose.
+**Cards, the sidebar and quote blocks.** The map marks three to five beats whose evidence prints as a card. Print each card where its beat is told, copied from the record. The sidebar lists five to eight pieces of evidence, and every card is among them. A card's headline and a sidebar entry's lines say plainly what the document is, and claim nothing the document does not show. A quote block is optional. Use one when a line someone said does more set apart than it would inside a paragraph. It is word for word and names the person who said it. Two or three in an article is usually the most that helps, with none in the opening and at most one in the closing. Nova's own lines stay in the prose.
 
 **Length and house style.** Aim at the map's expected length, which is about 1,500 words at most. A session that gave less makes a shorter article. Where a dash might go, the house style is a comma, a colon or a full stop.
 

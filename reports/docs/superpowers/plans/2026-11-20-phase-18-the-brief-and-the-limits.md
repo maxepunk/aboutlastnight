@@ -802,3 +802,83 @@ The lock (run 2f) puts the map's headline, the line under it and its headings am
 **Done.** The above holds and the suite is green.
 
 **Seats.** Builder Opus 5.5 at medium, reviewer Opus 5.5 at medium.
+
+---
+
+## Run 2h: the second read's lines (added 2026-11-24)
+
+Five fresh readers read the built prompts after runs 2b to 2e. The integrator walked each finding through the whole pipeline and put eighteen lines and three questions to the director, who answered the questions and approved every line on 2026-11-24. The wording is part 10 of `docs/superpowers/specs/2026-11-24-phase-18-run-2c-wording.md`, and the four changed rule files are in the approved-text folder. This run puts them in. It is the last round of prompt lines before the skill and the docs.
+
+The director's correction from run 2c binds every seat: **judge a change by the whole pipeline.** A line is read by more than the writer it sits in front of: a later writer, a check, a judge, and the director at a stop. Before a line changes, know who else reads it.
+
+### Rulings for run 2h
+
+- **R44. Part 10 of the wording doc is the read for this run.** Every "Approved" line goes in word for word, at the place part 10 gives. Nothing else a model reads changes. A line that cannot be built as written comes back as NEEDS_CONTEXT.
+- **R45. R24 is reversed.** The article writer reads the brief, then its own part, as the other two writers do and as the spec gives it.
+- **R46. The settled angle has one renderer and three readers.** `renderSettledWeave(weave, edits, { reader })` and `settledWeaveOf(state, { reader })`, where `reader` is `'map'` (the default), `'article'` or `'judge'`. `withEvidence` goes, with its call sites. The map writer and the map's rework read the `'map'` form, the article writer and the article's rework the `'article'` form, the article's judge the `'judge'` form. A reader that is none of the three fails loud.
+- **R47. One label over the notes.** The label is one constant, and every prompt that prints the notes prints it: the weave writer's, the map writer's, the article writer's, their reworks' and both judges'.
+- **R48. One name for a stop.** The writers' block of the notes from the stops takes a stop's name and an action's word from the map the judges' block already reads (`STOP_NOTE_PLACES`, `STOP_NOTE_ACTIONS` in `lib/prompt-renderers/director-words-renderer.js`). A note sent back prints its round; an approved note prints none. A stop the map does not name prints as it does for the judges.
+- **R49. The judge is no longer asked for its numbered steps.** `revisionGuidance` leaves the OUTPUT FORMAT and the schema the judge is given. Code that reads one from a stored verdict stays, since the console's trace shows an old session's. A verdict that holds none flows through the guard, the rework and the trace with no error and no empty label.
+- **R50. The map as the article writer is shown it holds no `gapNote` and no `dropped`.** The stored map, the stamp, the checks, the judge and the page read the map whole.
+- **R51. Blake's full name changes in the journalist theme only.** The parked theme is not touched.
+- **R52. The line `Under each connection is the evidence that shows it.` prints only when the block prints a connection.** A connection with no evidence yet says so, as a thread does.
+
+### Review focus for run 2h
+
+- Every approved line compared with part 10 word for word, in the rendered prompt and not only in the diff.
+- Each changed block read in every prompt that prints it: the settled angle (five readers, three forms), the label over the notes (the three writers, their reworks, both judges), the notes from the stops.
+- A piece of a connection's evidence that the map writer puts under a beat passes the map's check of a beat's evidence.
+- A judge's verdict with no numbered steps: the guard, the rework's findings, the automatic passes' trace and the desk all read it. A stored verdict that holds steps still shows them in the trace.
+- The rule files byte for byte equal to their approved files, each sha re-pinned.
+- A theme that prints no pronouns, and the parked theme, still build what they built.
+
+### Brief W: the writers' lines
+
+**Intent.** Every approved line of part 10 that a writer reads stands in that writer's prompt, and each block the stages share says one thing to every reader.
+
+**Layers.**
+- The four rule files, copied from the approved-text folder: `brief.md`, `job-map.md`, `limits.md`, `job-article.md`. Their shas in `lib/__tests__/rule-set.test.js`.
+- `lib/rule-set.js`: the article call's order (R45).
+- `lib/prompt-renderers/settled-weave.js`: the three readers (R46, R52), with the evidence under a connection for the map, no headline line for the article, and the judge's sentence. The call site in the article judge's prompt (`lib/workflow/nodes/evaluator-nodes.js`, the one call of `settledWeaveOf`) passes `reader: 'judge'`. That line is this slice's; nothing else in that file is.
+- The label over the notes (R47): one constant, read by the weave writer's prompt, by `_buildInvestigationObservations` for the map and the article, and by the judges' notes block.
+- `lib/prompt-builder.js`: the notes from the stops (R48); the line over the map, the list of section names after it, and the map as shown (R50); the label over the notes.
+- `lib/workflow/nodes/arc-specialist-nodes.js`: the weave writer's list of who was played.
+- `lib/theme-config.js`: Blake's full name (R51). Find every reader of that entry and say what each now prints.
+- `lib/schemas/outline.schema.json`: the one word.
+
+**Tests.** Each approved line word for word. The settled angle's three forms, each with what it holds and what it leaves out, and a reader that is none of the three. A connection with evidence and one with none. The map as shown without the two notes, and a stored map untouched. The notes from the stops for a note sent back, an approved note and a stop the map does not name. The tests that held the old words moved.
+
+**Invariants.** Nothing else a model reads changes. The stored weave and the stored map are read whole by everything that read them. The meeting's change ids (`M1`) still print on the lines the map writer fits in. No change touches `lib/hand-edit-diff.js`, `settleEdits` or the rules of the director's edits.
+
+**Verification.** Render all eleven prompts for 111326 and 101826 and compare with the phase branch's renders. Read each changed block in every prompt that prints it. Check by a test or a walk through `lib/map.js` that a piece taken from a connection's evidence passes a beat's evidence check.
+
+**Done.** The approved lines stand in the renders word for word, the rule files equal their approved files, the suite is green, the moved pins carry their reasons.
+
+### Brief X: the judges' lines
+
+**Intent.** A judge reads what a breach is, what its finding holds and what the director's words are in the approved words, is told which limits no question covers, and is asked only for what something reads.
+
+**Layers.** `lib/workflow/nodes/evaluator-nodes.js`, and `lib/workflow/nodes/node-helpers.js` where a verdict's fields are read:
+- the three sentences on a breach, on doubt and on what a finding says;
+- the added sentence on the director's words;
+- the sentence after the list of the limits, one for each judge. Check it against the questions: the limits no question of that judge scores are exactly the ones its sentence names, held by a test that derives them;
+- the weave judge's opening;
+- the OUTPUT FORMAT and the schema: a question's notes for both judges, its fix, the list of breaches, no numbered steps (R49), and `must pass` off each question's line;
+- the roster block both judges print, without the summary of the characters.
+
+**Tests.** Each approved line word for word, in the system prompt or the user prompt that prints it. A verdict with no numbered steps through `truthOnlyVerdict`, the director's-edits guard, `buildRevisionContext` and the console's trace logic. A stored verdict with steps still shown by the trace. The roster block byte-equal for the two judges of one session.
+
+**Invariants.** A finding still opens with its limits' codes and parses. The scores, the pass mark and the questions' own words do not change. The line of `settledWeaveOf` in the article judge's prompt is slice W's. The label over the notes is slice W's: a test of yours that holds its old words is left for W.
+
+**Verification.** Render both judges' prompts for 111326 and 101826 and read each from top to bottom.
+
+**Done.** The approved lines stand in the renders word for word, the suite is green.
+
+### Seats for run 2h
+
+| Slice | Builder | Reviewer |
+|---|---|---|
+| W | Opus 5.5, high | Fable 5.2, high |
+| X | Opus 5.5, medium | Opus 5.5, high |
+
+Verifier Sonnet 5.5 at medium. Fixer Opus 5.5 at high. Re-review Opus 5.5 at medium.

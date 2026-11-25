@@ -332,3 +332,184 @@ Now: `every one that mentions Blake.`
 Approved: `every one that mentions Blake, by name or as the Valet.`
 
 Stays: every other word of that label.
+
+## Part 10. The second read's lines (approved 2026-11-24)
+
+Five fresh readers read the built prompts after runs 2b to 2e. The director answered three questions first: Blake's surname is Manley; the notes are Nova's notes and thinking from the investigation, and only a line they quote a person as saying is text for the article; and the brief's sentence on evidence takes four more words. The director then approved every line below ("yes to all 18, and the notes sentence is fine").
+
+Each line is given as it is ("Now") and as approved ("Approved"). Where a place is given, the place is part of what was approved.
+
+### Rule files
+
+The four changed files are in the approved-text folder, and each rule file is a copy of its approved file.
+
+**The brief.** Now: `The evidence goes in front of the reader a piece at a time.`
+
+Approved: `The evidence the argument needs goes in front of the reader a piece at a time.`
+
+**The map writer's own part, on a section's heading.** Now: `A section's heading says what that section tells the reader, in this story's own names. Take it from the section's step.`
+
+Approved: `A section's heading tells the reader what the section is about, in this story's own names. It does not give away what the section finds.`
+
+**The limits, on "we".** Now: `When Nova writes "we", it means NovaNews, or Nova and the reader, or Nova and a guest reporter.`
+
+Approved, one sentence added after it: `In a session where Nova was in the warehouse, the part about this session allows one more.`
+
+**The article writer's own part, on a card's headline and a sidebar entry.** New, right after `The sidebar lists five to eight pieces of evidence, and every card is among them.`:
+
+`A card's headline and a sidebar entry's lines say plainly what the document is, and claim nothing the document does not show.`
+
+### The order of the article writer's two texts
+
+The brief, then the writer's own part, as the spec gives it for every writer. No words change.
+
+### Blake's name
+
+The journalist theme's list of the game's own characters gives Blake the full name `Blake Manley`.
+
+### The label over the director's notes
+
+Now:
+
+```
+The Director's Notes (what people did and said in the warehouse)
+Backstory in the notes, what the director knows about the characters beyond what the session showed, is not in the record and did not happen in the warehouse. The article never states it as fact. It can appear as what Nova suspects, asks or believes.
+```
+
+Approved:
+
+```
+The Director's Notes (what people did and said in the warehouse, and often what came after it and the director's own read of the session)
+They are Nova's notes and thinking, not text for the article. A line they quote a person as saying is one the article can quote.
+Backstory in the notes, what the director knows about the characters beyond what the session showed, is not in the record and did not happen in the warehouse. The article never states it as fact. It can appear as what Nova suspects, asks or believes.
+```
+
+This is the one label over the notes in every prompt that prints them: the weave writer's, the map writer's, the article writer's, their reworks' and both judges'. In the map writer's and the article writer's prompts it takes the place of `The director's notes on the session, as written.` The sentence `Each block below says what it is.` and the line on the epilogue stay after it.
+
+### The director's notes from the stops, in every writer's prompt
+
+Now:
+
+```
+Standing notes the director gave at earlier stops, in order.
+Each carries its kind: a rejection note was applied by the rework at its own stop;
+an approval note is forward guidance no writer has acted on yet.
+Keep honoring each in what you write now.
+- [arc-selection, rejection 1] (the note)
+```
+
+Approved:
+
+```
+The director's notes from the stops so far, in order, in the director's own words. A note sent with a send-back was acted on at that stop: do not undo what it asked for. A note sent with an approval has not been acted on yet: act on it where it bears on your work.
+- [the story meeting, sent back, round 1] (the note)
+- [the map, approved] (the note)
+```
+
+A stop's name and an action's word are the ones the judges' block of these notes already prints. A note sent back carries its round. An approved note carries none.
+
+### The weave writer's list of who was played
+
+Now, three labels: `ROSTER PCs`, `NPCs`, `NON-ROSTER PCs`.
+
+Approved: `Played in this session`, `The game's own characters`, `Not played in this session`.
+
+The words in brackets after the first label stay. After the second they become `(never players)`, and after the third they go, since each only repeated its new label.
+
+Now, under the last: `A thread names one only through what the record shows of them.`
+
+Approved: `A thread names one only through what the record or the director's words show of them.`
+
+### The settled angle, by who reads it
+
+**The map writer and the map's rework.** The intro ends on the three sentences the article writer read until now: `The headline is printed as it stands. The other lines here, the director's own among them, say what the article argues. None of them is a sentence for the article.`
+
+Under each connection goes its evidence, one piece a line, as under each thread. When the block prints a connection, the intro says so, right after its sentence on the threads the angle leaves out: `Under each connection is the evidence that shows it.`
+
+**The article writer and the article's rework.** The headline's line is left out, since the map just below carries the headline in force. The intro ends: `The lines here, the director's own among them, say what the article argues. None of them is a sentence for the article.`
+
+**The article's judge.** No evidence under a thread or a connection, as for the article writer. The headline's line stays. The intro ends: `Apart from the director's answers and the lines marked as the director's, the lines here are the writer's notes. They are not the record and not the director's words.`
+
+### The line over the map, for the article writer
+
+Now: `and "connection" the id of the weave's connection that lands in it.`
+
+Approved: `and "connection" the id of the weave's connection that lands in it: the beat where the article shows those two threads meeting.`
+
+New, right after the sentence on a piece's stance (`whether it supports the move or cuts against it.`): `A piece that cuts against a beat is a caution or a disagreement. It keeps the article from claiming more than the record supports, and the article can tell the disagreement where the step needs it.`
+
+New, right after `A photo's "beat" is the beat it sits beside.`: `A photo whose moment is outside the story sits in the section where its people appear, and nothing is written to explain it.`
+
+Now: `"leftOut" lists the beats the story does not use, and "gapNote" and "dropped" are the map's notes to the director.`
+
+Approved: `"leftOut" lists the beats the story does not use.` The map as the article writer is shown it holds no `gapNote` and no `dropped`.
+
+New, after the line and before the map:
+
+```
+What each section's name stands for:
+- lede: the opening
+- theStory: what people said and did in front of everyone
+- followTheMoney: the money
+- thePlayers: particular people and what they wanted
+- whatsMissing: what nobody has explained
+- closing: the closing
+```
+
+Each name and its words come from the theme's list of sections, as the map writer's list does.
+
+### One field of the map
+
+Now: `each live connection lands in one beat`
+
+Approved: `each connection lands in one beat`
+
+### The judges
+
+**Doubt.** Now: `A plain statement of what Nova thinks is Nova's opinion, and it needs no label to pass.`
+
+Approved: `A line that shows by how it is said that it is what Nova suspects, asks or believes needs no label to pass.`
+
+**What a breach is.** Now: `A breach is something you can show: the sentence, and what in the record or the director's words it goes against.`
+
+Approved: `A breach is something you can show: the sentence, and what it goes against, in the record, in the director's words or in the limit itself.`
+
+**What a finding says.** Now: `and says what the record or the director's words show instead. Say what is wrong and what is true.`
+
+Approved: `and says what is wrong: what the record or the director's words show instead, or what the limit rules out.`
+
+Stays: `Do not write the new sentence. The writer words it, and a sentence you write is printed as it stands.`
+
+**The director's words.** New, added to the line that says what they are: `A line the director wrote or changed, marked as theirs, counts with them.`
+
+**Limits no question asks about.** New, right after the list of the fifteen limits.
+
+For the article's judge: `No question below asks about the head count. Code checks it.`
+
+For the weave's judge: `No question below asks about the head count, photos or words from running the game. Code checks the first, and the other two are checked on the article.`
+
+**The weave's judge, its opening.** Now: `Judge what each line claims, not how it is worded: a line breaks a limit when the article it leads to would state something the record and the director's words do not support.`
+
+Approved: `A line here is a note, so do not hold it to the manner of printed prose. A line breaks a limit when the article it leads to would state as fact something the record and the director's words do not support.`
+
+Now: `It pitches two or three angles, each a story told through the threads it names, and the director may pick any of them, so check every angle: each line of its pitch against the evidence of its threads.`
+
+Approved: `The weave pitches two or three angles, each a story told through the threads it names, and the director may pick any of them, so check every angle. The evidence under a line is the first place to look. The record and the director's words decide.`
+
+**What a judge is asked to write.**
+
+A question's notes. Now: `and the record it contradicts`. Approved: `and what is wrong with it`, for both judges.
+
+A question's fix. Now: `the one concrete action that brings this criterion up to 0.8`. Approved: `what has to change, in a few words, with no new sentence`.
+
+The list of breaches. Now: `issues that MUST be fixed`. Approved: `each breach, written as described above`.
+
+The list of numbered steps, one for each breach, is no longer asked for. No rework reads it.
+
+The words `must pass` come off each question's line. The heading above the questions already says it.
+
+**The summary of the characters** no longer prints to the judges. They have the documents, and the list of names with pronouns stays.
+
+## Left for after the next session
+
+The frame around a rework. The page limits of the map and the weave. One connection needing one beat. What a left-out beat holds, the top photo's line, and the counts of memories made public. A section's layout type and the badge on a card. The money block's two faults on 111326 are outside the phase.
