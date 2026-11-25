@@ -573,10 +573,17 @@ const REPO = path.join(__dirname, '..', '..');
  *   argues (-58). The fixture prints no paired sales and no sentences about Blake to these writers,
  *   so those two labels move nothing here: outline-journalist 24626 -> 24682 (+56),
  *   article-journalist 26493 -> 26491 (-2), arcs-journalist 12768 -> 12831 (+63).
+ * - Phase 18, run 2h, slice W (R46, R52; the wording doc's part 10, "The settled angle, by who
+ *   reads it"), one renderer of the settled weave and three readers. The map writer's form prints
+ *   each connection's evidence under it (+190), says so in the intro right after the threads left
+ *   out (+53), and ends the intro on the three sentences the article writer read until now (+164):
+ *   outline-journalist 24682 -> 25089 (+407). The article writer's form prints no HEADLINE line
+ *   (-60), and its intro ends on the two approved sentences (-44): article-journalist
+ *   26491 -> 26387 (-104). The arc pin does not move.
  */
 const PINNED = {
-  'outline-journalist': ['c0825972cee10d05b92ea1657ee8ce566217cff353c9744aef4b9a1d8ea9bb28', 24682],
-  'article-journalist': ['5f601dc66a47e6f59a08b455ac07058478b0a8028d386f94b6a46f278e4e77d4', 26491],
+  'outline-journalist': ['da9211561dceb5552b9134f26bbd8fdf5320dab2269fd854b33a9b9f306360ad', 25089],
+  'article-journalist': ['78c720b6397d4ea68490256e98979506fd1db8f75d2b6aa1cad8ef04358ec141', 26387],
   'arcs-journalist': ['bab64787b2a486d00780f3c18c6d4766eef3383d43d85cdb04e328c5c2fc8e56', 12831]
 };
 

@@ -10,20 +10,17 @@
  *   it rests on ("from your notes") only when the picked angle is the first, the one that rests
  *   on the director's read (R11);
  * - the threads it tells, in its order, a thread the director added after the angle's own, each
- *   by its id, its name and its line; and under each, its evidence, one piece a line: its stance,
- *   its sources and what it shows (phase 4b, brief 1B; R7), for the map writer to give each beat
- *   the pieces that tell it. A thread with none yet, such as one the director added, says so.
- *   With `withEvidence: false` (phase 18, run 2b, R19) no thread's evidence prints, the intro
- *   says only that the threads come in the angle's order, and it ends on the sentences for the
- *   article (run 2c): the article writer and its rework read it so, since the map holds the
- *   evidence the map writer chose for each beat. Every other
- *   reader (the map writer, the map's rework, the article's judge) reads it whole;
+ *   by its id, its name and its line; and, for the map writer, under each its evidence, one piece
+ *   a line: its stance, its sources and what it shows (phase 4b, brief 1B; R7), to give each beat
+ *   the pieces that tell it. A thread with none yet, such as one the director added, says so;
  * - the threads the angle leaves out, last among the threads, by name and nothing more: no id,
  *   no line, no evidence (phase 4b fix round, fix 5). The map writer adds no thread, so what a
  *   left-out thread carries is noise in its prompt;
- * - the connections between its threads, each by its line and the names of the threads it joins.
- *   A connection's kind stays underneath, unprinted. A connection that joins a thread the angle
- *   leaves out is gone from it, so no later writer meets the link;
+ * - the connections between its threads, each by its line and the names of the threads it joins,
+ *   and, for the map writer, under each its evidence as under a thread (phase 18, run 2h, R52):
+ *   the map lands each connection on a beat, and the pieces that show it are the ones the weave
+ *   writer chose. A connection's kind stays underneath, unprinted. A connection that joins a
+ *   thread the angle leaves out is gone from it, so no later writer meets the link;
  * - every question with what its answer changes, the thread it sits beside by name, and the
  *   director's answer word for word or the mark that it is unanswered;
  * - each change the director made at the meeting that it shows, marked on its line by its id in
@@ -36,10 +33,17 @@
  *
  * The other angles stay with the meeting, for going back to it (R9): no later writer reads them.
  *
- * The intro ends on what the lines are (phase 18, run 2c; LINES_SENTENCES): for every reader,
- * that WHERE IT ENDS UP answers the QUESTION and what FROM THE DIRECTOR'S NOTES is; for the
- * article writer and its rework, in the form without the evidence, that the headline prints as it
- * stands and no other line is a sentence for the article.
+ * One renderer, three readers (phase 18, run 2h, R46; the wording doc's part 10, "The settled
+ * angle, by who reads it"), each a form of the block (READERS):
+ * - 'map', the default: the map writer and the map's rework. Everything above, the evidence
+ *   under each thread and each connection included;
+ * - 'article': the article writer and the article's rework. No evidence anywhere, since the map
+ *   holds the evidence the map writer chose for each beat (run 2b, R19), and no HEADLINE line,
+ *   since the map just below carries the headline in force;
+ * - 'judge': the article's judge. No evidence anywhere, as for the article writer; the HEADLINE
+ *   line stays.
+ * The intro ends on what the lines are (LINES_SENTENCES): for every reader, that WHERE IT ENDS UP
+ * answers the QUESTION and what FROM THE DIRECTOR'S NOTES is; then each reader's own ending.
  *
  * renderDirectorAnswers prints the answers alone, for the meeting's fact check after a
  * director's round, which reads them as the director's words (T1).
@@ -111,12 +115,13 @@ function listOf(words) {
 }
 
 /**
- * A thread's evidence, one piece a line under it (phase 4b, brief 1B; R7): the piece's stance,
- * its sources as the record names them, and what it shows. A thread with no piece yet says so.
- * Only a thread in the story has its evidence printed (renderSettledWeave).
+ * A thread's or a connection's evidence, one piece a line under it (phase 4b, brief 1B; R7; phase
+ * 18, run 2h, R52): the piece's stance, its sources as the record names them, and what it shows.
+ * A line with no piece yet says so. Only the map's form prints it, under a thread in the story and
+ * under each connection it prints (renderSettledWeave).
  */
-function evidenceLines(thread) {
-  const pieces = objectsOf(thread.evidence);
+function evidenceLines(element) {
+  const pieces = objectsOf(element.evidence);
   if (pieces.length === 0) return ['  - No evidence yet.'];
   return pieces.map((piece) => {
     const sources = listOf((Array.isArray(piece.sources) ? piece.sources : []).map(textOf).filter(Boolean));
@@ -221,8 +226,8 @@ function settledChangesOf(weave, edits) {
 }
 
 /**
- * The intro's sentence on the threads in the story, with the evidence under them and without it
- * (R19): the one sentence of the intro the option changes.
+ * The intro's sentence on the threads in the story, with the evidence under them (the map's form)
+ * and without it (the article's and the judge's, R19).
  */
 const THREADS_SENTENCE = Object.freeze({
   withEvidence: 'The threads in the story come in the order the angle tells them, and under each is its evidence, one piece a line: whether it supports the thread or cuts against it, its sources, and what it shows.',
@@ -230,35 +235,82 @@ const THREADS_SENTENCE = Object.freeze({
 });
 
 /**
- * The intro's last sentences (phase 18, run 2c; the wording doc's part 3), what the settled
- * angle's lines are:
- * - `shared`, for every reader of the settled weave (the map writer, the map's rework, the article
- *   writer, its rework and the article's judge): which line is the answer to the question, and what
- *   "from the director's notes" is;
- * - `forTheArticle`, after them in the form without the evidence, the one the article writer and
- *   its rework read: the headline prints as it stands, and the other lines, the director's own
- *   among them (their changes, their answers, their read of the session), say what the article
- *   argues and are no sentence for the article (run 2e, the wording doc's part 9).
+ * The intro's sentence on the evidence under the connections (phase 18, run 2h, R52): in the map's
+ * form, right after the sentence on the threads the angle leaves out, and only when the block
+ * prints a connection.
+ */
+const CONNECTIONS_SENTENCE = 'Under each connection is the evidence that shows it.';
+
+/**
+ * The intro's last sentences, what the settled angle's lines are (phase 18, run 2c, the wording
+ * doc's part 3; run 2e, part 9; run 2h, part 10):
+ * - `shared`, for every reader: which line is the answer to the question, and what "from the
+ *   director's notes" is;
+ * - then each reader's own ending (READERS): for the map writer, that the headline prints as it
+ *   stands and the other lines, the director's own among them, say what the article argues and are
+ *   no sentence for the article (the three sentences the article writer read until run 2h); for
+ *   the article writer, the same without the headline's sentence, since its form prints no
+ *   headline; for the judge, that apart from the director's answers and the lines marked as
+ *   theirs, the lines are the writer's notes, neither the record nor the director's words.
  */
 const LINES_SENTENCES = Object.freeze({
   shared: "WHERE IT ENDS UP is Nova's answer to the QUESTION. FROM THE DIRECTOR'S NOTES, when it is there, is the director's own read of the session, which this angle rests on.",
-  forTheArticle: "The headline is printed as it stands. The other lines here, the director's own among them, say what the article argues. None of them is a sentence for the article."
+  map: "The headline is printed as it stands. The other lines here, the director's own among them, say what the article argues. None of them is a sentence for the article.",
+  article: "The lines here, the director's own among them, say what the article argues. None of them is a sentence for the article.",
+  judge: "Apart from the director's answers and the lines marked as the director's, the lines here are the writer's notes. They are not the record and not the director's words."
 });
 
 /**
+ * The three readers of the settled weave (R46), each with what its form prints: the evidence under
+ * each thread and each connection, and the HEADLINE line. Each form's intro ends on its own
+ * sentences (LINES_SENTENCES).
+ */
+const READERS = Object.freeze({
+  map: Object.freeze({ evidence: true, headline: true }),
+  article: Object.freeze({ evidence: false, headline: false }),
+  judge: Object.freeze({ evidence: false, headline: true })
+});
+
+/** The reader a call that names none gets: the map writer's form. */
+const DEFAULT_READER = 'map';
+
+/**
+ * The form a reader reads (READERS), failing loud for a reader that is none of the three and for
+ * any other option, the retired `withEvidence` among them (R46): a caller still in that shape
+ * would otherwise be handed the map's form without a word.
+ *
+ * @param {Object} options - renderSettledWeave's options
+ * @returns {{evidence: boolean, headline: boolean}}
+ * @throws {Error}
+ */
+function formOf(options) {
+  const given = options && typeof options === 'object' ? options : {};
+  const others = Object.keys(given).filter((key) => key !== 'reader');
+  if (others.length > 0) {
+    throw new Error(`renderSettledWeave takes { reader } alone (phase 18, run 2h, R46); got ${others.map((key) => `"${key}"`).join(', ')}. The option "withEvidence" went: the article writer reads { reader: 'article' }.`);
+  }
+  const reader = given.reader === undefined ? DEFAULT_READER : given.reader;
+  if (!Object.prototype.hasOwnProperty.call(READERS, reader)) {
+    throw new Error(`renderSettledWeave: the reader is one of ${Object.keys(READERS).map((name) => `'${name}'`).join(', ')} (got ${JSON.stringify(reader)}).`);
+  }
+  return { ...READERS[reader], ending: LINES_SENTENCES[reader] };
+}
+
+/**
  * The story the director settled at the story meeting, for every later writer: the angle they
- * picked, as they left it (lib/weave.js settledAngleOf).
+ * picked, as they left it (lib/weave.js settledAngleOf), in the form its reader reads (READERS).
  *
  * @param {Object|null} weave - the weave as the director left it (state.weave)
  * @param {Object[]} edits - the director's standing edits the weave carries
  *   (lib/hand-edit-diff.js carriedEdits)
  * @param {Object} [options]
- * @param {boolean} [options.withEvidence=true] - false leaves out the evidence under each thread
- *   in the story, and the intro's clause on it (phase 18, run 2b, R19), and ends the intro on the
- *   sentences for the article (run 2c, LINES_SENTENCES.forTheArticle): the article writer's form
+ * @param {string} [options.reader='map'] - 'map' (the map writer and its rework), 'article' (the
+ *   article writer and its rework) or 'judge' (the article's judge)
  * @returns {string} the tagged block, or '' when there is no weave or it holds no angle
+ * @throws {Error} for a reader that is none of the three, or any other option
  */
-function renderSettledWeave(weave, edits, { withEvidence = true } = {}) {
+function renderSettledWeave(weave, edits, options = {}) {
+  const form = formOf(options);
   const settled = isWeave(weave) ? settledAngleOf(weave) : null;
   if (!settled) return '';
   const { angle } = settled;
@@ -266,12 +318,14 @@ function renderSettledWeave(weave, edits, { withEvidence = true } = {}) {
   const marked = (line) => changeMark(marks.get(line) || []);
   const threadNames = new Map(weave.threads.filter((thread) => thread && weaveIdOf(thread)).map((thread) => [weaveIdOf(thread), textOf(thread.name) || textOf(thread.line)]));
   const isFirst = weave.angles[0] === angle;
+  const connectionsEvidence = form.evidence && settled.connections.length > 0;
 
   const lines = [
     `<${SETTLED_WEAVE_TAG}>`,
-    `The story the director settled at the story meeting: the angle they picked, as they left it, with the director's answers to the questions. A line that ends in [the director's change ...] holds a change the director made at the meeting, named by its id. Each answer is the director's words, word for word. ${withEvidence ? THREADS_SENTENCE.withEvidence : THREADS_SENTENCE.without} The threads the angle leaves out come after them, by name. ${LINES_SENTENCES.shared}${withEvidence ? '' : ` ${LINES_SENTENCES.forTheArticle}`}`,
+    `The story the director settled at the story meeting: the angle they picked, as they left it, with the director's answers to the questions. A line that ends in [the director's change ...] holds a change the director made at the meeting, named by its id. Each answer is the director's words, word for word. ${form.evidence ? THREADS_SENTENCE.withEvidence : THREADS_SENTENCE.without} The threads the angle leaves out come after them, by name.${connectionsEvidence ? ` ${CONNECTIONS_SENTENCE}` : ''} ${LINES_SENTENCES.shared} ${form.ending}`,
     '',
-    ...PITCH_LINES.map(([field, label]) => `${label}: ${textOf(angle[field])}${marked(`pitch:${field}`)}`)
+    ...PITCH_LINES.filter(([field]) => form.headline || field !== 'headline')
+      .map(([field, label]) => `${label}: ${textOf(angle[field])}${marked(`pitch:${field}`)}`)
   ];
   if (isFirst && textOf(weave.fromYourNotes)) {
     lines.push(`FROM THE DIRECTOR'S NOTES: "${textOf(weave.fromYourNotes)}"${marked('fromYourNotes')}`);
@@ -282,7 +336,7 @@ function renderSettledWeave(weave, edits, { withEvidence = true } = {}) {
     const id = textOf(thread.id);
     const verdict = thread.verdict === true ? " It carries the verdict." : '';
     lines.push(`- ${id} ${textOf(thread.name)}: ${textOf(thread.line)}${verdict}${marked(`thread:${id}`)}`);
-    if (withEvidence) lines.push(...evidenceLines(thread));
+    if (form.evidence) lines.push(...evidenceLines(thread));
   });
   if (settled.leftOut.length > 0) {
     const leftOut = settled.leftOut.map((thread) => `${textOf(thread.name) || textOf(thread.line)}${marked(`leftOut:${textOf(thread.id)}`)}`);
@@ -295,6 +349,7 @@ function renderSettledWeave(weave, edits, { withEvidence = true } = {}) {
     settled.connections.forEach((connection) => {
       const joins = Array.isArray(connection.joins) ? connection.joins.map(textOf).filter(Boolean) : [];
       lines.push(`- ${textOf(connection.id)}, joining ${joins.map(nameOf).join(' and ')}: ${textOf(connection.line)}${marked(`connection:${textOf(connection.id)}`)}`);
+      if (form.evidence) lines.push(...evidenceLines(connection));
     });
   }
 
@@ -309,11 +364,13 @@ function renderSettledWeave(weave, edits, { withEvidence = true } = {}) {
 
 /**
  * The settled weave from a thread's state: the weave and the director's standing edits it
- * carries (state._weaveHandEdits). What the map writer, the article writer and the article's
- * judge call; the article writer and its rework pass `withEvidence: false` (R19).
+ * carries (state._weaveHandEdits), in its reader's form (R46). The map writer and the map's
+ * rework read the default, 'map'; the article writer and its rework pass { reader: 'article' }
+ * (ai-nodes.js articleWriterInputs); the article's judge passes { reader: 'judge' }
+ * (evaluator-nodes.js).
  *
  * @param {Object} state
- * @param {Object} [options] - renderSettledWeave's options
+ * @param {Object} [options] - renderSettledWeave's options: { reader }
  * @returns {string}
  */
 function settledWeaveOf(state, options = {}) {

@@ -3,7 +3,8 @@
  *
  * - The settled weave without the evidence under its threads (R19): the map holds the evidence the
  *   map writer chose for each beat. The article writer and its rework read it that way; the map
- *   writer, the map's rework and the article's judge read it whole.
+ *   writer and the map's rework read it whole. Run 2h (R46): each reads its reader's form, and the
+ *   article's judge reads the judge's.
  * - The map as shown (R20): each beat without its `kind`, each left-out beat by its id and title
  *   alone (mapAsShown). The stored map, the stamp, the fact check, the judge and the page read the
  *   map whole.
@@ -150,11 +151,13 @@ describe("R31: the strip of a beat's kind, and the map as shown built on it", ()
   });
 });
 
-describe('R19: the article writer and its rework read the settled weave without the evidence under its threads', () => {
+// Run 2h (R46): each reader reads its own form of the settled weave: the map writer and its rework
+// the map's, the article writer and its rework the article's, the article judge the judge's.
+describe("R19, R46: the article writer and its rework read the settled weave in the article's form", () => {
   it('opens the writer and its rework on the settled weave without its evidence', async () => {
     const state = articleState();
     const { writer, rework } = await articleCalls(state);
-    const without = settledWeaveOf(state, { withEvidence: false });
+    const without = settledWeaveOf(state, { reader: 'article' });
     expect(without).not.toBe(settledWeaveOf(state));
     expect(writer.prompt.startsWith(`${without}\n`)).toBe(true);
     expect(rework.prompt.startsWith(`${without}\n`)).toBe(true);
@@ -177,10 +180,11 @@ describe('R19: the article writer and its rework read the settled weave without 
     expect(sdk.mock.calls[0][0].prompt.startsWith(`${settledWeaveOf(state)}\n`)).toBe(true);
   });
 
-  it("the article judge reads it whole, as before", async () => {
+  it("the article judge reads it in the judge's form", async () => {
     const state = articleState({ contentBundle: clone(PREVIOUS_BUNDLE) });
     const user = await evalTesting.buildEvaluationUserPrompt('article', state, {});
-    expect(user).toContain(settledWeaveOf(state));
+    expect(user).toContain(settledWeaveOf(state, { reader: 'judge' }));
+    expect(user).not.toContain(settledWeaveOf(state));
   });
 });
 

@@ -313,7 +313,8 @@ describe('4.7a: what the article judge reads', () => {
     state.weave.questions[0].answer = 'Sarah ran the bar all morning.';
     const prompt = userFor(state);
     const at = (s) => prompt.indexOf(s);
-    const settled = settledWeaveOf(state);
+    // Run 2h (R46): the judge's form of the settled weave.
+    const settled = settledWeaveOf(state, { reader: 'judge' });
     const answers = renderDirectorAnswers(state.weave.questions);
     expect(count(prompt, settled)).toBe(1);
     expect(count(prompt, answers)).toBe(1);

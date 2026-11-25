@@ -150,9 +150,9 @@ describe('buildProbePrompt', () => {
     };
     const { userPrompt, jsonSchema } = await buildProbePrompt(session);
 
-    // Phase 18, run 2b: the settled weave without its threads' evidence (R19), the map as the
+    // Phase 18, run 2b and run 2h: the settled weave in the article's form (R19, R46), the map as the
     // writer is shown it (R20), and the schema the article call is given (R23).
-    expect(userPrompt.startsWith(settledWeaveOf(probeArticleState(session), { withEvidence: false }))).toBe(true);
+    expect(userPrompt.startsWith(settledWeaveOf(probeArticleState(session), { reader: 'article' }))).toBe(true);
     const map = userPrompt.slice(userPrompt.indexOf('<STORY_MAP>'), userPrompt.indexOf('</STORY_MAP>'));
     expect(map).toContain(JSON.stringify(mapAsShown(FIXED_MAP), null, 2));
     expect(jsonSchema).toBe(WRITER_BUNDLE_SCHEMA);

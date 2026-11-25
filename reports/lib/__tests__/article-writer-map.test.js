@@ -72,8 +72,8 @@ describe('4.7b: the article writer reads the settled weave, then the map', () =>
     const state = articleState();
     const { user } = await writerPrompt(state);
 
-    // Run 2b (R19): the settled weave without the evidence under its threads.
-    expect(user.startsWith(settledWeaveOf(state, { withEvidence: false }))).toBe(true);
+    // Run 2b (R19), run 2h (R46): the settled weave in the article's form, without its evidence.
+    expect(user.startsWith(settledWeaveOf(state, { reader: 'article' }))).toBe(true);
     const order = [
       '</SETTLED_WEAVE>',
       `<${STORY_MAP_TAG}>`,
@@ -175,7 +175,7 @@ describe('4.7b: the article writer reads the settled weave, then the map', () =>
   it('articleWriterInputs passes the settled weave, then the map as the article reads it', () => {
     const state = articleState({ characterIdMappings: { 'p2.jpg': { exclude: true } } });
     const [settledWeave, map] = articleWriterInputs(state);
-    expect(settledWeave).toBe(settledWeaveOf(state, { withEvidence: false }));
+    expect(settledWeave).toBe(settledWeaveOf(state, { reader: 'article' }));
     expect(map.sections.flatMap((s) => s.photos)).toEqual([]);
     expect(state.outline.sections[1].photos).toEqual([{ filename: 'p2.jpg', beat: 'b2' }]);   // the stored map is untouched
   });

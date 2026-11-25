@@ -367,85 +367,143 @@ describe('4.14a: the settled weave tells the story the director settled', () => 
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Phase 18, run 2b (R19; brief H): the settled weave without the evidence under its threads
+// Phase 18, run 2h (R46, R52; the wording doc's part 10, "The settled angle, by who reads it"):
+// one renderer, three readers. The map writer and the map's rework read the 'map' form, the
+// article writer and its rework the 'article' form, the article's judge the 'judge' form. It
+// replaces run 2b's option that left out the evidence (R19) and run 2c's sentences for the
+// article in that form.
 // ═══════════════════════════════════════════════════════════════════════════
-describe('R19: the option that leaves out the evidence under the threads', () => {
+describe("Run 2h: the settled angle, by who reads it (R46, R52)", () => {
   const { settledWeaveOf } = require('../prompt-renderers/settled-weave');
 
   /** The intro line, the one after the tag. */
   const introOf = (text) => text.split('\n')[1];
-  const directorsState = () => {
-    const weave = directors();
-    return { weave, _weaveHandEdits: standingAtMeeting(null, WRITERS, weave) };
-  };
+  const directorsEdits = (weave) => carriedEdits(standingAtMeeting(null, WRITERS, weave), weave);
+  const render = (reader, weave = directors()) => renderSettledWeave(weave, directorsEdits(weave), { reader });
 
-  it('prints no piece of evidence under a thread, and no line for a thread with none', () => {
-    const weave = directors();
-    const edits = carriedEdits(standingAtMeeting(null, WRITERS, weave), weave);
-    const text = renderSettledWeave(weave, edits, { withEvidence: false });
-    expect(text.split('\n').filter((line) => line.startsWith('  - '))).toEqual([]);
-    expect(text).not.toContain('No evidence yet.');
-    ['The room named Ellis at the vote.', 'Rowan to Sloane: "Not a word to Ellis."', 'The late sales into RowanVale.']
-      .forEach((shows) => expect(text).not.toContain(shows));
-  });
-
-  it("keeps every other line of the settled weave as it prints with the evidence", () => {
-    const weave = directors();
-    const edits = carriedEdits(standingAtMeeting(null, WRITERS, weave), weave);
-    const whole = renderSettledWeave(weave, edits).split('\n');
-    const without = renderSettledWeave(weave, edits, { withEvidence: false }).split('\n');
-    const kept = whole.filter((line, i) => i !== 1 && !line.startsWith('  - '));
-    expect(without.filter((line, i) => i !== 1)).toEqual(kept);
-  });
-
-  it("says in the intro's fourth sentence only that the threads come in the angle's order, and keeps every other sentence", () => {
-    const weave = directors();
-    const whole = introOf(renderSettledWeave(weave, []));
-    const without = introOf(renderSettledWeave(weave, [], { withEvidence: false }));
-    expect(without).toBe("The story the director settled at the story meeting: the angle they picked, as they left it, with the director's answers to the questions. A line that ends in [the director's change ...] holds a change the director made at the meeting, named by its id. Each answer is the director's words, word for word. The threads in the story come in the order the angle tells them. The threads the angle leaves out come after them, by name. WHERE IT ENDS UP is Nova's answer to the QUESTION. FROM THE DIRECTOR'S NOTES, when it is there, is the director's own read of the session, which this angle rests on. The headline is printed as it stands. The other lines here, the director's own among them, say what the article argues. None of them is a sentence for the article.");
-    expect(whole).toBe(without.replace(
-      'The threads in the story come in the order the angle tells them.',
-      'The threads in the story come in the order the angle tells them, and under each is its evidence, one piece a line: whether it supports the thread or cuts against it, its sources, and what it shows.'
-    ).replace(" The headline is printed as it stands. The other lines here, the director's own among them, say what the article argues. None of them is a sentence for the article.", ''));
-  });
-
-  it('prints the evidence by default, and with the option set to true', () => {
-    const weave = directors();
-    expect(renderSettledWeave(weave, [], { withEvidence: true })).toBe(renderSettledWeave(weave, []));
-    expect(renderSettledWeave(weave, [])).toContain('  - supports, from notes: The room named Ellis at the vote.');
-  });
-
-  it('settledWeaveOf takes the same option, from a thread\'s state', () => {
-    const state = directorsState();
-    const edits = carriedEdits(state._weaveHandEdits, state.weave);
-    expect(settledWeaveOf(state, { withEvidence: false })).toBe(renderSettledWeave(state.weave, edits, { withEvidence: false }));
-    expect(settledWeaveOf(state)).toBe(renderSettledWeave(state.weave, edits));
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Phase 18, run 2c (the wording doc's part 3; brief O): what the settled angle's lines are
-// ═══════════════════════════════════════════════════════════════════════════
-describe("Run 2c: the intro says what the settled angle's lines are, to every reader and to the article", () => {
-  /** The intro line, the one after the tag. */
-  const introOf = (text) => text.split('\n')[1];
+  const OPENING = "The story the director settled at the story meeting: the angle they picked, as they left it, with the director's answers to the questions. A line that ends in [the director's change ...] holds a change the director made at the meeting, named by its id. Each answer is the director's words, word for word.";
+  const THREADS_WITH_EVIDENCE = 'The threads in the story come in the order the angle tells them, and under each is its evidence, one piece a line: whether it supports the thread or cuts against it, its sources, and what it shows.';
+  const THREADS = 'The threads in the story come in the order the angle tells them.';
+  const LEFT_OUT = 'The threads the angle leaves out come after them, by name.';
+  const CONNECTIONS = 'Under each connection is the evidence that shows it.';
   const SHARED = "WHERE IT ENDS UP is Nova's answer to the QUESTION. FROM THE DIRECTOR'S NOTES, when it is there, is the director's own read of the session, which this angle rests on.";
-  const FOR_THE_ARTICLE = "The headline is printed as it stands. The other lines here, the director's own among them, say what the article argues. None of them is a sentence for the article.";
+  const FOR_THE_MAP = "The headline is printed as it stands. The other lines here, the director's own among them, say what the article argues. None of them is a sentence for the article.";
+  const FOR_THE_ARTICLE = "The lines here, the director's own among them, say what the article argues. None of them is a sentence for the article.";
+  const FOR_THE_JUDGE = "Apart from the director's answers and the lines marked as the director's, the lines here are the writer's notes. They are not the record and not the director's words.";
 
-  it('ends the intro on the two shared sentences for every reader: the map writer, its rework and the article judge read it whole', () => {
-    const whole = introOf(renderSettledWeave(directors(), []));
-    expect(whole.endsWith(` The threads the angle leaves out come after them, by name. ${SHARED}`)).toBe(true);
-    expect(whole).not.toContain(FOR_THE_ARTICLE);
+  describe("'map': the map writer and the map's rework", () => {
+    it('is the default', () => {
+      expect(render('map')).toBe(renderSettledWeave(directors(), directorsEdits(directors())));
+    });
+
+    it("says the connections' evidence right after the threads left out, and ends on the three sentences the article writer read until now", () => {
+      expect(introOf(render('map'))).toBe(`${OPENING} ${THREADS_WITH_EVIDENCE} ${LEFT_OUT} ${CONNECTIONS} ${SHARED} ${FOR_THE_MAP}`);
+    });
+
+    it("prints each connection's evidence under it, one piece a line, as under each thread", () => {
+      const lines = render('map').split('\n');
+      const c1 = lines.findIndex((line) => line.startsWith('- c1, '));
+      const c2 = lines.findIndex((line) => line.startsWith('- c2, '));
+      expect(lines[c1 + 1]).toBe('  - supports, from row001: Sloane in the bathroom.');
+      expect(lines[c2 + 1]).toBe('  - supports, from ledger: The late sales.');
+      expect(lines[c2 + 2]).not.toMatch(/^ {2}- /);
+    });
+
+    it('says a connection with no evidence yet has none, as a thread does', () => {
+      const weave = directors();
+      delete weave.connections[0].evidence;
+      weave.connections[1].evidence = [];
+      const lines = render('map', weave).split('\n');
+      expect(lines[lines.findIndex((line) => line.startsWith('- c1, ')) + 1]).toBe('  - No evidence yet.');
+      expect(lines[lines.findIndex((line) => line.startsWith('- c2, ')) + 1]).toBe('  - No evidence yet.');
+    });
+
+    it('leaves the sentence on the connections out when the block prints no connection', () => {
+      const weave = { ...directors(), connections: [] };
+      const text = render('map', weave);
+      expect(text).not.toContain('CONNECTIONS:');
+      expect(introOf(text)).toBe(`${OPENING} ${THREADS_WITH_EVIDENCE} ${LEFT_OUT} ${SHARED} ${FOR_THE_MAP}`);
+      // A connection to a thread the angle leaves out is gone from the block, and so is the sentence.
+      const left = clone(WRITERS);
+      left.angles[0].threads = ['t1'];
+      expect(introOf(renderSettledWeave(left, [], { reader: 'map' }))).not.toContain(CONNECTIONS);
+    });
+
+    it("keeps the headline, each thread's evidence and the meeting's change ids", () => {
+      const text = render('map');
+      expect(text).toContain(`HEADLINE: ${WRITERS.angles[0].headline}`);
+      expect(text).toContain('  - supports, from notes: The room named Ellis at the vote.');
+      expect(text.split('\n').find((line) => line.startsWith('- t3'))).toMatch(/\[the director's change M1: the line\]$/);
+    });
   });
 
-  it('adds the four sentences for the article after them only in the form without the evidence, the article writer\'s and its rework\'s', () => {
-    const without = introOf(renderSettledWeave(directors(), [], { withEvidence: false }));
-    expect(without.endsWith(` The threads the angle leaves out come after them, by name. ${SHARED} ${FOR_THE_ARTICLE}`)).toBe(true);
+  describe("'article': the article writer and the article's rework", () => {
+    it('prints no evidence under a thread or a connection, and no line for one with none', () => {
+      const text = render('article');
+      expect(text.split('\n').filter((line) => line.startsWith('  - '))).toEqual([]);
+      expect(text).not.toContain('No evidence yet.');
+      ['The room named Ellis at the vote.', 'Sloane in the bathroom.', 'The late sales.'].forEach((shows) => expect(text).not.toContain(shows));
+    });
+
+    it('prints no headline line: the map below carries the headline in force', () => {
+      expect(render('article')).not.toMatch(/^HEADLINE: /m);
+      expect(render('article')).not.toContain(WRITERS.angles[0].headline);
+    });
+
+    it("keeps the intro's first sentences and its sentence on the threads as the form without evidence printed them, and ends on its two sentences", () => {
+      expect(introOf(render('article'))).toBe(`${OPENING} ${THREADS} ${LEFT_OUT} ${SHARED} ${FOR_THE_ARTICLE}`);
+    });
+
+    it("keeps every other line as the map's form prints it", () => {
+      const map = render('map').split('\n').filter((line, i) => i !== 1 && !line.startsWith('  - ') && !line.startsWith('HEADLINE: '));
+      expect(render('article').split('\n').filter((line, i) => i !== 1)).toEqual(map);
+    });
   });
 
-  it("prints both whether or not FROM THE DIRECTOR'S NOTES is there, since the sentence says when it is", () => {
+  describe("'judge': the article's judge", () => {
+    it('prints no evidence under a thread or a connection', () => {
+      const text = render('judge');
+      expect(text.split('\n').filter((line) => line.startsWith('  - '))).toEqual([]);
+      expect(text).not.toContain('No evidence yet.');
+    });
+
+    it('keeps the headline line', () => {
+      expect(render('judge')).toContain(`HEADLINE: ${WRITERS.angles[0].headline}`);
+    });
+
+    it("ends the intro on the judge's two sentences", () => {
+      expect(introOf(render('judge'))).toBe(`${OPENING} ${THREADS} ${LEFT_OUT} ${SHARED} ${FOR_THE_JUDGE}`);
+    });
+
+    it("keeps every other line as the map's form prints it", () => {
+      const map = render('map').split('\n').filter((line, i) => i !== 1 && !line.startsWith('  - '));
+      expect(render('judge').split('\n').filter((line, i) => i !== 1)).toEqual(map);
+    });
+  });
+
+  it("prints the shared sentences before each form's own ending, whether or not FROM THE DIRECTOR'S NOTES is there", () => {
     const weave = { ...directors(), picked: 'a2' };
-    expect(renderSettledWeave(weave, [])).not.toContain("FROM THE DIRECTOR'S NOTES: ");
-    expect(introOf(renderSettledWeave(weave, []))).toContain(SHARED);
+    [['map', FOR_THE_MAP], ['article', FOR_THE_ARTICLE], ['judge', FOR_THE_JUDGE]].forEach(([reader, ending]) => {
+      const intro = introOf(renderSettledWeave(weave, [], { reader }));
+      expect(intro.endsWith(`${SHARED} ${ending}`)).toBe(true);
+      expect(renderSettledWeave(weave, [], { reader })).not.toContain("FROM THE DIRECTOR'S NOTES: ");
+    });
+  });
+
+  it('fails loud for a reader that is none of the three, and for the retired option', () => {
+    expect(() => renderSettledWeave(directors(), [], { reader: 'arc' })).toThrow(/reader/);
+    expect(() => renderSettledWeave(directors(), [], { reader: '' })).toThrow(/reader/);
+    expect(() => renderSettledWeave(directors(), [], { withEvidence: false })).toThrow(/withEvidence/);
+    expect(() => settledWeaveOf({ weave: directors() }, { reader: 'outline' })).toThrow(/reader/);
+  });
+
+  it("settledWeaveOf reads the weave and the director's edits from a thread's state, in each form", () => {
+    const weave = directors();
+    const state = { weave, _weaveHandEdits: standingAtMeeting(null, WRITERS, weave) };
+    const edits = carriedEdits(state._weaveHandEdits, state.weave);
+    ['map', 'article', 'judge'].forEach((reader) => {
+      expect(settledWeaveOf(state, { reader })).toBe(renderSettledWeave(state.weave, edits, { reader }));
+    });
+    expect(settledWeaveOf(state)).toBe(renderSettledWeave(state.weave, edits, { reader: 'map' }));
   });
 });

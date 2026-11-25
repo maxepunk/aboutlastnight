@@ -1571,3 +1571,37 @@ describe('4.14b: the gate refuses a photo the director left out as the top photo
     expect(directorMapProblems(p2OnTop(), { theme: 'journalist', shown: clone(MAP) })).toBeNull();
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 18, run 2h (R52): the map writer reads each connection's evidence in the settled weave,
+// and may put a piece of it under the beat the connection lands in. A beat's evidence check is
+// lib/evidence.js evidenceProblems, the check the weave's own checks run on a connection's pieces
+// (lib/weave.js weaveFindings, piecesCheck), over the same record (evidenceContextOf): a piece that
+// passed under its connection passes under a beat.
+// ═══════════════════════════════════════════════════════════════════════════
+describe("run 2h: a piece of a connection's evidence under a beat", () => {
+  const { evidenceProblems } = require('../evidence');
+  const { renderSettledWeave } = require('../prompt-renderers/settled-weave');
+  const connectionPiece = { sources: ['row004'], shows: 'Rowan and Sloane meet over "The text of row004."', stance: 'cuts-against' };
+  const weave = {
+    angles: [{ id: 'a1', headline: 'h', gist: 'g', story: 's', question: 'q', lands: 'l', ends: 'e', threads: ['t1', 't2'] }],
+    threads: [
+      { id: 't1', name: 'The vote', line: 'The room voted.', evidence: [piece(['notes'], 'The vote.')] },
+      { id: 't2', name: 'The hall', line: 'The fight in the hall.', evidence: [piece(['row001'], 'The fight.')] }
+    ],
+    connections: [{ id: 'c1', joins: ['t1', 't2'], line: 'The vote and the fight are one quarrel.', kind: 'moment', evidence: [connectionPiece] }],
+    questions: []
+  };
+
+  it("passes the check the weave runs on the connection, and the map's check of the beat it lands in", () => {
+    expect(evidenceProblems([connectionPiece], RECORD)).toEqual([]);
+    // The map writer reads it under the connection, as the map's form of the settled weave prints it.
+    expect(renderSettledWeave(weave, [], { reader: 'map' }))
+      .toContain('- c1, joining "The vote" and "The hall": The vote and the fight are one quarrel.\n  - cuts against, from row004: Rowan and Sloane meet over "The text of row004."');
+    const map = writers();
+    map.sections[0].beats[1].evidence.push(clone(connectionPiece));
+    expect(map.sections[0].beats[1].connection).toBe('c1');
+    const { failures } = mapFindings(map, inputs());
+    expect(typesOf(failures)).toEqual([]);
+  });
+});

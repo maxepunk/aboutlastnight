@@ -995,7 +995,8 @@ function selectHeroImage(state) {
  * The map writer's inputs, read from state: buildOutlinePrompt's arguments, in order (phase
  * 2, brief 2.3; phase 4, brief 4.6). One function for the writer and its rework, so the
  * rework's prompt is built from exactly what the writer's was:
- * - the settled weave (settledWeaveOf), which the writer reads first, as its task;
+ * - the settled weave (settledWeaveOf) in the map's form (phase 18, run 2h, R46: the evidence
+ *   under each thread and each connection), which the writer reads first, as its task;
  * - the photos: code's pick for the top photo (selectHeroImage) first, marked as the hero,
  *   then every other photo the director kept (buildAvailablePhotos), as the article writer's
  *   PHOTOS list them;
@@ -1012,7 +1013,7 @@ function outlineWriterInputs(state) {
   const heroImage = selectHeroImage(state);
   const hero = heroPhotoEntry(state, heroImage);
   return [
-    settledWeaveOf(state),
+    settledWeaveOf(state, { reader: 'map' }),
     [...(hero ? [hero] : []), ...buildAvailablePhotos(state, heroImage, whiteboardFilenameOf(state))],
     state.shellAccounts || [],
     buildSessionFacts(state),
@@ -1636,9 +1637,10 @@ function articleMapOf(state) {
  *
  * Brief 4.7b (spec 6.1): the settled weave first (settledWeaveOf, 4.5's renderer), then the
  * map as the article reads it (articleMapOf), where the approved outline was passed until
- * phase 4. Phase 18, run 2b (R19): the settled weave without the evidence under its threads,
- * since the map holds the evidence the map writer chose for each beat; the builder prints the
- * map as the writer is shown it (prompt-builder.js mapAsShown, R20). The arc selection's
+ * phase 4. Phase 18, run 2b (R19) and run 2h (R46): the settled weave in the article's form, with
+ * no evidence under its threads or connections, since the map holds the evidence the map writer
+ * chose for each beat, and no headline line, since the map carries the headline in force; the
+ * builder prints the map as the writer is shown it (prompt-builder.js mapAsShown, R20, R50). The arc selection's
  * guidance (`_outlineGuidance`) went with its last readers, the writer and its rework (R4).
  *
  * Phase 3 (3.9; T13, the integrator's ruling): `options.photos` is every photo the
@@ -1676,7 +1678,7 @@ function articleWriterInputs(state) {
     ...buildAvailablePhotos(state, heroImage, whiteboardFilenameOf(state))
   ];
   return [
-    settledWeaveOf(state, { withEvidence: false }),
+    settledWeaveOf(state, { reader: 'article' }),
     map,
     state.shellAccounts || [],  // Deterministic shell account data for financial summary
     // Session facts for the non-roster character guardrail (RC3) and the verdict (brief 2.2)

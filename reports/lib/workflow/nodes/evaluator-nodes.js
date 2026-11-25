@@ -1744,7 +1744,9 @@ Does the weave keep within the limits?`;
       const novaWas = NOVA_WAS[reportingModeOf(state.sessionConfig)];
       const articleMoney = renderJudgeFinancialSummary(state);
       const answers = renderDirectorAnswers(state.weave && state.weave.questions);
-      const settledWeave = settledWeaveOf(state);
+      // Phase 18, run 2h (R46): the settled weave in the judge's form: no evidence under a thread
+      // or a connection, the headline kept, and the intro saying which lines are the writer's notes.
+      const settledWeave = settledWeaveOf(state, { reader: 'judge' });
       return `Check this article against the record and the director's words:
 
 WHERE NOVA WAS THIS SESSION: ${novaWas} (the part about this session in your instructions says what Nova saw, heard and did; ${modeBlockReaders()} score the article against it)
