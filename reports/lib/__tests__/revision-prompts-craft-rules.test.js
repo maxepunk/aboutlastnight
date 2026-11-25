@@ -211,9 +211,10 @@ describe('arc revision prompt gives the model the record (PROMPT-REVIEW; brief 2
   it('re-includes the three-category character block the generation prompt has', () => {
     const prompt = buildArcRevisionPrompt(STATE, 'ctx', 'prev');
     expect(prompt).toContain('### Character Categories');
-    expect(prompt).toContain('ROSTER PCs');
-    expect(prompt).toContain('NPCs');
-    expect(prompt).toContain('NON-ROSTER PCs');
+    // Phase 18, run 2h: the three lists' approved labels.
+    expect(prompt).toContain('**Played in this session**');
+    expect(prompt).toContain("**The game's own characters**");
+    expect(prompt).toContain('**Not played in this session**');
     // Quinn is a real game character who did not play this session.
     expect(prompt).toContain('Quinn');
     // Marcus/Nova are NPCs for the journalist theme.

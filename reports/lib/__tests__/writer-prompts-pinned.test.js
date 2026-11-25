@@ -583,11 +583,22 @@ const REPO = path.join(__dirname, '..', '..');
  * - Phase 18, run 2h, slice W (R45), the article writer reads <brief>, then <job-article>, as the
  *   other two writers do: article-journalist moves by hash alone (26387). The rule files are stubs
  *   here, so their copy moves no pin.
+ * - Phase 18, run 2h, slice W (R47, R48, R50; the wording doc's part 10), the writers' lines. The
+ *   director's notes from the stops open on the approved paragraph, and each note names its stop
+ *   and its action as the judges' block does, with a round only when it was sent back (+23, every
+ *   writer). The label over the director's notes is the approved one: the weave writer's heading
+ *   (+202), and at the top of <INVESTIGATION_OBSERVATIONS> in place of the old line for the map and
+ *   the article writers (+469). The weave writer's three lists take their approved labels (-25).
+ *   The map's schema says each connection, not each live one, lands in one beat (-10, printed
+ *   twice). The line over the map takes its approved sentences (+318), the names of the sections
+ *   follow it (+261), and the map as shown holds no dropped (-198; the fixture's map has no
+ *   gapNote): arcs-journalist 12831 -> 13031 (+200), outline-journalist 25089 -> 25571 (+482),
+ *   article-journalist 26387 -> 27260 (+873).
  */
 const PINNED = {
-  'outline-journalist': ['da9211561dceb5552b9134f26bbd8fdf5320dab2269fd854b33a9b9f306360ad', 25089],
-  'article-journalist': ['523eec76d52728a1ab3197e07c37b8b1e0c5d005d6cee11f4173b5809abc0850', 26387],
-  'arcs-journalist': ['bab64787b2a486d00780f3c18c6d4766eef3383d43d85cdb04e328c5c2fc8e56', 12831]
+  'outline-journalist': ['ad4ebd8c0dade3785ad4339b5936c73889cfe5e367637a29a42dfd6d3adf41f5', 25571],
+  'article-journalist': ['5dc3eae4f24f04c518d869d98b6fb4a199ba140bc7c5f7dbb4862498ad0ee0af', 27260],
+  'arcs-journalist': ['127f4fbcc52bbbaf0def5dde9085b6c51871a44d644622dd47bec4c3a0324dee', 13031]
 };
 
 describe('the writers send exactly what they sent before the reworkers were built from them', () => {

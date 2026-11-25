@@ -427,7 +427,7 @@ describe('4.14e: a failed rework keeps the version it started from, at the map a
         expect.objectContaining({ gate: 'outline', kind: 'approval', round: 1, stopRound: 1, text: MAP_NOTE })
       ]);
       const guidance = guidanceOf(sdk, 'article writer');
-      expect(guidance).toContain(`- [outline, approval 1] ${MAP_NOTE}`);
+      expect(guidance).toContain(`- [the map, approved] ${MAP_NOTE}`);
       expect(guidance.split(MAP_NOTE)).toHaveLength(2);
     });
 

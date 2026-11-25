@@ -153,9 +153,10 @@ describe('the arc writer writes one weave in one call', () => {
       .forEach((retired) => expect(`${retired}: ${own.includes(retired)}`).toBe(`${retired}: false`));
   });
 
-  it('the every-player lines are gone from the ROSTER PCs line', () => {
+  // Phase 18, run 2h: the line's approved label, "Played in this session".
+  it('the every-player lines are gone from the line of who was played', () => {
     const prompt = buildWeaveSections(weaveState());
-    const rosterLine = prompt.split('\n').find((line) => line.startsWith('**ROSTER PCs**'));
+    const rosterLine = prompt.split('\n').find((line) => line.startsWith('**Played in this session**'));
     expect(rosterLine).toBeDefined();
     expect(rosterLine).not.toMatch(/placement|writerQuestions|question|MUST|each has/);
   });

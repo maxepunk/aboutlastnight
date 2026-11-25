@@ -53,7 +53,7 @@ const { renderDirectorEnrichmentBlock, directorTensionSentences } = require('../
 const { renderRecordView, recordIdOf } = require('../../prompt-renderers/record-view');
 const { withSessionClock, timeOfDayLine } = require('../../prompt-renderers/session-clock');
 const { DERIVED_LABELS } = require('../../prompt-renderers/derived-labels');
-const { renderArcAccusation, renderWhiteboardConnections } = require('../../prompt-renderers/director-words-renderer');
+const { renderArcAccusation, renderWhiteboardConnections, DIRECTOR_NOTES_LABEL } = require('../../prompt-renderers/director-words-renderer');
 const { guestReporterLine } = require('../../prompt-renderers/session-authors');
 const { directorAccusationText } = require('../../accusation-verdict');
 // rosterWithPronounsSection: the roster with pronouns, the one
@@ -158,14 +158,12 @@ function directorWordsOf(state) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * The arc writer's label for the director's notes: what people did and said in the
- * warehouse, and where backstory in the notes falls (not in the record, never stated as
- * fact, open to what Nova suspects, asks or believes). The writer prints it as its notes
- * heading; the fact check (evaluator-nodes.js) prints it too, so both name the notes in
- * one text.
+ * The label over the director's notes, which the weave writer and its rework print as the notes'
+ * heading: the one label every prompt that prints the notes puts over them (phase 18, run 2h,
+ * R47; director-words-renderer.js DIRECTOR_NOTES_LABEL). Exported here under its old name, which
+ * the judges (evaluator-nodes.js) import.
  */
-const ARC_NOTES_LABEL = `The Director's Notes (what people did and said in the warehouse)
-Backstory in the notes, what the director knows about the characters beyond what the session showed, is not in the record and did not happen in the warehouse. The article never states it as fact. It can appear as what Nova suspects, asks or believes.`;
+const ARC_NOTES_LABEL = DIRECTOR_NOTES_LABEL;
 
 /**
  * The OUTPUT FORMAT line for the weave's questions: the list stays empty unless the record
@@ -295,12 +293,16 @@ const WEAVE_TASK = `Pitch two or three angles for the director to read in a few 
 - **questions**: the questions <job-weave> allows, each with what its answer changes in print as "changes", and the id of the thread it sits beside as "thread". Each comes to ${QUESTION_WORD_BOUND} words or fewer across its about, question and changes, so the director reads it in a glance.`;
 
 /**
- * The three-category character block: the roster, the theme's NPCs, and the game's
- * characters who are not playing this session.
+ * The three-category character block: who was played in this session (the roster), the game's
+ * own characters, and the game's characters not played in this session.
  *
- * Phase 4 (brief 4.4): the every-player line is gone from the ROSTER PCs line. Every
+ * Phase 4 (brief 4.4): the every-player line is gone from the first list's line. Every
  * player appears by the time the article is written, and the map places each (spec
  * 4.5); the weave holds the threads the story needs.
+ *
+ * Phase 18, run 2h (the wording doc's part 10, "The weave writer's list of who was played"): the
+ * three labels in the words the list of names uses, and the line under the last says a thread
+ * names one only through what the record or the director's words show of them.
  *
  * @param {string[]} roster - session roster (first names)
  * @param {string} theme - the session's theme, for its NPCs
@@ -320,14 +322,14 @@ function buildCharacterCategoriesBlock(roster = [], theme = 'journalist', allCha
 
   return `### Character Categories
 
-**ROSTER PCs** (they were at the investigation; the part about this session says how Nova knows what they did):
+**Played in this session** (they were at the investigation; the part about this session says how Nova knows what they did):
 ${JSON.stringify(roster)}
 
-**NPCs** (the game's own characters, never players):
+**The game's own characters** (never players):
 ${ownCharacters.join(', ')}
 
-**NON-ROSTER PCs** (game characters not playing this session):
-${nonRosterPCs.length > 0 ? `${nonRosterPCs.join(', ')}\n- A thread names one only through what the record shows of them.` : '(none this session)'}
+**Not played in this session**:
+${nonRosterPCs.length > 0 ? `${nonRosterPCs.join(', ')}\n- A thread names one only through what the record or the director's words show of them.` : '(none this session)'}
 `;
 }
 

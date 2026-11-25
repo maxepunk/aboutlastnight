@@ -158,7 +158,7 @@ describe('journalist map stop', () => {
   it("the guidance keeps phase 1's note filtering: every note but the one being acted on", async () => {
     const { rework } = await writerAndRework(SEND_BACK);
     const guidance = rework.user.slice(rework.user.indexOf('\n<DIRECTOR_GUIDANCE>\n'));
-    expect(guidance).toContain('- [arc-selection, approval 1] Keep Riley in view.');
+    expect(guidance).toContain('- [the story meeting, approved] Keep Riley in view.');
     expect(guidance).not.toContain(NOTE);
   });
 
@@ -265,7 +265,7 @@ describe('journalist article stop', () => {
   it("the guidance keeps phase 1's note filtering", async () => {
     const { rework } = await writerAndRework(SEND_BACK);
     const guidance = rework.user.slice(rework.user.indexOf('<DIRECTOR_GUIDANCE>'));
-    expect(guidance).toContain('- [arc-selection, approval 1] Keep Riley in view.');
+    expect(guidance).toContain('- [the story meeting, approved] Keep Riley in view.');
     expect(guidance).not.toContain(NOTE);
   });
 });
@@ -346,7 +346,7 @@ describe('journalist arc stop', () => {
   it("the standing notes keep phase 1's filtering", async () => {
     const { rework } = await writerAndRework(SEND_BACK);
     const guidance = rework.user.slice(rework.user.indexOf('<DIRECTOR_GUIDANCE>'));
-    expect(guidance).toContain('- [arc-selection, rejection 1] Drop the succession thread.');
+    expect(guidance).toContain('- [the story meeting, sent back, round 1] Drop the succession thread.');
     expect(guidance).not.toContain(NOTE);
   });
 });

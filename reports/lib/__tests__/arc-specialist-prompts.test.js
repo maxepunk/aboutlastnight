@@ -253,8 +253,8 @@ describe("arc prompts: the director's words as record", () => {
     it('the reworker shows every earlier arc note and leaves out the one it is acting on', () => {
       const prompt = buildArcRevisionPrompt({ ...base, directorGateNotes: NOTES, _meetingRound: 'send-back', _arcFeedback: 'Put the vote first.' }, 'CTX', 'PREV');
       expect(prompt).toContain('<DIRECTOR_GUIDANCE>');
-      expect(prompt).toContain('- [arc-selection, rejection 1] Drop the succession thread.');
-      expect(prompt).not.toContain('- [arc-selection, rejection 2] Put the vote first.');
+      expect(prompt).toContain('- [the story meeting, sent back, round 1] Drop the succession thread.');
+      expect(prompt).not.toContain('- [the story meeting, sent back, round 2] Put the vote first.');
       expect(prompt.trimEnd().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
     });
 
@@ -262,14 +262,14 @@ describe("arc prompts: the director's words as record", () => {
     // a rework acts on. An automatic pass acts on none, so every note stands.
     it('an automatic pass acts on no note: with no round mark, every note stands', () => {
       const prompt = buildArcRevisionPrompt({ ...base, directorGateNotes: NOTES, _meetingRound: null, _arcFeedback: 'Put the vote first.' }, 'CTX', 'PREV');
-      expect(prompt).toContain('- [arc-selection, rejection 1] Drop the succession thread.');
-      expect(prompt).toContain('- [arc-selection, rejection 2] Put the vote first.');
+      expect(prompt).toContain('- [the story meeting, sent back, round 1] Drop the succession thread.');
+      expect(prompt).toContain('- [the story meeting, sent back, round 2] Put the vote first.');
     });
 
     it('the writer renders them through the same function', () => {
       const prompt = buildWeavePrompt({ ...base, directorGateNotes: NOTES });
-      expect(prompt).toContain('- [arc-selection, rejection 1] Drop the succession thread.');
-      expect(prompt).toContain('- [arc-selection, rejection 2] Put the vote first.');
+      expect(prompt).toContain('- [the story meeting, sent back, round 1] Drop the succession thread.');
+      expect(prompt).toContain('- [the story meeting, sent back, round 2] Put the vote first.');
     });
 
     it('adds nothing when there are no notes', () => {
@@ -598,7 +598,10 @@ describe('phase 3 (3.3): the arc calls read the rule set', () => {
       const state = journalistState();
       const prompt = buildWeaveSections(state);
       const label = prompt.slice(prompt.indexOf("### The Director's Notes"), prompt.indexOf('<DIRECTOR_NOTES>'));
-      expect(label).toMatch(/^### The Director's Notes \(what people did and said in the warehouse\)$/m);
+      // Phase 18, run 2h (R47; the wording doc's part 10): the label says the notes often hold what
+      // came after and the director's own read, and that they are Nova's notes and thinking.
+      expect(label).toMatch(/^### The Director's Notes \(what people did and said in the warehouse, and often what came after it and the director's own read of the session\)$/m);
+      expect(label).toContain("They are Nova's notes and thinking, not text for the article. A line they quote a person as saying is one the article can quote.");
       expect(label).toContain('is not in the record and did not happen in the warehouse. The article never states it as fact. It can appear as what Nova suspects, asks or believes.');
       expect(label).not.toMatch(/\b[TC]\d{1,2}\b|the room/);
       expect(label).not.toMatch(/\breading\b/i);
@@ -617,7 +620,9 @@ describe('phase 3 (3.3): the arc calls read the rule set', () => {
     it('the label is ARC_NOTES_LABEL, the one text the arc writer prints and the arc judge imports', () => {
       const { ARC_NOTES_LABEL } = arcModule;
       expect(typeof ARC_NOTES_LABEL).toBe('string');
-      expect(ARC_NOTES_LABEL).toBe("The Director's Notes (what people did and said in the warehouse)\nBackstory in the notes, what the director knows about the characters beyond what the session showed, is not in the record and did not happen in the warehouse. The article never states it as fact. It can appear as what Nova suspects, asks or believes.");
+      // Phase 18, run 2h (R47): the one label over the notes, held in director-words-renderer.js.
+      expect(ARC_NOTES_LABEL).toBe("The Director's Notes (what people did and said in the warehouse, and often what came after it and the director's own read of the session)\nThey are Nova's notes and thinking, not text for the article. A line they quote a person as saying is one the article can quote.\nBackstory in the notes, what the director knows about the characters beyond what the session showed, is not in the record and did not happen in the warehouse. The article never states it as fact. It can appear as what Nova suspects, asks or believes.");
+      expect(ARC_NOTES_LABEL).toBe(require('../prompt-renderers/director-words-renderer').DIRECTOR_NOTES_LABEL);
       expect(ARC_NOTES_LABEL).not.toContain("Nova's reading");
       const prompt = buildWeaveSections(journalistState());
       expect(count(prompt, ARC_NOTES_LABEL)).toBe(1);
@@ -713,7 +718,8 @@ describe('phase 3 (3.3): the arc calls read the rule set', () => {
 
     it("lists the game's own characters without an alias: Blake once", () => {
       const block = buildCharacterCategoriesBlock(['Alex'], 'journalist', []);
-      expect(block).toContain('**NPCs** (the game\'s own characters, never players):\nMarcus, Nova, Blake\n');
+      // Phase 18, run 2h: the list's approved label.
+      expect(block).toContain("**The game's own characters** (never players):\nMarcus, Nova, Blake\n");
       expect(block).not.toContain('Valet');
     });
 

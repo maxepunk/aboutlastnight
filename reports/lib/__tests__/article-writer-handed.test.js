@@ -68,11 +68,14 @@ describe('R20: mapAsShown, the map as the article writer is shown it', () => {
     expect(mapAsShown(clone(MAP)).leftOut).toEqual(MAP.leftOut.map((beat) => ({ id: beat.id, move: beat.move })));
   });
 
+  // Run 2h (R50): and without the map's notes to the director, gapNote and dropped.
   it("keeps every other field of the map as it is", () => {
     const shown = mapAsShown(clone(MAP));
     const expected = clone(MAP);
     expected.sections.forEach((section) => section.beats.forEach((beat) => { delete beat.kind; }));
     expected.leftOut = expected.leftOut.map((beat) => ({ id: beat.id, move: beat.move }));
+    delete expected.gapNote;
+    delete expected.dropped;
     expect(shown).toEqual(expected);
   });
 
@@ -132,8 +135,8 @@ describe("R31: the strip of a beat's kind, and the map as shown built on it", ()
     expect(mapWithoutBeatKinds({ sections: [{ slot: 'lede' }], leftOut: ['b9'] })).toEqual({ sections: [{ slot: 'lede' }], leftOut: ['b9'] });
   });
 
-  it('the map as shown is the stripped map, each left-out beat cut to its id and title', () => {
-    const stripped = mapWithoutBeatKinds(clone(MAP));
+  it('the map as shown is the stripped map, each left-out beat cut to its id and title, with no gapNote and no dropped (R50)', () => {
+    const { gapNote: _gapNote, dropped: _dropped, ...stripped } = mapWithoutBeatKinds(clone(MAP));
     expect(mapAsShown(clone(MAP))).toEqual({ ...stripped, leftOut: stripped.leftOut.map((beat) => ({ id: beat.id, move: beat.move })) });
   });
 

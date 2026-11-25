@@ -446,20 +446,21 @@ describe('instructionText: the pipeline\'s own instructions only', () => {
       }
     });
 
+    // Phase 18, run 2h (R48): the preamble's approved words.
     it('keeps the pipeline\'s label lines, the standing-notes preamble', () => {
       const text = instructionText(section);
-      expect(text).toContain('Standing notes the director gave at earlier stops, in order.');
-      expect(text).toContain('Keep honoring each in what you write now.');
+      expect(text).toContain("The director's notes from the stops so far, in order, in the director's own words.");
+      expect(text).toContain('act on it where it bears on your work.');
     });
 
     it('scans the preamble: a removed phrase there is found', () => {
-      const preamble = section.replace('Keep honoring each', 'Keep honoring who killed Marcus and each');
+      const preamble = section.replace('act on it where it bears', 'act on who killed Marcus where it bears');
       expect(findRemovedPhrases(instructionText(preamble))).toEqual(['who killed Marcus']);
     });
 
     it('a block in the retired guidance shape, with no standing-notes preamble, cannot be read, and says so', () => {
       const retired = '<DIRECTOR_GUIDANCE>\nThe director reviewed the arcs and asks for this emphasis. It outranks the craft rules above where they conflict:\n\nLead with the money.\n</DIRECTOR_GUIDANCE>';
-      expect(() => instructionText(retired)).toThrow(/Standing notes the director gave at earlier stops/);
+      expect(() => instructionText(retired)).toThrow(/The director's notes from the stops so far/);
     });
   });
 

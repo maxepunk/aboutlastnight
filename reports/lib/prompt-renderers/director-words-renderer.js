@@ -18,7 +18,11 @@
  * - each photo's description as the director typed it at the character-IDs stop,
  *   joined to its photo by filename.
  * - the notes the director sent at the stops, for both judges (phases 14 and 15,
- *   brief B), each under its stop and the action it went with.
+ *   brief B), each under its stop and the action it went with; the writers' block of the
+ *   same notes (prompt-builder.js formatGateNotes) names a stop and an action by the same
+ *   map (phase 18, run 2h, R48).
+ * - the label over the director's notes, the one text every prompt that prints the notes
+ *   puts over them (phase 18, run 2h, R47).
  *
  * Nothing here paraphrases the director. A label says whose words follow; the
  * words themselves are copied as given (trimmed at the ends, nothing else).
@@ -27,6 +31,28 @@
 const { isNoCulpritVerdict, blamesNoCharacter, accusedNames, normalizeVotes } = require('../accusation-verdict');
 const { stopNotesOf } = require('../director-words');
 const { noteKindOf } = require('../workflow/state');
+
+// ═══════════════════════════════════════════════════════
+// THE LABEL OVER THE DIRECTOR'S NOTES
+// ═══════════════════════════════════════════════════════
+
+/**
+ * The label over the director's notes (phase 18, run 2h, R47; the wording doc's part 10, "The
+ * label over the director's notes"): what the notes hold (what people did and said in the
+ * warehouse, and often what came after it and the director's own read of the session), that they
+ * are Nova's notes and thinking and not text for the article, though a line they quote a person as
+ * saying is one the article can quote, and where backstory in them falls (not in the record,
+ * never stated as fact, open to what Nova suspects, asks or believes).
+ *
+ * The one text every prompt that prints the notes puts over them, each in its own frame: the weave
+ * writer and its rework as the notes' heading (arc-specialist-nodes.js, which exports it as
+ * ARC_NOTES_LABEL), the map writer, the article writer and their reworks at the top of
+ * <INVESTIGATION_OBSERVATIONS> (prompt-builder.js _buildInvestigationObservations), and both
+ * judges bare over <DIRECTOR_NOTES> (evaluator-nodes.js).
+ */
+const DIRECTOR_NOTES_LABEL = `The Director's Notes (what people did and said in the warehouse, and often what came after it and the director's own read of the session)
+They are Nova's notes and thinking, not text for the article. A line they quote a person as saying is one the article can quote.
+Backstory in the notes, what the director knows about the characters beyond what the session showed, is not in the record and did not happen in the warehouse. The article never states it as fact. It can appear as what Nova suspects, asks or believes.`;
 
 // ═══════════════════════════════════════════════════════
 // ACCUSATION
@@ -250,18 +276,48 @@ ${formatCorrectionList(list)}
 /** The tag the judges print the notes at the stops under (evaluator-nodes.js TRUTH_MATERIAL.stopNotes). */
 const DIRECTOR_STOP_NOTES_TAG = 'DIRECTOR_STOP_NOTES';
 
-/** Each stop that files a note, in the words the console's stop labels give it. */
+/**
+ * Each stop that files a note, in the words the console's stop labels give it. The one map of a
+ * stop's name: the judges' block (renderDirectorStopNotes) and the writers' (prompt-builder.js
+ * formatGateNotes; phase 18, run 2h, R48) read it through stopNotePlaceOf.
+ */
 const STOP_NOTE_PLACES = Object.freeze({
   'arc-selection': 'the story meeting',
   outline: 'the map',
   article: 'the article'
 });
 
+/** A stop the map does not name, as both blocks print it. */
+const UNNAMED_STOP = 'an earlier stop';
+
 /**
  * The action a note went with, from its kind (workflow/state.js noteKindOf). A reweave's note
- * and a send-back's are both filed as a rejection, so both read as sent back.
+ * and a send-back's are both filed as a rejection, so both read as sent back. The one map of an
+ * action's word, which both blocks read through stopNoteActionOf.
  */
 const STOP_NOTE_ACTIONS = Object.freeze({ approval: 'approved', rejection: 'sent back' });
+
+/**
+ * The stop a note was filed at, by its name (STOP_NOTE_PLACES), or "an earlier stop" for a stop
+ * the map does not name.
+ *
+ * @param {Object} note - a directorGateNotes entry
+ * @returns {string}
+ */
+function stopNotePlaceOf(note) {
+  return STOP_NOTE_PLACES[note && note.gate] || UNNAMED_STOP;
+}
+
+/**
+ * The action a note went with, in its word (STOP_NOTE_ACTIONS): "approved" or "sent back". A kind
+ * the map does not name reads as sent back, as noteKindOf reads a note with none.
+ *
+ * @param {Object} note - a directorGateNotes entry
+ * @returns {string}
+ */
+function stopNoteActionOf(note) {
+  return STOP_NOTE_ACTIONS[noteKindOf(note)] || STOP_NOTE_ACTIONS.rejection;
+}
 
 /**
  * The notes the director sent at the stops, for both judges (phases 14 and 15, brief B; ruling
@@ -277,9 +333,7 @@ const STOP_NOTE_ACTIONS = Object.freeze({ approval: 'approved', rejection: 'sent
 function renderDirectorStopNotes(state) {
   const notes = stopNotesOf(state);
   const lines = notes.length === 0 ? ['None.'] : notes.map((note) => {
-    const place = STOP_NOTE_PLACES[note.gate] || 'an earlier stop';
-    const action = STOP_NOTE_ACTIONS[noteKindOf(note)] || STOP_NOTE_ACTIONS.rejection;
-    return `- At ${place}, ${action}: "${note.text.trim()}"`;
+    return `- At ${stopNotePlaceOf(note)}, ${stopNoteActionOf(note)}: "${note.text.trim()}"`;
   });
   return [
     `<${DIRECTOR_STOP_NOTES_TAG}>`,
@@ -439,6 +493,14 @@ module.exports = {
   // Brief B (R2): the notes at the stops, which both judges print
   DIRECTOR_STOP_NOTES_TAG,
   renderDirectorStopNotes,
+  // Phase 18, run 2h (R48): the one map of a stop's name and an action's word, which the judges'
+  // block and the writers' (prompt-builder.js formatGateNotes) read
+  STOP_NOTE_PLACES,
+  STOP_NOTE_ACTIONS,
+  stopNotePlaceOf,
+  stopNoteActionOf,
+  // Phase 18, run 2h (R47): the one label over the director's notes
+  DIRECTOR_NOTES_LABEL,
   renderWhiteboardConnections,
   // The one join key for a photo: the leave-out box, the hero, the kept photos, and the map's
   // edits and checks (brief 4.6). console/outline-edit-logic.js holds a copy a test keeps equal.

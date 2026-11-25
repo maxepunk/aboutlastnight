@@ -530,7 +530,9 @@ describe('1E: the article writer tells each beat from the evidence it carries', 
     const label = labelOf(user);
     // Phase 4b, piece 4 (brief 4B; R1): the label names the beat's summary, its synopsis, which a
     // map from before piece 4 and a move the director added may lack.
-    expect(label).toContain('A beat is one move of the story: its "move" says it in a few plain words, "synopsis", where the beat has one, says in one sentence what the article tells there, "players" names the people in it, "threads" the ids of the settled weave\'s threads it carries, and "connection" the id of the weave\'s connection that lands in it.');
+    // Run 2h (the wording doc's part 10): a connection's beat is where the article shows its two
+    // threads meeting.
+    expect(label).toContain('A beat is one move of the story: its "move" says it in a few plain words, "synopsis", where the beat has one, says in one sentence what the article tells there, "players" names the people in it, "threads" the ids of the settled weave\'s threads it carries, and "connection" the id of the weave\'s connection that lands in it: the beat where the article shows those two threads meeting.');
     // Phase 17 (R3; the read's section 13): the article draws on the evidence, as C16 says.
     expect(label).toContain('Its "evidence" holds the pieces of the record the move can be told from, each with its "sources"');
     expect(label).toContain('what it "shows", and its "stance": whether it supports the move or cuts against it.');

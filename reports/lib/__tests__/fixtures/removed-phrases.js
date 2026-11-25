@@ -569,9 +569,9 @@ const TENSIONS_HEADING = "### Blake and the Valet in the director's notes";
  * formatGateNotes in lib/prompt-builder.js): STANDING_NOTES_PREAMBLE's lines. The
  * director's notes are the GATE_NOTE_LINE lines after it, to the block's end. Brief 4.7c:
  * the arc stop's guidance and its label went from the section, so the preamble is the one
- * label the parser reads.
+ * label the parser reads. Phase 18, run 2h (R48): the preamble's approved words.
  */
-const STANDING_NOTES_PREAMBLE = 'Standing notes the director gave at earlier stops';
+const STANDING_NOTES_PREAMBLE = "The director's notes from the stops so far";
 const GATE_NOTE_LINE = /^- \[[^\]\n]+\] /m;
 
 /**

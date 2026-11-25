@@ -7,6 +7,7 @@ const { ThemeLoader, PHASE_REQUIREMENTS } = require('../theme-loader');
 // Phase 4 (brief 4.6): the outline writer is the map writer, which reads the settled weave
 // first, as its task (lib/prompt-renderers/settled-weave.js).
 const { renderSettledWeave } = require('../prompt-renderers/settled-weave');
+const { DIRECTOR_NOTES_LABEL } = require('../prompt-renderers/director-words-renderer');
 const { WEAVE: FIXTURE_WEAVE, MAP: FIXTURE_MAP } = require('./fixtures/rework-state');
 const SETTLED_WEAVE = renderSettledWeave(FIXTURE_WEAVE, null);
 /** Brief 4.7b: the article writer writes from the settled weave and the story map as the director left it. */
@@ -667,8 +668,10 @@ describe('PromptBuilder', () => {
       expect(userPrompt).toContain('<INVESTIGATION_OBSERVATIONS>');
       expect(userPrompt).toContain('Blake solicited Vic three times');
       // Phase 3 (3.2): the header names what the notes are, and dates nothing to
-      // "this morning"; T1 and the mode block say how the room's events reached Nova.
-      expect(userPrompt).toContain("The director's notes on the session, as written");
+      // "this morning"; T1 and the mode block say how the room's events reached Nova. Phase 18,
+      // run 2h (R47): the header is the one label over the notes.
+      expect(userPrompt).toContain(`<INVESTIGATION_OBSERVATIONS>\n${DIRECTOR_NOTES_LABEL}\nEach block below says what it is.`);
+      expect(userPrompt).not.toContain("The director's notes on the session, as written");
       expect(userPrompt).not.toContain('What happened during the investigation this morning');
       // Whiteboard should NOT be in this section, nor anywhere in the prompt. Phase 17: the
       // article writer reads C12, which says "what Nova suspects" (rule-text read, change 1), so
@@ -677,9 +680,11 @@ describe('PromptBuilder', () => {
         userPrompt.indexOf('<INVESTIGATION_OBSERVATIONS>'),
         userPrompt.indexOf('</INVESTIGATION_OBSERVATIONS>')
       );
-      expect(section).toContain('Blake solicited Vic three times');
-      expect(section).not.toContain('suspects');
-      const outsideCraft = userPrompt.replace(/^<(brief|job-[a-z]+)>$[\s\S]*?^<\/\1>$/gm, '');
+      // Run 2h (R47): the label over the notes says what Nova suspects, asks or believes, in the
+      // director's approved words, so the scan for the whiteboard's "suspects" reads past it.
+      expect(section.replace(DIRECTOR_NOTES_LABEL, '')).toContain('Blake solicited Vic three times');
+      expect(section.replace(DIRECTOR_NOTES_LABEL, '')).not.toContain('suspects');
+      const outsideCraft = userPrompt.replace(/^<(brief|job-[a-z]+)>$[\s\S]*?^<\/\1>$/gm, '').replace(DIRECTOR_NOTES_LABEL, '');
       expect(outsideCraft).toContain('<SETTLED_WEAVE>');
       expect(outsideCraft).not.toContain('suspects');
     });
@@ -1011,7 +1016,9 @@ describe('buildOutlinePrompt — the director\'s raw notes', () => {
     const { userPrompt } = await render({ directorNotes: DIRECTOR_NOTES });
     // Phase 17: the scan reads the prompt outside the rule files the user prompt carries (since
     // phase 18, the brief and the map writer's part), whose wording is the director's.
-    const outsideCraft = userPrompt.replace(/^<(brief|job-[a-z]+)>$[\s\S]*?^<\/\1>$/gm, '');
+    // Run 2h (R47): the label over the notes, in the director's approved words, says what Nova
+    // suspects, asks or believes, so the scan reads past it as it reads past the rule files.
+    const outsideCraft = userPrompt.replace(/^<(brief|job-[a-z]+)>$[\s\S]*?^<\/\1>$/gm, '').replace(DIRECTOR_NOTES_LABEL, '');
     expect(outsideCraft).toContain('<SETTLED_WEAVE>');
     expect(outsideCraft).not.toContain('suspects');
   });
@@ -1611,11 +1618,11 @@ describe("4.6b: the map writer's task says what is true", () => {
     expect(task).not.toContain('standing note');
     // The approval note prints marked [arc-selection, approval N], and the check counts it;
     // a rejection note at the meeting prints marked as one, and the check does not.
-    expect(userPrompt).toContain('- [arc-selection, approval 1] Lead with the money.');
+    expect(userPrompt).toContain('- [the story meeting, approved] Lead with the money.');
     expect(meetingNoteOf({ directorGateNotes: MEETING_NOTES })).toBe(true);
     const rejection = [{ ...MEETING_NOTES[0], kind: 'rejection' }];
     const { userPrompt: sentBack } = await builder().buildOutlinePrompt(SETTLED_WEAVE, [HERO], [], null, { gateNotes: rejection });
-    expect(sentBack).toContain('- [arc-selection, rejection 1] Lead with the money.');
+    expect(sentBack).toContain('- [the story meeting, sent back, round 1] Lead with the money.');
     expect(meetingNoteOf({ directorGateNotes: rejection })).toBe(false);
   });
 });
@@ -1643,7 +1650,7 @@ describe("4.6c: the map writer's task points at the meeting's note only when its
     const { userPrompt } = await builder().buildOutlinePrompt(SETTLED_WEAVE, [HERO], [], null, { gateNotes: MEETING_NOTES });
     expect(meetingNoteOf({ directorGateNotes: MEETING_NOTES })).toBe(true);
     expect(changeLineOf(userPrompt)).toBe(WITH_NOTE);
-    expect(userPrompt).toContain('- [arc-selection, approval 1] Lead with the money.');
+    expect(userPrompt).toContain('- [the story meeting, approved] Lead with the money.');
   });
 
   it.each([

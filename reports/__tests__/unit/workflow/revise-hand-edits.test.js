@@ -77,15 +77,15 @@ describe('reviseOutline', () => {
   it('passes the standing notes, excluding the one it is acting on', async () => {
     const sdk = sdkReturning(EDITED);
     await reviseOutline({ _previousOutline: OUTLINE, directorGateNotes: NOTES, _outlineFeedback: 'Tighten the lede.', outlineRevisionCount: 1 }, cfg(sdk));
-    expect(promptOf(sdk)).toContain('- [arc-selection, rejection 1] Drop the vote arc.');
-    expect(promptOf(sdk)).not.toContain('- [outline, rejection 1] Tighten the lede.');
+    expect(promptOf(sdk)).toContain('- [the story meeting, sent back, round 1] Drop the vote arc.');
+    expect(promptOf(sdk)).not.toContain('- [the map, sent back, round 1] Tighten the lede.');
     expect(promptOf(sdk)).toContain("THE DIRECTOR'S NOTE:\nTighten the lede.");
   });
 
   it('on an evaluator-driven pass (no feedback) every note is passed', async () => {
     const sdk = sdkReturning(EDITED);
     await reviseOutline({ _previousOutline: OUTLINE, directorGateNotes: NOTES, _outlineFeedback: null, outlineRevisionCount: 2 }, cfg(sdk));
-    expect(promptOf(sdk)).toContain('- [outline, rejection 1] Tighten the lede.');
+    expect(promptOf(sdk)).toContain('- [the map, sent back, round 1] Tighten the lede.');
   });
 
   it('still nulls the feedback slot and the previous outline on success', async () => {
@@ -145,8 +145,8 @@ describe('reviseContentBundle', () => {
     const sdk = sdkReturning(EDITED_BUNDLE);
     const notes = [...NOTES, { gate: 'article', kind: 'rejection', round: 1, text: 'Name the shell.', at: 't3' }];
     await reviseContentBundle({ _previousContentBundle: BUNDLE, directorGateNotes: notes, _articleFeedback: 'Name the shell.', articleRevisionCount: 1 }, cfg(sdk));
-    expect(promptOf(sdk)).toContain('- [outline, rejection 1] Tighten the lede.');
-    expect(promptOf(sdk)).not.toContain('- [article, rejection 1] Name the shell.');
+    expect(promptOf(sdk)).toContain('- [the map, sent back, round 1] Tighten the lede.');
+    expect(promptOf(sdk)).not.toContain('- [the article, sent back, round 1] Name the shell.');
   });
 });
 
@@ -307,13 +307,13 @@ describe('revision prompt builders accept gateNotes', () => {
   const promptBuilder = createMockPromptBuilder();
   it('outline revision renders the notes inside <DIRECTOR_GUIDANCE> after <RULES>', async () => {
     const prompt = await buildOutlineRevisionPrompt({ _outlineGuidance: null }, 'CTX', 'PREV', promptBuilder, NOTES);
-    expect(prompt).toContain('- [arc-selection, rejection 1] Drop the vote arc.');
+    expect(prompt).toContain('- [the story meeting, sent back, round 1] Drop the vote arc.');
     expect(prompt.indexOf('<DIRECTOR_GUIDANCE>')).toBeGreaterThan(prompt.indexOf('<RULES>'));
   });
   // Brief 4.7b (R4): the article rework's guidance is the standing notes alone.
   it('article revision likewise, and omits the section with no notes', async () => {
     const withNotes = await buildArticleRevisionPrompt({}, 'CTX', 'PREV', promptBuilder, NOTES);
-    expect(withNotes).toContain('- [outline, rejection 1] Tighten the lede.');
+    expect(withNotes).toContain('- [the map, sent back, round 1] Tighten the lede.');
     const bare = await buildArticleRevisionPrompt({}, 'CTX', 'PREV', promptBuilder, []);
     expect(bare).not.toContain('DIRECTOR_GUIDANCE');
   });

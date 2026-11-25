@@ -10,7 +10,10 @@ const { renderDirectorEnrichmentBlock } = require('./prompt-renderers/director-n
 const { renderRecordView, DOCUMENT_POINTER } = require('./prompt-renderers/record-view');
 const { withSessionClock } = require('./prompt-renderers/session-clock');
 const { DERIVED_LABELS } = require('./prompt-renderers/derived-labels');
-const { renderSessionFactsVerdict, renderPhotoListEntry, photoKey } = require('./prompt-renderers/director-words-renderer');
+const {
+  renderSessionFactsVerdict, renderPhotoListEntry, photoKey, stopNotePlaceOf, stopNoteActionOf, STOP_NOTE_ACTIONS,
+  DIRECTOR_NOTES_LABEL
+} = require('./prompt-renderers/director-words-renderer');
 const contentBundleSchema = require('./schemas/content-bundle.schema.json');
 // Phase 4 (brief 4.6): the map writer embeds the map's schema for its theme as its
 // <SCHEMA> (fix 3.2b), the one the SDK channel enforces (ai-nodes.js), as the article
@@ -281,25 +284,38 @@ ${content.trim()}
 }
 
 /**
+ * The paragraph over the director's notes from the stops in every writer's prompt (phase 18, run
+ * 2h, R48; the wording doc's part 10, "The director's notes from the stops"): what the notes are,
+ * and what each kind asks of the writer. A note sent with a send-back was acted on at its stop and
+ * is not undone; a note sent with an approval has reached no writer yet.
+ */
+const GATE_NOTES_PREAMBLE = "The director's notes from the stops so far, in order, in the director's own words. A note sent with a send-back was acted on at that stop: do not undo what it asked for. A note sent with an approval has not been acted on yet: act on it where it bears on your work.";
+
+/**
  * The director's standing notes as a prompt paragraph (spec 2026-09-19 §5.3).
  * Entries with no usable text are skipped. '' when nothing remains.
  *
- * Phase 1 brief 1.1: the note box is now sent with WHATEVER the director presses,
- * so the channel holds two kinds. The preamble has to tell them apart — a rejection
- * note was already acted on by the rework at its own stop, but an approval note has
- * never reached a writer, and calling it "already applied" told the writer to treat
- * a forward instruction as history.
+ * Phase 1 brief 1.1: the note box is sent with whatever the director presses, so the channel
+ * holds two kinds, and the paragraph tells them apart: a note sent back was acted on by the rework
+ * at its own stop, while an approval note has never reached a writer.
+ *
+ * Phase 18, run 2h (R48): the paragraph, then one line a note, `[stop, action, round n] text`. A
+ * stop's name and an action's word come from the map the judges' block reads
+ * (director-words-renderer.js stopNotePlaceOf, stopNoteActionOf), so a stop the map does not name
+ * prints as it does for the judges. A note sent back carries its round; an approved note carries
+ * none. A note's kind is read through noteKindOf, so one with none reads as sent back.
  */
 function formatGateNotes(gateNotes) {
   const list = Array.isArray(gateNotes)
     ? gateNotes.filter(n => n && typeof n.text === 'string' && n.text.trim())
     : [];
   if (list.length === 0) return '';
-  const lines = list.map(n => `- [${n.gate}, ${noteKindOf(n)} ${n.round || 1}] ${n.text.trim()}`);
-  return 'Standing notes the director gave at earlier stops, in order.\n' +
-         'Each carries its kind: a rejection note was applied by the rework at its own stop;\n' +
-         'an approval note is forward guidance no writer has acted on yet.\n' +
-         'Keep honoring each in what you write now.\n' + lines.join('\n');
+  const lines = list.map((n) => {
+    const action = stopNoteActionOf(n);
+    const round = action === STOP_NOTE_ACTIONS.rejection ? `, round ${n.round || 1}` : '';
+    return `- [${stopNotePlaceOf(n)}, ${action}${round}] ${n.text.trim()}`;
+  });
+  return `${GATE_NOTES_PREAMBLE}\n${lines.join('\n')}`;
 }
 
 /**
@@ -493,11 +509,40 @@ function systemPromptOpening(theme, call, sessionConfig) {
  * told from", so the article draws on them for what the move needs.
  * Phase 18 (the phase 18 read's part 5b): a section's job on the map is its step, and the line
  * says so right after it names a section's parts.
+ * Phase 18, run 2h (the wording doc's part 10, "The line over the map, for the article writer"):
+ * a connection's beat is where the article shows its two threads meeting; a piece that cuts against
+ * a beat is a caution or a disagreement; a photo whose moment is outside the story sits where its
+ * people appear, unexplained; and "leftOut" is the one note the line names, since the map as shown
+ * holds no gapNote and no dropped (mapAsShown, R50). The names of the sections follow the line
+ * (sectionNamesLines).
  * It names the record in words, never by its tag, as lib/evidence.js's piece descriptions do: the
  * map prints above the record, and the prompt's readers take the first <RECORD> for the record.
  */
 const STORY_MAP_TAG = 'STORY_MAP';
-const STORY_MAP_LABEL = `The story map as the director left it at the map's stop, as JSON. Each section gives its slot, heading, job, beats and photos. A section's job is its step: what the reader learns there about the question. A beat is one move of the story: its "move" says it in a few plain words, "synopsis", where the beat has one, says in one sentence what the article tells there, "players" names the people in it, "threads" the ids of the settled weave's threads it carries, and "connection" the id of the weave's connection that lands in it. Its "evidence" holds the pieces of the record the move can be told from, each with its "sources" (the id of a document in the record, ${SOURCES_GLOSS}), what it "shows", and its "stance": whether it supports the move or cuts against it. A beat marked "card": true prints an inline evidence card of the document named by its piece flagged "card": true. A photo's "beat" is the beat it sits beside. "leftOut" lists the beats the story does not use, and "gapNote" and "dropped" are the map's notes to the director.`;
+const STORY_MAP_LABEL = `The story map as the director left it at the map's stop, as JSON. Each section gives its slot, heading, job, beats and photos. A section's job is its step: what the reader learns there about the question. A beat is one move of the story: its "move" says it in a few plain words, "synopsis", where the beat has one, says in one sentence what the article tells there, "players" names the people in it, "threads" the ids of the settled weave's threads it carries, and "connection" the id of the weave's connection that lands in it: the beat where the article shows those two threads meeting. Its "evidence" holds the pieces of the record the move can be told from, each with its "sources" (the id of a document in the record, ${SOURCES_GLOSS}), what it "shows", and its "stance": whether it supports the move or cuts against it. A piece that cuts against a beat is a caution or a disagreement. It keeps the article from claiming more than the record supports, and the article can tell the disagreement where the step needs it. A beat marked "card": true prints an inline evidence card of the document named by its piece flagged "card": true. A photo's "beat" is the beat it sits beside. A photo whose moment is outside the story sits in the section where its people appear, and nothing is written to explain it. "leftOut" lists the beats the story does not use.`;
+
+/** The line over the names of the sections the article writer is shown after the map's line (run 2h). */
+const SECTION_NAMES_LINE = "What each section's name stands for:";
+
+/**
+ * The map's sections for a theme, one line each, its name and what it stands for, from the
+ * theme's config (lib/theme-config.js mapSlotsOf): the one list the map writer's <SLOTS> prints
+ * and the article writer reads after the line over the map (phase 18, run 2e, R33; run 2h, the
+ * wording doc's part 10). A slot with no description would print as "undefined", so the call
+ * stops the prompt instead: one check for both readers.
+ *
+ * @param {string} themeName
+ * @returns {string[]} `- <key>: <description>`, in the config's order
+ * @throws {Error} for a slot with no description
+ */
+function sectionNamesLines(themeName) {
+  const slots = mapSlotsOf(themeName);
+  const undescribed = slots.find((slot) => typeof slot.description !== 'string' || !slot.description.trim());
+  if (undescribed) {
+    throw new Error(`The map writer's <SLOTS> and the article writer's names of the sections print each slot's description, and slot "${undescribed.key}" of theme "${themeName}" has none in lib/theme-config.js (map.slots).`);
+  }
+  return slots.map((slot) => `- ${slot.key}: ${slot.description}`);
+}
 
 /**
  * The instruction's line on which inline cards the article prints (phase 4b, brief 1E; spec
@@ -868,12 +913,13 @@ function mapWithoutBeatKinds(map) {
 
 /**
  * The story map as the article writer and its rework are shown it (phase 18, run 2b, R20; run 2c,
- * R31): the map with no beat's kind (mapWithoutBeatKinds), then each beat under `leftOut` cut to
- * its id and its title (its "move") alone, since a struck beat's synopsis and evidence would hand
- * back what the director took out. The map the stop stores, the stamp, the fact check, the judge
- * and the page read the map whole; this copy is only what <STORY_MAP> prints. The map it is given
- * is untouched; anything that is no map passes through, and so does a left-out entry that is no
- * object.
+ * R31; run 2h, R50): the map with no beat's kind (mapWithoutBeatKinds), then each beat under
+ * `leftOut` cut to its id and its title (its "move") alone, since a struck beat's synopsis and
+ * evidence would hand back what the director took out, and without `gapNote` and `dropped`, the
+ * map's notes to the director, which would hand the writer a lead the director has not settled
+ * into the story. The map the stop stores, the stamp, the checks, the judge and the page read the
+ * map whole; this copy is only what <STORY_MAP> prints. The map it is given is untouched; anything
+ * that is no map passes through, and so does a left-out entry that is no object.
  *
  * @param {Object|null} map - the map as the article reads it (ai-nodes.js articleMapOf)
  * @returns {Object|null}
@@ -881,6 +927,8 @@ function mapWithoutBeatKinds(map) {
 function mapAsShown(map) {
   if (!isPlainObject(map)) return map;
   const shown = mapWithoutBeatKinds(map);
+  delete shown.gapNote;
+  delete shown.dropped;
   if (Array.isArray(shown.leftOut)) {
     shown.leftOut = shown.leftOut.map((beat) => {
       if (!isPlainObject(beat)) return beat;
@@ -956,8 +1004,11 @@ class PromptBuilder {
     const epilogueLine = notes.includes('\n<EPILOGUE>\n')
       ? "\nThe follow-up from Nova's day is the <EPILOGUE> below. In the story it is Nova's own reporting from the rest of that day."
       : '';
+    // Phase 18, run 2h (R47): the one label over the notes opens the block, where "The director's
+    // notes on the session, as written." stood, and the block's own lines follow it.
     return `<INVESTIGATION_OBSERVATIONS>
-The director's notes on the session, as written. Each block below says what it is.${epilogueLine}
+${DIRECTOR_NOTES_LABEL}
+Each block below says what it is.${epilogueLine}
 
 ${notes}
 </INVESTIGATION_OBSERVATIONS>`;
@@ -1152,13 +1203,9 @@ Only the ${n} players above were at the investigation. Every other character exc
     if (typeof settledWeave !== 'string' || !settledWeave.trim()) {
       throw new Error('The map writer reads the settled weave first, and this thread holds no weave: the story meeting settles it. Go back to the story meeting.');
     }
-    const slots = mapSlotsOf(this.themeName);
-    // Phase 18, run 2e: <SLOTS> prints each slot's description from the theme's config (R33), so
-    // a slot with none would print as "undefined" to the map writer; it stops the prompt instead.
-    const undescribed = slots.find((slot) => typeof slot.description !== 'string' || !slot.description.trim());
-    if (undescribed) {
-      throw new Error(`The map writer's <SLOTS> prints each slot's description, and slot "${undescribed.key}" of theme "${this.themeName}" has none in lib/theme-config.js (map.slots).`);
-    }
+    // Phase 18, run 2e: <SLOTS> prints each slot's description from the theme's config (R33);
+    // a slot with none stops the prompt (sectionNamesLines).
+    const slotLines = sectionNamesLines(this.themeName);
     const observationsSection = this._buildInvestigationObservations(options.directorNotes, options.directorCorrections, options.evidenceBundle);
     // Brief 2.1: every usable document in full, once, with the investigation's timeline.
     const recordSection = renderRecordView(options.evidenceBundle, { sessionConfig: this.sessionConfig });
@@ -1176,7 +1223,7 @@ ${mapTask(heroMarked, meetingNote)}
 
 <SLOTS>
 The sections the map can use, by the name the map gives each. Use the ones the story needs, in the order its steps need them.
-${slots.map((slot) => `- ${slot.key}: ${slot.description}`).join('\n')}
+${slotLines.join('\n')}
 </SLOTS>
 ${observationsSection ? `\n${observationsSection}\n` : ''}
 <available-photos>
@@ -1382,6 +1429,8 @@ ${photos.map((photo, i) => renderPhotoListEntry(photo, i, options.photoDescripti
 
 <${STORY_MAP_TAG}>
 ${STORY_MAP_LABEL}
+${SECTION_NAMES_LINE}
+${sectionNamesLines(this.themeName).join('\n')}
 ${JSON.stringify(mapAsShown(map), null, 2)}
 </${STORY_MAP_TAG}>
 

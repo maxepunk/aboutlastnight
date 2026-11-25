@@ -68,7 +68,7 @@
                   "description": "The ids of the settled weave's threads the move carries",
                   "items": { "type": "string" }
                 },
-                "connection": { "type": "string", "description": "The id of the settled weave's connection that lands in this beat; each live connection lands in one beat" },
+                "connection": { "type": "string", "description": "The id of the settled weave's connection that lands in this beat; each connection lands in one beat" },
                 "card": { "type": "boolean", "description": "True when the move's evidence prints as a card; one of its pieces is then flagged as the card's document" },
                 "evidence": {
                   "type": "array",
@@ -128,7 +128,7 @@
             "description": "The ids of the settled weave's threads the move carries",
             "items": { "type": "string" }
           },
-          "connection": { "type": "string", "description": "The id of the settled weave's connection that lands in this beat; each live connection lands in one beat" },
+          "connection": { "type": "string", "description": "The id of the settled weave's connection that lands in this beat; each connection lands in one beat" },
           "card": { "type": "boolean", "description": "True when the move's evidence prints as a card; one of its pieces is then flagged as the card's document" },
           "evidence": {
             "type": "array",

@@ -178,15 +178,15 @@ describe('<DIRECTOR_GUIDANCE> standing notes (spec 2026-09-19 §5.3)', () => {
   // arcs and asks for this emphasis"), and the tests of a section carrying it went too.
   it('notes only → the section carries only the standing-notes paragraph, in order, labelled', () => {
     const section = buildDirectorGuidanceSection(NOTES);
-    expect(section.startsWith('<DIRECTOR_GUIDANCE>\nStanding notes the director gave at earlier stops, in order.')).toBe(true);
+    expect(section.startsWith("<DIRECTOR_GUIDANCE>\nThe director's notes from the stops so far, in order, in the director's own words.")).toBe(true);
     // Phase 1 brief 1.1: an approval note has NOT been applied by a rework, so the
-    // old blanket "each was already applied at its own gate" was a lie about it.
-    expect(section).toContain('a rejection note was applied by the rework at its own stop');
-    expect(section).toContain('an approval note is forward guidance');
-    expect(section).toContain('Keep honoring each in what you write now.');
+    // old blanket "each was already applied at its own gate" was a lie about it. Phase 18,
+    // run 2h (R48): the paragraph's approved words say what each kind asks of the writer.
+    expect(section).toContain('A note sent with a send-back was acted on at that stop: do not undo what it asked for.');
+    expect(section).toContain('A note sent with an approval has not been acted on yet: act on it where it bears on your work.');
     expect(section).not.toContain('outranks');
-    const a = section.indexOf('- [arc-selection, rejection 1] Drop the vote arc.');
-    const b = section.indexOf('- [outline, rejection 1] Lead with the ledger.');
+    const a = section.indexOf('- [the story meeting, sent back, round 1] Drop the vote arc.');
+    const b = section.indexOf('- [the map, sent back, round 1] Lead with the ledger.');
     expect(a).toBeGreaterThan(-1);
     expect(b).toBeGreaterThan(a);
     expect(section.trim().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
@@ -242,12 +242,12 @@ describe('<DIRECTOR_GUIDANCE> standing notes (spec 2026-09-19 §5.3)', () => {
 
   it('buildOutlinePrompt and buildArticlePrompt read options.gateNotes and still end with the section', async () => {
     const o = await makeBuilder().buildOutlinePrompt(SETTLED_WEAVE, [], [], null, { gateNotes: NOTES });
-    expect(o.userPrompt).toContain('- [outline, rejection 1] Lead with the ledger.');
+    expect(o.userPrompt).toContain('- [the map, sent back, round 1] Lead with the ledger.');
     expect(o.userPrompt.trim().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
     // Brief 4.7b: the article writer's section is the standing notes alone (R4).
     const a = await makeBuilder().buildArticlePrompt(SETTLED_WEAVE, MAP, [], null, null, { directorGuidance: GUIDANCE, gateNotes: NOTES });
     expect(a.userPrompt).not.toContain(GUIDANCE);
-    expect(a.userPrompt).toContain('- [arc-selection, rejection 1] Drop the vote arc.');
+    expect(a.userPrompt).toContain('- [the story meeting, sent back, round 1] Drop the vote arc.');
     expect(a.userPrompt.trim().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
   });
 });
