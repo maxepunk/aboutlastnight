@@ -347,8 +347,9 @@ const REMOVED_PHRASES = [
   'You are REVISING that outline, not writing it from scratch.',
   '<arc-evidence>',
 
-  // Phase 4, 4.6b: the map's task names the approval note marked arc-selection, the one
-  // the map's check counts, not any standing note.
+  // Phase 4, 4.6b: the map's task names the meeting's approval note, the one the map's
+  // check counts, not any standing note (since phase 18, run 2h, R57, as the note marked
+  // [the story meeting, approved]).
   'the standing note marked arc-selection',
 
   // Phase 4, 4.7a: the article judge scores the truth criteria alone (spec 6.2). Its

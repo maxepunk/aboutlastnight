@@ -196,6 +196,49 @@ describe('R48: the director\'s notes from the stops, in every writer\'s prompt',
   });
 });
 
+// R57: the map writer is told which note counts as the source "note" of a change it lists under
+// weaveChanges by the mark <DIRECTOR_GUIDANCE> prints on that note. When R48 changed the marks,
+// the pointer kept the old one ("marked arc-selection"), so it named a mark no block held. The
+// pointer names the mark the block prints, built from the same two functions.
+describe("R57: the map's pointer at the meeting's note names the mark <DIRECTOR_GUIDANCE> prints", () => {
+  const { mapSchemaFor, MEETING_NOTE_POINTER } = require('../map');
+  const APPROVAL = MEETING_NOTES.find((note) => note.kind === 'approval');
+
+  /** The mark the block prints on the meeting's approval note, read from the prompt. */
+  const markIn = (prompt) => {
+    const block = prompt.slice(prompt.lastIndexOf('<DIRECTOR_GUIDANCE>'));
+    const line = block.split('\n').find((l) => l.endsWith(` ${APPROVAL.text}`));
+    expect(line).toBeDefined();
+    return line.slice('- '.length, line.length - APPROVAL.text.length - 1);
+  };
+
+  it.each(['map writer', 'map rework'])("%s: the task and the schema's source point at the mark the block prints", (name) => {
+    const prompt = renders[name].prompt;
+    const mark = markIn(prompt);
+    expect(mark).toBe('[the story meeting, approved]');
+    const pointer = `the note marked ${mark} in <DIRECTOR_GUIDANCE>`;
+    expect(MEETING_NOTE_POINTER).toBe(pointer);
+    expect(mapSchemaFor('journalist').properties.weaveChanges.items.properties.source.description.endsWith(`: ${pointer}`)).toBe(true);
+    expect(prompt).toContain(JSON.stringify(mapSchemaFor('journalist'), null, 2));
+    expect(prompt).not.toContain('marked arc-selection');
+  });
+
+  it("the map writer's task line on the meeting's changes points at that mark", () => {
+    const prompt = renders['map writer'].prompt;
+    expect(prompt).toContain(`and each change the director's note from the meeting asks for (the note marked ${markIn(prompt)} in <DIRECTOR_GUIDANCE>).`);
+  });
+
+  it('builds the mark from the one map of a stop\'s name and an action\'s word, not from typed words', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const source = fs.readFileSync(path.join(__dirname, '..', 'map.js'), 'utf8');
+    const line = source.split('\n').find((l) => l.startsWith('const MEETING_NOTE_POINTER ='));
+    expect(line).toContain('stopNotePlaceOf(');
+    expect(line).toContain('stopNoteActionOf(');
+    expect(line).not.toMatch(/story meeting|approved/);
+  });
+});
+
 describe("the weave writer's list of who was played", () => {
   const { buildCharacterCategoriesBlock } = arcNodes._testing;
 

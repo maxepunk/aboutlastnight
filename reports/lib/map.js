@@ -73,7 +73,9 @@ const {
   mapTally, mapPhotoPlacements, mapRepeats, rosterMemberOf, beatIdOf, beatCardOf, cardPiecesOf, beatWithId, isMapValue, shownMapOf,
   freeStruckBeatPhotos, dropEmptiedSections, leftOutTopPhoto, initBeat, EMPTIED_SECTION_REASON
 } = require('../console/outline-edit-logic');
-const { photoKey, photoDescriptionFor } = require('./prompt-renderers/director-words-renderer');
+const {
+  photoKey, photoDescriptionFor, stopNotePlaceOf, stopNoteActionOf
+} = require('./prompt-renderers/director-words-renderer');
 const {
   mapEditAddress, mapOrderOf, isCut, isStrike, isMap, standingOnMap, carriedEdits, concernEditIds, editWhere,
   handEditReportOf, MAP_NONE, MAP_LEFT_OUT, MAP_SCOPE, MAP_TOP_PHOTO
@@ -166,14 +168,20 @@ const MEETING_NOTE_SOURCE = 'note';
 /** The story meeting's stop type (R3), the gate its notes carry. */
 const MEETING_GATE = 'arc-selection';
 
+/** The director's approval note at the story meeting, as meetingNoteOf finds it: its stop and its kind. */
+const MEETING_APPROVAL = Object.freeze({ gate: MEETING_GATE, kind: 'approval' });
+
 /**
  * Where a map prompt holds the note meetingNoteOf finds, the director's approval note at the
- * story meeting: <DIRECTOR_GUIDANCE> marks each standing note with its stop and its kind, as
- * "[arc-selection, approval 1]" (prompt-builder.js formatGateNotes). The map writer's task
- * (prompt-builder.js MAP_TASK_NOTE_CHANGE) and the schema's line for a change's source
- * (mapSchemaFor) both point at the note with this one text (brief 4.6e).
+ * story meeting: <DIRECTOR_GUIDANCE> marks each note with its stop's name and its action's word,
+ * an approved note with no round, as "[the story meeting, approved]" (prompt-builder.js
+ * formatGateNotes). The pointer builds that mark from the same two functions the block reads
+ * (director-words-renderer.js stopNotePlaceOf, stopNoteActionOf), so the two cannot drift apart
+ * (phase 18, run 2h, R57). The map writer's task (prompt-builder.js MAP_TASK_NOTE_CHANGE) and the
+ * schema's line for a change's source (mapSchemaFor) both point at the note with this one text
+ * (brief 4.6e).
  */
-const MEETING_NOTE_POINTER = `the approval note marked ${MEETING_GATE} in <DIRECTOR_GUIDANCE>`;
+const MEETING_NOTE_POINTER = `the note marked [${stopNotePlaceOf(MEETING_APPROVAL)}, ${stopNoteActionOf(MEETING_APPROVAL)}] in <DIRECTOR_GUIDANCE>`;
 
 /** A field as text: the string trimmed, or '' for anything else. */
 function textOf(value) {

@@ -63,10 +63,11 @@ const MAP_TASK_NOTE_SOURCE = ', or "note"';
  * bounds filled in from lib/map.js); the part and the brief say the rest, so the task restates none
  * of it.
  *
- * Brief 4.6b: each line is true of the prompt it sits in. The meeting's note is the approval
- * note marked arc-selection in <DIRECTOR_GUIDANCE>, the one note the map checks take as a
- * change's source "note" (lib/map.js meetingNoteOf); a reweave's or a send-back's note at
- * the meeting prints there marked as a rejection. The line on the top photo prints only
+ * Brief 4.6b: each line is true of the prompt it sits in. The meeting's note is the note
+ * marked [the story meeting, approved] in <DIRECTOR_GUIDANCE> (formatGateNotes; R48, R57), the
+ * one note the map checks take as a change's source "note" (lib/map.js meetingNoteOf); a
+ * reweave's or a send-back's note at the meeting prints there marked as sent back, with its
+ * round. The line on the top photo prints only
  * when a photo is marked [hero image] (MAP_TASK_TOP_PHOTO). Brief 4.6c: the line on the
  * meeting's changes points at that note, and offers "note" as a source, only when the
  * prompt's notes hold it (MAP_TASK_NOTE_CHANGE, MAP_TASK_NOTE_SOURCE). Pointed at a note it

@@ -1582,9 +1582,9 @@ describe('phase 3 (3.2): the journalist writers read the rule set', () => {
 // 4.6b: the map writer's task says what is true of the prompt it sits in
 // ═══════════════════════════════════════════════════════════════════════════
 //
-// The meeting's note is the approval note marked arc-selection, the one note the map's
-// check accepts as a change's source (lib/map.js meetingNoteOf); a reweave's or a
-// send-back's note prints marked as a rejection. The top photo starts from the photo marked
+// The meeting's note is the note marked [the story meeting, approved], the one note the
+// map's check accepts as a change's source (lib/map.js meetingNoteOf); a reweave's or a
+// send-back's note prints marked as sent back, with its round. The top photo starts from the photo marked
 // [hero image] only when <available-photos> marks one.
 describe("4.6b: the map writer's task says what is true", () => {
   const { meetingNoteOf } = require('../map');
@@ -1612,13 +1612,13 @@ describe("4.6b: the map writer's task says what is true", () => {
     expect(userPrompt).not.toContain('[hero image]');
   });
 
-  it("names the meeting's note as the approval note marked arc-selection: the note the map's check counts as the source \"note\"", async () => {
+  it("names the meeting's note as the note marked [the story meeting, approved]: the note the map's check counts as the source \"note\"", async () => {
     const { userPrompt } = await builder().buildOutlinePrompt(SETTLED_WEAVE, [HERO], [], null, { gateNotes: MEETING_NOTES });
     const task = taskOf(userPrompt);
-    expect(task).toContain('each change the director\'s note from the meeting asks for (the approval note marked arc-selection in <DIRECTOR_GUIDANCE>)');
+    expect(task).toContain('each change the director\'s note from the meeting asks for (the note marked [the story meeting, approved] in <DIRECTOR_GUIDANCE>)');
     expect(task).not.toContain('standing note');
-    // The approval note prints marked [arc-selection, approval N], and the check counts it;
-    // a rejection note at the meeting prints marked as one, and the check does not.
+    // The approval note prints marked [the story meeting, approved], and the check counts it;
+    // a rejection note at the meeting prints marked as sent back, and the check does not.
     expect(userPrompt).toContain('- [the story meeting, approved] Lead with the money.');
     expect(meetingNoteOf({ directorGateNotes: MEETING_NOTES })).toBe(true);
     const rejection = [{ ...MEETING_NOTES[0], kind: 'rejection' }];
@@ -1632,7 +1632,7 @@ describe("4.6b: the map writer's task says what is true", () => {
 // 4.6c: the map writer's task points at the meeting's note only when the prompt holds it
 // ═══════════════════════════════════════════════════════════════════════════
 //
-// The meeting's note is the approval note marked arc-selection, by lib/map.js meetingNoteOf's
+// The meeting's note is the note marked [the story meeting, approved], by lib/map.js meetingNoteOf's
 // rule, which the map checks read too. Pointed at a note its prompt does not hold, the writer
 // names "note" as a change's source, the check fails the change, and the round's one rework
 // goes on that failure (0926262).
@@ -1644,7 +1644,7 @@ describe("4.6c: the map writer's task points at the meeting's note only when its
   const changeLineOf = (userPrompt) => userPrompt.slice(userPrompt.indexOf('- Fit in each change the director made'), userPrompt.indexOf('- Give each section you use'));
   /** The map writer's task: from its first line to the theme's slots. */
   const taskOf = (userPrompt) => userPrompt.slice(userPrompt.indexOf("Lay the settled weave above across the article's sections"), userPrompt.indexOf('<SLOTS>'));
-  const WITH_NOTE = "- Fit in each change the director made at the meeting, marked above by its edit's id, and each change the director's note from the meeting asks for (the approval note marked arc-selection in <DIRECTOR_GUIDANCE>). List each change you make to fit one in under weaveChanges, with its source: the edit's id, or \"note\".\n";
+  const WITH_NOTE = "- Fit in each change the director made at the meeting, marked above by its edit's id, and each change the director's note from the meeting asks for (the note marked [the story meeting, approved] in <DIRECTOR_GUIDANCE>). List each change you make to fit one in under weaveChanges, with its source: the edit's id, or \"note\".\n";
   const WITHOUT_NOTE = "- Fit in each change the director made at the meeting, marked above by its edit's id. List each change you make to fit one in under weaveChanges, with its source: the edit's id.\n";
 
   it("with the meeting's approval note among the notes, the line points at it and offers \"note\" as a source", async () => {
@@ -1683,7 +1683,7 @@ describe("phase 18, C: the map writer's task is the read's, word for word", () =
   const builder = () => new PromptBuilder({ loadPhasePrompts: jest.fn(), validate: jest.fn() });
   const taskOf = (userPrompt) => userPrompt.slice(userPrompt.indexOf("Lay the settled weave above across the article's sections"), userPrompt.indexOf('<SLOTS>'));
   const TOP_PHOTO_LINE = "- Choose the top photo. The photo marked [hero image] in <available-photos> is code's pick, the one with the most players identified in it: start from it.";
-  const NOTE_CHANGE = ", and each change the director's note from the meeting asks for (the approval note marked arc-selection in <DIRECTOR_GUIDANCE>)";
+  const NOTE_CHANGE = ", and each change the director's note from the meeting asks for (the note marked [the story meeting, approved] in <DIRECTOR_GUIDANCE>)";
   const AS_READ = `Lay the settled weave above across the article's sections: the story map the article writer writes the article from. \`<job-map>\` below says how. The only lines on the map that the article prints as you write them are the deck under the settled angle's headline, which the map carries word for word, and each section's heading. The director reads the map as a board whose synopses are folded when it opens: that page holds at most ${MAP_WORD_BOUND} words, so aim for ${MAP_WORD_AIM} of your own; with every synopsis open it holds at most ${MAP_OPEN_WORD_BOUND}, so give the synopses about ${MAP_SYNOPSIS_AIM} words between them.
 - Fit in each change the director made at the meeting, marked above by its edit's id. List each change you make to fit one in under weaveChanges, with its source: the edit's id.
 - Give each section you use its heading, its job, its beats and its photos. The job is the section's step, in one sentence of about 25 words at most. The beats come in the order the article will tell them. Each has its move, a title of a few plain words with its people; its synopsis of about 20 words; the ids of the threads it carries; and its evidence, taken from those threads' evidence above and from the record. Every thread in the story lands in at least one beat, and a beat in a section carries only threads of the story, since the director settled the other threads out of it at the meeting. Drop each slot the story does not use, with its reason.

@@ -597,9 +597,16 @@ const REPO = path.join(__dirname, '..', '..');
  * - Phase 18, run 2h, slice W (R51), Blake's full name in the journalist theme is Blake Manley, so
  *   the list of names every writer reads prints it (+7): arcs-journalist 13031 -> 13038,
  *   outline-journalist 25571 -> 25578, article-journalist 27260 -> 27267.
+ * - Phase 18, run 2h, slice W, fix round (R57), the map's pointer at the meeting's note names the
+ *   mark <DIRECTOR_GUIDANCE> prints on it since R48: "the note marked [the story meeting,
+ *   approved] in <DIRECTOR_GUIDANCE>", where it said "the approval note marked arc-selection in
+ *   <DIRECTOR_GUIDANCE>" (lib/map.js MEETING_NOTE_POINTER, built from director-words-renderer.js
+ *   stopNotePlaceOf and stopNoteActionOf). The fixture's note at the meeting is a rejection, so the
+ *   task's clause does not print; the schema's line for a change's source in <SCHEMA> carries the
+ *   pointer (+7): outline-journalist 25578 -> 25585. The article and arc pins do not move.
  */
 const PINNED = {
-  'outline-journalist': ['cc86ac423b57bc64366f1f266eeedd3dc232f0725e646936b7b7d5c8d64c463e', 25578],
+  'outline-journalist': ['1c2c5d57f9d868f857a6e4fbe83e9349c8f8416626ab327b4f7899aa463bf3d8', 25585],
   'article-journalist': ['1af0ba0f57746a4a0b9a08481feca2c661f24b3384256752fb5247ec80c7f16f', 27267],
   'arcs-journalist': ['6456b789025a9e9d9dbb85d62947735299b005fa5064bbcd17dd5fd95f0c0da5', 13038]
 };
