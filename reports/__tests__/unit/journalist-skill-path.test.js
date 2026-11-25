@@ -695,6 +695,18 @@ describe('the skill reads what the pipeline reads (phase 18, run 3)', () => {
     expect(generator).not.toMatch(/"rule"|limit's code/);
   });
 
+  // Run 3, fix round 1, finding 2: what SKILL.md says of the agents' lists is what is built.
+  // The four lists themselves are held to RULE_SET_CALLS by the run 1 test.
+  it('SKILL.md says which agents list the rule files and in what order, and the curator and the image analyzer read world.md alone', () => {
+    expect(FILES['SKILL.md']).toContain(
+      'The four agents that write or check the story (the arc analyzer, the outline generator, the article generator and the validator) each list the rule files they read: `world.md`, `limits.md`, then their console call\'s own files in its order, with the mode file, the part about this session, last. The curator and the image analyzer read `world.md` alone.'
+    );
+    ['evidence-curator', 'image-analyzer'].forEach((name) => {
+      const files = [...agent(name).matchAll(/references\/rules\/([a-z-]+\.md)/g)].map((m) => m[1]);
+      expect(`${name}: ${files.join(',')}`).toBe(`${name}: world.md`);
+    });
+  });
+
   it("the record names a turn-in's name as the writers' record does: name given, or no name given", () => {
     const doc = FILES['schemas.md'];
     const block = doc.slice(doc.indexOf('### analysis/evidence-bundle.json')).match(/```\n([\s\S]*?)\n```/)[1];
