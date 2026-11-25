@@ -430,6 +430,18 @@ describe("1D: each of the writer's beats passes the evidence check, and each of 
     expect(failure.line).not.toMatch(/\b[btc]\d+\b|sam001/);
   });
 
+  // The final review's item 2: the director's page calls a section's job its step (the section
+  // editor's "Step: what the reader learns here about the question"), so the director's line
+  // names the step. The rework's message keeps the schema's field, the job of the section.
+  it("a section's job that breaks story terms is named to the director as the section's step, and to the rework as its job", () => {
+    const map = storyLevelMap();
+    map.sections[0].job = 'Opens on the vote at 9:58 and asks the question.';
+    const failure = check(map).failures.find((f) => f.type === 'story-terms');
+    expect(failure.line.startsWith("The section's step ")).toBe(true);
+    expect(failure.line).not.toMatch(/\bjob\b/);
+    expect(failure.message.startsWith('The job of section lede ')).toBe(true);
+  });
+
   it("the headline, the deck and a section's heading are exempt; names, possessives and numbers in words are story terms", () => {
     const map = storyLevelMap();
     map.headline = 'Ten Votes at 9:58 Call a $450,000 Trial an Accident';

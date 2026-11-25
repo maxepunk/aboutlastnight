@@ -1070,7 +1070,7 @@ function mapFindings(map, inputs = {}) {
   objectsOf(map.sections).forEach((section) => {
     const slot = textOf(section.slot);
     if (!has(share.sections, slot) && !has(share.sectionFields, `${slot}.job`)) {
-      terms(`the job of section ${slot}`, "the section's job", section.job, `sections[#${slot}]`);
+      terms(`the job of section ${slot}`, "the section's step", section.job, `sections[#${slot}]`);
     }
   });
   // A beat's synopsis is held as its move is (piece 4; spec 2026-10-07 section 10), the director's
