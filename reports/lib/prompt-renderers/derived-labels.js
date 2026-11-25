@@ -19,8 +19,9 @@ const DERIVED_LABELS = {
    * characterData, from extractCharacterData (Haiku). Run 2c: its pronouns are the documents',
    * which the roster overrides, so the label says where pronouns come from. Run 2e: it names the
    * block by what it is called in the prompt, the list of names (prompt-builder.js ROSTER_OPENING),
-   * whose heading no longer says "roster". The weave writer and the two judges print it; the
-   * article writer reads no summary (run 2b, R22).
+   * whose heading no longer says "roster". The weave writer and its rework print it
+   * (arc-specialist-nodes.js buildWeaveSections); the article writer reads no summary (run 2b,
+   * R22), and neither do the two judges (evaluator-nodes.js, withCharacterContext: false).
    */
   characterContext:
     'A model made this summary from the documents in the record. Where it differs from a document, ' +

@@ -383,7 +383,7 @@ function buildDirectorGuidanceSection(gateNotes = [], ...retired) {
 }
 
 /**
- * The reporting-mode block for one session and theme, defaulting to on-site
+ * The <this-session> block for one session and theme, defaulting to on-site
  * (BASELINE.md §4 class 6).
  *
  * BOTH remote sessions of the last five were written as on-site. The rule
