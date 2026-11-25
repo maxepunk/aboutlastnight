@@ -513,3 +513,22 @@ The words `must pass` come off each question's line. The heading above the quest
 ## Left for after the next session
 
 The frame around a rework. The page limits of the map and the weave. One connection needing one beat. What a left-out beat holds, the top photo's line, and the counts of memories made public. A section's layout type and the badge on a card. The money block's two faults on 111326 are outside the phase.
+
+## Part 11. The lines the director approved on the map, for the article's judge (approved 2026-11-24)
+
+The final review of the whole phase found a seam between three runs. Since the lock, the map's headline, the line under it and each section's heading are recorded with the director's own edits, whoever wrote them. The article's judge is listed them under `THE DIRECTOR'S EDITS (record: the director's own text, each final as the director left it)`, as `text the director wrote`. Part 10 then told the judge that a line the director wrote or changed counts with the director's words. So a line a writer wrote, which no judge checks, reached the judge as the director's words.
+
+The director chose: such a line is final, and it is not the director's words.
+
+New, a second list in the article judge's prompt. It follows the director's edits, or stands alone when the director wrote none:
+
+```
+THE LINES THE DIRECTOR APPROVED ON THE MAP (final as approved):
+A writer wrote each line below, and the director approved it with the map. The article prints it as given, and no rework changes it. It is not the director's words, so no other sentence of the article stands on it. Where one breaks a limit, write the concern in advisoryWarnings, opening with the line's id and then the limit it concerns, as in: Director's edit E2: T1: <the concern>.
+```
+
+Each line follows, printed as a director's edit is printed.
+
+Stays: the heading and the words of the director's edits, for every line the director wrote, cut or moved. A line of the map that the director wrote or changed (the headline at the story meeting, the line under it or a heading on the map) stays there, and so does a line the director retyped at the desk.
+
+Stays: the list of the director's edits a rework is given. It tells the rework to keep each line, which is right for both kinds.

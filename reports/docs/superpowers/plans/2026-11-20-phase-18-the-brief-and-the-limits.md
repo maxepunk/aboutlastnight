@@ -954,3 +954,46 @@ What the earlier runs left for this run is in the workspace, `surveys/for-g.md`.
 | G3 | Opus 5.5, medium | Opus 5.5, medium |
 
 Verifier Sonnet 5.5 at medium. Fixer Opus 5.5 at high. Re-review Opus 5.5 at medium.
+
+---
+
+## Run 2i: the judge's two lists (added 2026-11-24)
+
+The final review of the whole phase found one blocking seam between runs 2f, 2g and 2h. The lock records the map's headline, its deck and each section's heading with the director's own edits, whoever wrote them. The article's judge lists them as text the director wrote, and since run 2h it counts a line the director wrote with the director's words. So a line a writer wrote and no judge checks reached the judge as the director's words, and an article sentence that repeats it could pass as backed by them. No stored session holds locked lines, so the judge's prompt had never been rendered with them.
+
+The director chose (2026-11-24): a line they only approved is final, and it is not their words. The wording is part 11 of `docs/superpowers/specs/2026-11-24-phase-18-run-2c-wording.md`.
+
+### Rulings for run 2i
+
+- **R58. The article judge's standing lines print as two lists.** A line the director wrote, cut or moved stays under the director's edits, in that block's words. A line of the map that the director approved and did not write prints under the new heading, in part 11's words. The second list follows the first, and each prints only when it holds a line.
+- **R59. One function says which kind a standing line is.** A standing line of the article stop is "approved on the map" when all three hold: its place is the headline, the line under it or a section's heading; its text is the line the map gives at that place; and the director did not write or change that line, on the map (the map's standing edits) or, for the headline, at the story meeting (the director's changes to the settled angle). Every other standing line is the director's own. The function reads the edits and the map and changes neither.
+- **R60. Nothing else that reads the director's lines changes.** The stamp, the settle, the guard, the verdict, the fact check, the desk and its payload, and the list a rework is given all read the standing lines as they do. A concern about an approved line is written and parsed as a concern about an edit is, with the same prefix and the line's id.
+
+### Review focus for run 2i
+
+- The judge's prompt rendered from a state the real stamp made, read in place: the two headings, part 11's sentences word for word, each line in the right list.
+- Each way a line comes to be the director's own: changed on the map, a headline changed at the story meeting, retyped at the desk after the stamp, a section the director added on the map. Each way it is only approved: written by the weave writer or the map writer and left as it was.
+- An old thread with no stamped line, a thread with no map, and no edits at all: what printed before prints now.
+- A concern the judge writes about an approved line reaches the desk as before (the verdict's guard, the payload, the mark beside the line).
+- `scripts/lib/render-calls.js` agrees with what the evaluator passes.
+- Nothing in `lib/hand-edit-diff.js`, the settle or the stamp's recording changed.
+
+### Brief Y: the judge's two lists
+
+**Intent.** The article's judge is told the truth about each standing line: which the director wrote, and which a writer wrote and the director approved. Only the first kind counts with the director's words.
+
+**Layers.**
+- One function for R59, beside the stamp or in the module that already reads the map's standing edits, exported for the judge and for tests.
+- `lib/workflow/nodes/evaluator-nodes.js`: the article judge's block of the director's edits splits by that function (R58). The weave judge's block is not touched.
+- `scripts/lib/render-calls.js` and `scripts/render-prompts.js`, if what the evaluator passes changes.
+- Docs: the lines of `docs/architecture/judges.md` and `director-edits.md` that describe the judge's list.
+
+**Tests.** The cases of the review focus, each through the real stamp and the real block. Part 11's words held word for word. A test that the two lists together hold every standing line once.
+
+**Invariants.** R60. No writer's prompt changes, so no pin in `writer-prompts-pinned.test.js` moves. The director's edits block keeps its words. The limits' codes in a concern still parse.
+
+**Verification.** Render both judges for 111326 and 101826 and compare with the head's: no difference, since neither stored thread holds a stamped line. Then build the article judge's prompt for a state made by the real stamp on an invented map and article, with no model call, and read the block in place.
+
+**Done.** The judge's prompt for a new session holds the two lists as part 11 gives them, the suite is green, the docs lines are true.
+
+Seats: builder Opus 5.5 at high, reviewer Fable 5.2 at high.
