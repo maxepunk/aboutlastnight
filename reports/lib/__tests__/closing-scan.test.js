@@ -3,9 +3,10 @@
  *
  * Every writer's prompt and every rework's, rendered through its own node with the real rule
  * files and a recording stand-in for the model, in both reporting modes, holds:
- * - no rule number: none of the old craft rules' C1 to C19 anywhere in the render, and none of
- *   the limits' T1 to T15 in the pipeline's own instruction text (only the judges keep the
- *   codes, and the judges are outside this scan);
+ * - no rule number: none of the old craft rules' C1 to C19 and none of the limits' T1 to T15 in
+ *   the pipeline's own instruction text (only the judges keep the codes, and the judges are
+ *   outside this scan). Both are read on the instruction text, so the scan never fires on the
+ *   session's own material: the record, the director's notes, a judge's finding a rework carries;
  * - no old rule tag and no phrase the integrator's removed list names (R12's among them), in
  *   the instruction text;
  * - the `this-session` block once, in the system prompt, and never in the user prompt.
@@ -135,13 +136,13 @@ async function renderWritersAndReworks(mode) {
 }
 
 /**
- * What the closing scan finds in one render ("system\n=====\nuser"): an old craft rule's number
- * anywhere, a limit's code in the instruction text, and each removed phrase in it.
+ * What the closing scan finds in one render ("system\n=====\nuser"), all in its instruction
+ * text: an old craft rule's number, a limit's code, and each removed phrase.
  */
 function closingScan(render) {
   const text = instructionText(render);
   return [
-    ...(render.match(/\bC\d{1,2}\b/g) || []),
+    ...(text.match(/\bC\d{1,2}\b/g) || []),
     ...(text.match(/\bT\d{1,2}\b/g) || []),
     ...findRemovedPhrases(text).map(String)
   ];
@@ -234,8 +235,10 @@ describe('the closing scan fails on a planted line', () => {
     const inNotes = render.replace('</DIRECTOR_GUIDANCE>', '- [the story meeting, approved] Say who the exposer was, as the mode block says.\n</DIRECTOR_GUIDANCE>');
     expect(inNotes).not.toBe(render);
     expect(closingScan(inNotes)).toEqual([]);
-    const inRecord = render.replace('</RECORD>', "The exposer wrote T6 on the board.\n</RECORD>");
+    const inRecord = render.replace('</RECORD>', "The exposer wrote T6 and C7 on the board.\n</RECORD>");
     expect(inRecord).not.toBe(render);
     expect(closingScan(inRecord)).toEqual([]);
+    // The same craft code planted in an instruction still fails it.
+    expect(closingScan(planted('Follow C7 for the closing.'))).toEqual(['C7']);
   });
 });
