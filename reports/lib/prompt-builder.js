@@ -270,8 +270,8 @@ ${npcLines.join('\n')}`;
  * the section the writers add by name, <DIRECTOR_GUIDANCE>. The parked detective's
  * prompt files, each wrapped under its file name, went with its writers (R1; phase 4,
  * briefs 4.6 and 4.7b). The journalist's rule files come wrapped from lib/rule-set.js,
- * and a journalist prompt points at a rule by its id and its file's tag, as in "C16
- * (<craft-story>)".
+ * and a journalist prompt points at a rule file by its tag alone, as in "<job-map>", and at
+ * no rule by number (phase 18, R7).
  *
  * @param {string} filename - the tag: a section's name (e.g. 'DIRECTOR_GUIDANCE')
  * @param {string} content - the section's content
@@ -320,9 +320,10 @@ function formatGateNotes(gateNotes) {
 }
 
 /**
- * Drop the note the reviser is acting on RIGHT NOW (it is already in the prompt as
- * HUMAN FEEDBACK). On an evaluator-driven second pass the feedback slot is null, so
- * nothing is excluded and every note stands (spec §5.3 [I10]).
+ * Drop the note the reviser is acting on RIGHT NOW (it is already in the prompt, under
+ * THE DIRECTOR'S NOTE: node-helpers.js DIRECTOR_NOTE_LABEL). On an evaluator-driven second
+ * pass the feedback slot is null, so nothing is excluded and every note stands (spec §5.3
+ * [I10]).
  *
  * Phase 1 brief 1.1: the match is kind- and gate-narrowed, not text-only. The note
  * being acted on can only be the REJECTION at the stop being reworked; a text-only
@@ -393,15 +394,15 @@ function buildDirectorGuidanceSection(gateNotes = [], ...retired) {
  * the system prompt, immediately after the identity line.
  *
  * I3 finished the job: the craft prompts no longer assert presence at all, in
- * either direction. Since phase 3 (3.2) the journalist's craft files are retired and
- * T8 in the truth rules defers here. This block is the only place the reporter's
- * whereabouts are stated. Pinned by prompt-reporting-mode-neutral.test.js.
+ * either direction. Since phase 3 (3.2) the journalist's craft files are retired, and since
+ * phase 18 the limit on Nova's side ("Nova takes no side", limits.md) has its part about this
+ * session here. This block is the only place the reporter's whereabouts are stated. Pinned
+ * by prompt-reporting-mode-neutral.test.js.
  *
  * The reporter covers the room and is never a member of it; hardConstraints used to
  * say the opposite in so many words (`use "We decided"`). The journalist's blocks said
- * "you did not vote" until phase 3 (task 3.1); it is now T8's shared part in
- * truth-rules.md, which the outline and article writers carry in their system prompts
- * since 3.2 (the arc calls and judges from 3.3 and 3.4).
+ * "you did not vote" until phase 3 (task 3.1); it is now in limits.md, which every writer
+ * and judge carries in its system prompt (phase 18, R2; before it, truth-rules.md).
  *
  * Phase 2 (2.6): the remote block asks for attribution and allows the absence to
  * be stated at most once. 092026's remote article announced it five times ("I was
@@ -412,8 +413,10 @@ function buildDirectorGuidanceSection(gateNotes = [], ...retired) {
  * Phase 3 (task 3.1): the journalist's block is the rule set's mode file,
  * `references/rules/mode-on-site.md` or `mode-remote.md`, read through lib/rule-set.js:
  * T8's mode part, Nova's position as the uninterested third party and what Nova could
- * witness. Its remote file sends exposures to Nova by turn-in, never as tips; "never
- * votes" moved to the truth rules (T8's shared part) and the party to T7.
+ * witness. "Never votes" moved to the limits (limits.md), and the party to the limit on the
+ * three stretches of time. Since phase 18 the mode files are the approved text: the remote one
+ * says the memories were turned in to Nova and the players sent "tips and messages" besides,
+ * the director's words (R6).
  *
  * Phase 4 (R14; brief 4.13): every theme's block is its own mode file, from the rules
  * folder its config names. The detective's one-line blocks, which served its writers of
@@ -472,7 +475,7 @@ ${generateRosterSection('journalist', canonicalCharacters || null, null, config.
  * The theme's identity line for the call (lib/theme-config.js identityLineOf; brief 4.13),
  * then the session's mode block, before anything else the prompt asserts (phase 1 brief 1.5:
  * the arc writer and the outline reworker were never told the mode, so a remote session's
- * arc summaries said "I watched"), then the world and the truth rules, the stable frame
+ * arc summaries said "I watched"), then the world and the limits, the stable frame
  * every writer and judge reads first (phase 3, 3.2: the integrator's placement ruling), all
  * from the theme's files (R14). The call's own text follows it.
  *
@@ -1019,7 +1022,7 @@ ${notes}
    * Build the <DIRECTOR_GUIDANCE> section (Q2 decision): the standing notes.
    *
    * Appended LAST to the map and article writers' user prompts. Recency bias is the
-   * point: the director's notes have to survive several thousand tokens of craft rules.
+   * point: the director's notes have to survive several thousand tokens of rule files.
    * Brief 4.7c: the notes are its one input (buildDirectorGuidanceSection).
    *
    * @param {Array} [gateNotes] - directorGateNotes entries carried into this prompt
@@ -1169,8 +1172,8 @@ Only the ${n} players above were at the investigation. Every other character exc
   /**
    * The map writer's system prompt, shared with its rework (2.3): its opening alone
    * (systemPromptOpening; brief 4.13b), the theme's identity line, the mode block, then the
-   * world and the truth rules from the theme's rules folder (R14). Its craft files go last in
-   * the user prompt.
+   * world and the limits from the theme's rules folder (R14). The brief and the map writer's own
+   * part (<brief>, <job-map>) go last in the user prompt.
    *
    * @returns {Promise<string>}
    * @throws {Error} for a theme with no story map (lib/map.js mapSchemaFor), such as the
@@ -1192,7 +1195,7 @@ Only the ${n} players above were at the investigation. Every other character exc
    * 18, run 2c, R33: a slot's stock heading is not printed here), then what the outline writer read: the director's notes, the photos
    * with the director's descriptions, the record with the investigation's timeline, the money, the
    * session facts with the director's accusation, the roster with pronouns (phase 3, 3.10;
-   * T9), the map's <SCHEMA> (fix 3.2b) and the craft files last (the integrator's placement
+   * T9), the map's <SCHEMA> (fix 3.2b) and the brief and <job-map> last (the integrator's placement
    * ruling). The arcs, the arc analysis and the selected arcs went with their channels (R4),
    * and the arc stage's <SHOULD_CONSIDER> with the arc selection.
    *
@@ -1287,7 +1290,7 @@ ${loadRuleSet('outline', { theme: this.themeName }).craft}`;
   /**
    * The article writer's system prompt, shared with the article reworker (2.3): its opening
    * (systemPromptOpening; brief 4.13b), the theme's identity line, the mode block, the world
-   * and the truth rules from the theme's folder (R14), then the roster with pronouns (phase
+   * and the limits from the theme's folder (R14), then the roster with pronouns (phase
    * 3, 3.2: the integrator's placement ruling). The roster prints here alone (M20: the user
    * prompt's <RULES> carried a second copy).
    *
@@ -1312,7 +1315,7 @@ ${this._rosterSection({ withCharacterContext: false })}`;
   /**
    * The article writer's user prompt up to, not including, <DIRECTOR_GUIDANCE> (brief
    * 4.7b): the settled weave, the map, the task, then the data, the session facts, the
-   * generation instruction with its schema, and the craft files last. Shared with the
+   * generation instruction with its schema, and the brief and <job-article> last. Shared with the
    * article reworker (2.3), which follows it with its revision block and then its own
    * <DIRECTOR_GUIDANCE>. Takes buildArticlePrompt's arguments; options.gateNotes is the
    * tail's and is not read here.
@@ -1343,8 +1346,8 @@ ${this._rosterSection({ withCharacterContext: false })}`;
    * Brief 4.7b (spec 6.1): the settled weave first, then the story map as the director left
    * it (<STORY_MAP>, where the approved outline printed until phase 4), then the task
    * (ARTICLE_TASK), then what the writer read before: the data, the roster and verdict, the
-   * generation instruction with its schema, and the craft files last (phase 3, 3.2: the
-   * integrator's placement ruling; the world and the truth rules are in the system
+   * generation instruction with its schema, and the brief and <job-article> last (phase 3, 3.2:
+   * the integrator's placement ruling; phase 18, R45; the world and the limits are in the system
    * prompt). The instruction takes the sections, their ids and the top photo from the map,
    * and the headings, the headline and the deck as the task gives them (ARTICLE_TASK), so it
    * names none of the theme's slots. The HERO IMAGE line went: the map's top photo is the

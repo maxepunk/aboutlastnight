@@ -563,7 +563,7 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   const [editError, setEditError] = React.useState('');
   // The stop's ONE note box (phase 1, brief 1.1). On screen in the view mode and
   // sent with whatever the director presses: with Approve it becomes a standing note
-  // for every later writer, with Send back it is the rework's HUMAN FEEDBACK and then
+  // for every later writer, with Send back it is the rework's THE DIRECTOR'S NOTE and then
   // stands. The name stays `feedbackText` — the server still reads it as feedback on
   // a send back.
   const [feedbackText, setFeedbackText] = React.useState('');

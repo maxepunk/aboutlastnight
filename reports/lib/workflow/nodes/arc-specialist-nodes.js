@@ -88,8 +88,8 @@ const { reworkSchemaWithChangedEdits, takeChangedEdits, getPromptBuilder } = req
  *
  * The same section the outline and article prompts carry, built by the same two
  * functions (prompt-builder.js), with the gate `arc-selection`: on the director's round
- * (brief 4.5, by its mark) the round's note is already its HUMAN FEEDBACK and is filtered
- * out; every other note stands.
+ * (brief 4.5, by its mark) the round's note is already in the rework, under THE DIRECTOR'S
+ * NOTE, and is filtered out; every other note stands.
  *
  * @param {Object} state
  * @returns {string} '\n\n<DIRECTOR_GUIDANCE>...' or '' when there are no notes

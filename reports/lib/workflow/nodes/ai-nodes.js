@@ -1468,7 +1468,7 @@ async function mapReworkCall(state, promptBuilder, theme = state.theme || 'journ
     humanFeedback: state._outlineFeedback || null,
     handEdits: edits
   });
-  // Spec §5.3 [I10]: the note being acted on is already in the prompt as HUMAN FEEDBACK.
+  // Spec §5.3 [I10]: the note being acted on is already in the prompt, under THE DIRECTOR'S NOTE.
   const gateNotes = filterGateNotes(state.directorGateNotes, state._outlineFeedback, 'outline');
   const prompt = await buildOutlineRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes);
   const systemPrompt = await buildOutlineRevisionSystemPrompt(promptBuilder);
@@ -1527,8 +1527,8 @@ function outlineRevisionRules(theme) {
 
 /**
  * The map's rework system prompt: the map writer's system prompt, then the rework rules
- * (phase 2, 2.3). The writer's brings the theme's identity line, the reporting-mode block
- * right after it, and the world and the truth rules.
+ * (phase 2, 2.3). The writer's brings the theme's identity line, the <this-session> block
+ * right after it, and the world and the limits.
  *
  * @param {string} writerSystemPrompt - PromptBuilder.buildOutlineSystemPrompt()
  * @param {string} theme - the writer's theme, whose rework identity opens the rules
@@ -2022,7 +2022,7 @@ async function reviseContentBundle(state, config) {
 
   try {
     // INSIDE the try: the context and buildArticleRevisionPrompt, which loads the writer's
-    // craft files and THROWS if any are missing. Outside, a throw escaped as a graph-level
+    // rule files and THROWS if any are missing. Outside, a throw escaped as a graph-level
     // rejection instead of this node's failure path (task 4.14e: articleReworkFailed), which
     // keeps the article the rework started from and leaves the run resumable.
 
@@ -2217,9 +2217,9 @@ function articleRevisionRules(theme) {
  * Get system prompt for article revision: the article writer's system prompt, then
  * the rework rules (phase 2, 2.3).
  *
- * The writer's system prompt brings the theme's identity line, the reporting-mode block in
+ * The writer's system prompt brings the theme's identity line, the <this-session> block in
  * its place (phase 1: a remote session's rework must not be the one writer left able
- * to put the reporter back in the room), the world, the truth rules and the roster
+ * to put the reporter back in the room), the world, the limits and the roster
  * with pronouns.
  *
  * @param {string} writerSystemPrompt - PromptBuilder.buildArticleSystemPrompt()
@@ -2325,7 +2325,7 @@ async function articleReworkCall(state, promptBuilder) {
  * @param {Object} [schema] - the schema the call is given, which the writer's sections print in
  *   <SCHEMA> (phase 18, run 2b, R23; articleReworkCall); the writer's when absent
  * @returns {Promise<string>} Complete revision prompt
- * @throws {Error} when one of the writer's craft files did not load
+ * @throws {Error} when one of the writer's rule files did not load
  */
 async function buildArticleRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes = [], schema = null) {
   await promptBuilder.requirePhasePrompts('articleGeneration');
@@ -2391,7 +2391,7 @@ function createMockPromptBuilder() {
     // and the article's reworks open their rules with.
     themeName: 'journalist',
 
-    // Brief 2.3: the reworkers check their writer's craft files and build from the
+    // Brief 2.3: the reworkers check their writer's rule files and build from the
     // writer's section builders. The mock's files always load.
     async requirePhasePrompts() {},
 

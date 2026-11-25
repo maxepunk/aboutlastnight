@@ -146,7 +146,7 @@ const TRUTH_MATERIAL = Object.freeze({
   corrections: '<DIRECTOR_CORRECTIONS>',    // the director's input-review corrections, after the notes (brief 4.7c)
   answers: '<DIRECTOR_ANSWERS>',            // the director's answers at the story meeting (renderDirectorAnswers; brief 4.5)
   stopNotes: `<${DIRECTOR_STOP_NOTES_TAG}>`, // every note the director sent at a stop (renderDirectorStopNotes; brief B, R2)
-  weave: '<SETTLED_WEAVE>',                 // the weave as the director settled it, every question with its answer or none (settledWeaveOf; brief 4.7a)
+  weave: '<SETTLED_WEAVE>',                 // the weave as the director settled it, in the judge's form (settledWeaveOf, reader 'judge'; brief 4.7a, run 2h R46)
   map: `\n${JUDGE_MAP_LABEL}\n`,           // the map as the director left it, its struck beats in leftOut (brief 4.7a)
   directorEdits: "THE DIRECTOR'S EDITS (",  // the director's edits, right after the output judged, when it carries one (renderJudgeDirectorEdits; brief 4.7f)
   epilogue: '<EPILOGUE>',                   // Nova's day, from the director's notes
@@ -1672,7 +1672,7 @@ function buildEvaluationUserPrompt(phase, state, options = {}) {
   switch (phase) {
     case 'arcs': {
       // Phase 4 (brief 4.4): the weave's fact check reads the weave, without its mark,
-      // then what the arc writer read for the truth rules: the verdict beside the
+      // then what the arc writer read for the limits: the verdict beside the
       // director's account of it, the roster with pronouns, the director's notes under
       // the arc writer's own label, and the record with the investigation's timeline. The evidence's
       // sources and the verdict thread are the code checks', and no craft file is read.

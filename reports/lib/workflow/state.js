@@ -954,6 +954,11 @@ const ReportStateAnnotation = Annotation.Root({
    * element the director put in whole that code put back without a photo the article cannot
    * print as code put it back (lib/hand-edit-diff.js standingAfterPass; task 4.5g, fix round
    * 1). checkpointArticle clears it on approve, as do a rollback and a fresh start.
+ *
+ * Phase 18, run 2f (R40): `_articleHandEdits` is first written by the article writer's first
+ * draft (ai-nodes.js stampFromMap): the approved map's headline, its deck and each heading it
+ * gives, whoever wrote them, and the top photo where the director chose it on the map. They are
+ * the director's lines from then on, as the edits made at the desk are.
    *
    * Phase 4 (brief 4.6): `_outlineHandEdits` holds the director's edits on the map, made at
    * every approve and send-back against the writer's last map (`_mapBaseline`;
