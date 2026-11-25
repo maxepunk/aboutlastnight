@@ -274,17 +274,30 @@ const READERS = Object.freeze({
 /** The reader a call that names none gets: the map writer's form. */
 const DEFAULT_READER = 'map';
 
+/** Is `value` a plain object, `{ ... }`: not null, an array, a Map or any other class's instance? */
+function isPlainObject(value) {
+  if (value === null || typeof value !== 'object') return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
 /**
  * The form a reader reads (READERS), failing loud for a reader that is none of the three and for
  * any other option, the retired `withEvidence` among them (R46): a caller still in that shape
- * would otherwise be handed the map's form without a word.
+ * would otherwise be handed the map's form without a word. Options that are not a plain object
+ * (a reader's name passed bare, null, an array) fail loud for the same reason; options left out
+ * (undefined) are the default reader's.
  *
- * @param {Object} options - renderSettledWeave's options
+ * @param {Object} [options] - renderSettledWeave's options
  * @returns {{evidence: boolean, headline: boolean}}
  * @throws {Error}
  */
 function formOf(options) {
-  const given = options && typeof options === 'object' ? options : {};
+  if (options !== undefined && !isPlainObject(options)) {
+    const got = typeof options === 'string' ? JSON.stringify(options) : Object.prototype.toString.call(options);
+    throw new Error(`renderSettledWeave takes { reader } as a plain object, or no options at all (phase 18, run 2h, R46); got ${got}.`);
+  }
+  const given = options || {};
   const others = Object.keys(given).filter((key) => key !== 'reader');
   if (others.length > 0) {
     throw new Error(`renderSettledWeave takes { reader } alone (phase 18, run 2h, R46); got ${others.map((key) => `"${key}"`).join(', ')}. The option "withEvidence" went: the article writer reads { reader: 'article' }.`);

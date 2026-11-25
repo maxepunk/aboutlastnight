@@ -497,6 +497,18 @@ describe("Run 2h: the settled angle, by who reads it (R46, R52)", () => {
     expect(() => settledWeaveOf({ weave: directors() }, { reader: 'outline' })).toThrow(/reader/);
   });
 
+  it('fails loud for options that are not a plain object, where it handed back the map\'s form; none at all is the map\'s', () => {
+    [['article'], [null], [['judge']], [42], [new Map([['reader', 'article']])]].forEach(([options]) => {
+      expect(() => renderSettledWeave(directors(), [], options)).toThrow(/renderSettledWeave takes \{ reader \}/);
+      expect(() => settledWeaveOf({ weave: directors() }, options)).toThrow(/renderSettledWeave takes \{ reader \}/);
+    });
+    const map = renderSettledWeave(directors(), [], { reader: 'map' });
+    expect(renderSettledWeave(directors(), [])).toBe(map);
+    expect(renderSettledWeave(directors(), [], undefined)).toBe(map);
+    expect(renderSettledWeave(directors(), [], {})).toBe(map);
+    expect(settledWeaveOf({ weave: directors() })).toBe(map);
+  });
+
   it("settledWeaveOf reads the weave and the director's edits from a thread's state, in each form", () => {
     const weave = directors();
     const state = { weave, _weaveHandEdits: standingAtMeeting(null, WRITERS, weave) };
