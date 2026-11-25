@@ -832,6 +832,16 @@ function addTracker(page, data, bundle) {
   page.text(textOf(tracker.totalExposed), 'Total Buried');
 }
 
+/**
+ * A mark as the desk lists it where the list names each mark's place (Article.js deskMarksList with
+ * `showWhere`: the marks beside no block, and the fold of those possibly resolved): its words, then
+ * the piece or the line it was about in brackets, the line View.deskNoteLine gives (phase 18, brief
+ * G3). A mark beside a piece is printed beside it, so its place is the piece's.
+ */
+function placedMarkText(mark) {
+  return View.deskNoteLine(mark);
+}
+
 /** The round's record, folded below the article as RevisionDiff renders it (steeringView). */
 function addRoundRecord(page, data, title) {
   page.title(title);
@@ -846,11 +856,18 @@ function addRoundRecord(page, data, title) {
  * The desk's page (spec 6.3): the echo of the settled story, then the article as it will print,
  * piece by piece (printedPlaces), each with the marks deskMarksAt gives it, its sidebar cards
  * under the desk's heading, the writer's money tracker as the desk shows it, the problems the
- * console would refuse before an approve or a send-back (deskProblems), and the marks beside no
- * piece. Below the article, folded: the marks the director's edits may have resolved, the fact
- * check's list, the trace and the round's record. No score is shown.
+ * console would refuse before an approve or a send-back (deskProblems), the lines under the note
+ * box, and the marks beside no piece, each with its place. Below the article, folded: the marks
+ * the director's edits may have resolved, each with its place, the fact check's list, the trace and
+ * the round's record. No score is shown.
+ *
+ * The lines under the note box (phase 18, brief G3), from the console's logic as Article.js reads
+ * them: what a send-back acts on (View.sendBackScopeLine), while the desk holds a mark it is about,
+ * and the line on the director's edits (View.DESK_HAND_EDITS_LINE) when `deskEdited` says the desk
+ * holds an edit of theirs, as Article.js shows it while it does (`hasEdits`). A stored payload
+ * carries no edit made at the desk, so the desk opens without it.
  */
-function deskPage(data, theme) {
+function deskPage(data, theme, deskEdited = false) {
   const H = PAGE_HEADINGS[ARTICLE];
   const bundle = isPlainObject(data.contentBundle) ? data.contentBundle : null;
   if (!bundle) throw new Error("The desk's payload holds no article to page: the article stop always holds its bundle.");
@@ -892,16 +909,20 @@ function deskPage(data, theme) {
   // box; the harness has no note box, so the line gives the note back.
   page.note(View.reworkDidNotRunLine(data.roundDidNotRun, '', 'article'));
 
+  // The lines under the note box, in Article.js's order.
+  page.hint(View.sendBackScopeLine(view.marks));
+  if (deskEdited) page.hint(View.DESK_HAND_EDITS_LINE);
+
   if (view.apart.any) {
     page.title(view.apart.title);
-    view.apart.items.forEach((mark) => page.toned(markTone(mark), mark.text, mark.label));
+    view.apart.items.forEach((mark) => page.toned(markTone(mark), placedMarkText(mark), mark.label));
   }
 
   page.folded(() => {
     if (view.folds.resolved.any) {
       page.title(view.folds.resolved.title);
       page.hint(view.folds.resolved.hint);
-      view.folds.resolved.items.forEach((mark) => page.toned(markTone(mark), mark.text, [mark.label, mark.where].filter(Boolean).join(', ')));
+      view.folds.resolved.items.forEach((mark) => page.toned(markTone(mark), placedMarkText(mark), mark.label));
     }
     if (view.folds.factCheck.any) {
       page.title(view.folds.factCheck.title);
@@ -922,7 +943,7 @@ const PAGES = {
   [ARC_SELECTION]: (data) => meetingPage(data),
   [CHARACTER_IDS]: (data) => characterIdsPage(data),
   [OUTLINE]: (data, options) => mapPage(data, options),
-  [ARTICLE]: (data, { theme }) => deskPage(data, theme)
+  [ARTICLE]: (data, { theme, deskEdited }) => deskPage(data, theme, deskEdited)
 };
 
 /**
@@ -940,12 +961,15 @@ const PAGE_STOPS = Object.freeze(Object.keys(PAGES));
  * @param {string} [options.theme='journalist'] - the session's theme, which words the trace's guidance (traceView)
  * @param {boolean} [options.synopsesOpen=false] - the map's page with every move's synopsis open
  *   (piece 4, R6); every other fold stays folded, and no other stop reads it
+ * @param {boolean} [options.deskEdited=false] - the desk's page while it holds an edit of the
+ *   director's, which shows the line on the director's edits under the note box (phase 18, brief
+ *   G3); no other stop reads it
  * @returns {{stop: string, lines: Array<Object>}|null}
  * @throws when a decision stop's payload holds nothing to page
  */
-function stopPage(stop, data, { theme = 'journalist', synopsesOpen = false } = {}) {
+function stopPage(stop, data, { theme = 'journalist', synopsesOpen = false, deskEdited = false } = {}) {
   if (!Object.prototype.hasOwnProperty.call(PAGES, stop)) return null;
-  return PAGES[stop](isPlainObject(data) ? data : {}, { theme, synopsesOpen });
+  return PAGES[stop](isPlainObject(data) ? data : {}, { theme, synopsesOpen, deskEdited: deskEdited === true });
 }
 
 /**

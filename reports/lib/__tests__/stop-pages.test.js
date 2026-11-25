@@ -724,3 +724,60 @@ describe('piece 3: the meeting prints a connection only while both its threads a
     expect(page(View.flipMeetingThread(out, 't3', true))).toContain(data.weave.connections[0].line);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 18, brief G3: the harness prints the desk the console shows. Each mark the desk lists with
+// its place prints with it, and the two lines under the note box print where Article.js shows
+// them, each read from the console's own logic.
+describe('brief G3: the desk prints each mark with its place, and the lines under the note box', () => {
+  const lineOf = (page, text) => page.lines.find((line) => line.text === text);
+
+  it('prints what a send-back acts on, under the problems and above the marks beside no piece, while a mark it is about shows', () => {
+    const data = deskData();
+    const view = View.deskView(data, data.contentBundle);
+    const scope = View.sendBackScopeLine(view.marks);
+    expect(scope).not.toBe('');
+    const page = stopPage('article', data);
+    expect(lineOf(page, scope)).toMatchObject({ tone: 'hint', folded: false, label: '' });
+    const texts = textsOf(page);
+    expect(inOrder(texts, [...Desk.deskProblems(data.contentBundle).map((problem) => problem.message), scope,
+      ...view.apart.items.map((mark) => mark.text)])).toBe('in order');
+    // A desk with no mark a send-back acts on shows no such line.
+    const quiet = deskData(article(), { factCheck: null });
+    expect(View.sendBackScopeLine(View.deskView(quiet, quiet.contentBundle).marks)).toBe('');
+    expect(textsOf(stopPage('article', quiet))).not.toContain(scope);
+  });
+
+  it("prints the line on the director's edits only while the desk holds an edit of theirs, after the scope line", () => {
+    const data = deskData();
+    expect(textsOf(stopPage('article', data))).not.toContain(View.DESK_HAND_EDITS_LINE);
+    const page = stopPage('article', data, { deskEdited: true });
+    expect(lineOf(page, View.DESK_HAND_EDITS_LINE)).toMatchObject({ tone: 'hint', folded: false });
+    const scope = View.sendBackScopeLine(View.deskView(data, data.contentBundle).marks);
+    expect(inOrder(textsOf(page), [scope, View.DESK_HAND_EDITS_LINE])).toBe('in order');
+    // The words the desk shows count it, as the console shows it.
+    expect(wordsShown('article', data, { deskEdited: true }) - wordsShown('article', data)).toBe(wordCount(View.DESK_HAND_EDITS_LINE));
+  });
+
+  it('prints a mark beside no piece, and one possibly resolved, with its label and its place in brackets, as the desk lists them', () => {
+    const data = deskData();
+    const real = View.deskView(data, data.contentBundle);
+    const gone = { key: 'mark-90', tone: 'concern', label: 'Concern about your line', text: 'The heading names a motive.', where: 'the heading of The Story', anchor: null };
+    const resolved = { key: 'mark-91', tone: 'advisory', label: 'Fact check, advisory', text: 'A dash in the prose.', where: 'paragraph 1 of The Story', anchor: null };
+    const spy = jest.spyOn(View, 'deskView').mockImplementation(() => ({
+      ...real,
+      apart: { ...real.apart, any: true, items: [...real.apart.items, gone] },
+      folds: { ...real.folds, resolved: { ...real.folds.resolved, any: true, items: [resolved] } }
+    }));
+    try {
+      const page = stopPage('article', data);
+      expect(lineOf(page, View.deskNoteLine(gone))).toMatchObject({ tone: 'concern', label: gone.label, folded: false });
+      expect(View.deskNoteLine(gone)).toBe('The heading names a motive. (the heading of The Story)');
+      expect(lineOf(page, View.deskNoteLine(resolved))).toMatchObject({ tone: 'mark', label: resolved.label, folded: true });
+      // A mark with no place prints its words alone.
+      real.apart.items.forEach((mark) => expect(lineOf(page, mark.text)).toMatchObject({ label: mark.label }));
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
