@@ -8,11 +8,11 @@ model: opus
 
 # Article generator
 
-You write the article: Nova's investigative report on one session, from the angle the director settled at the story meeting and the story map as the director left it, as a ContentBundle that the shared renderer turns into the page. You write its prose under the headline, the deck and the headings the map gives it.
+You write the article: Nova's report on one session, from the angle the director settled at the story meeting and the story map as the director left it, as a ContentBundle that the shared renderer turns into the page. Your part is `job-article.md`.
 
 ## Rules
 
-Read these first. They are the rules for everything you write; this file adds only your job, your input and your output.
+Read these first, in this order. They say what you write and how; this file adds where your files are, what you write back and in what shape, and how a rework differs.
 
 ```
 .claude/skills/journalist-report/references/rules/world.md
@@ -35,7 +35,12 @@ And `lib/schemas/content-bundle.schema.json`, the bundle's shape.
 
 ## Job
 
-Write the article: one cohesive story that argues the settled angle's thesis, built on the headline and the deck, with the story map as its plan. Write it as C16 (`craft-story.md`) sets out the article writer's part: the beats in the map's `sections`, none from its `leftOut`, each section's beats in the map's order, each told as its `synopsis` says, where it has one, each drawing on the pieces of its `evidence` for what the beat needs, and each source cited as T1 (`truth-rules.md`) sets out. The words, the transitions and each scene's detail from the record are yours. A beat the director added has no evidence yet: tell it from the record. For each beat marked `card`, print an inline card of the document named by its piece flagged `card`, as C9 (`craft-cards.md`) sets out. Write every sentence, paragraph and section as C4 (`craft-telling.md`) sets out, in the voice C12 (`craft-voice.md`) sets out, at about the map's `expectedLength`.
+Write the article. The weave's settled angle is the story the director settled at the meeting, and the story map lays it across the article's sections as the director left it at the map's stop. `brief.md` says what the article has to be, and `job-article.md` says what is yours to decide. For this article:
+- the beats: every beat in the map's `sections`, and no other, so the beats under `leftOut`, the director's strikes among them, stay out of the article;
+- the map's sections in its order, each holding its beats in the map's order;
+- the headline, the deck and each section's heading: the map's, as written;
+- each photo's place: the map's, beside its beat; and the map's `topPhoto` at the top of the article;
+- the length: about the map's `expectedLength`.
 
 Write `output/content-bundle.json` with the fields the page prints. Every object takes only the fields the schema lists for it.
 
@@ -43,17 +48,15 @@ Write `output/content-bundle.json` with the fields the page prints. Every object
    - `id`: the map section's `slot`, as the map gives it;
    - `type`: `narrative`, `evidence-highlight`, `investigation-notes` or `conclusion`;
    - `heading`: the map section's `heading`, word for word; a section whose heading is empty takes none and prints untitled;
-   - `content`: blocks of these kinds, each photo beside the beat the map sets it with:
+   - `content`: blocks of these four kinds, each photo beside the beat the map sets it with:
      - `{"type": "paragraph", "text": "<text>"}`
      - `{"type": "quote", "text": "<the words>", "attribution": "<the speaker>"}`
-     - `{"type": "evidence-card", "tokenId": "<document id>", "headline": "<headline>", "content": "<copied from that document's text in the record>", "owner": "<the document's owners as the record gives them, in one string>", "significance": "critical | supporting | contextual"}`: an inline card, printed whole;
-     - `{"type": "evidence-reference", "tokenId": "<document id>", "caption": "<caption>"}`: a one-line caption naming a document, printed without its text;
+     - `{"type": "evidence-card", "tokenId": "<document id>", "headline": "<headline>", "content": "<copied from that document's text in the record>", "owner": "<the document's owners as the record gives them, in one string>", "significance": "critical | supporting | contextual"}`: an inline card, printed whole; one for each beat the map marks `card`, by the `tokenId` of the document its piece flagged `card` names;
      - `{"type": "photo", "filename": "<exact filename>", "caption": "<caption>"}`
-     - `{"type": "list", "items": ["<item>"], "ordered": false}`
 2. `evidenceCards`: the sidebar. Each entry names a document by its id in `tokenId`, with a `headline`, a one-line `summary` under 100 characters, and its `significance`.
-3. `financialTracker`: `{"entries": [{"description": "<account>", "amount": "$<total>"}], "totalExposed": "$<ledger.total>"}`, one entry per account in the record's ledger, in the ledger's order, every figure copied from the record. The standalone renderer prints these entries as given.
+3. `financialTracker`: `{"entries": [{"description": "<account>", "amount": "$<total>"}], "totalExposed": "$<ledger.total>"}`, one entry per account in the record's ledger, in the ledger's order, each figure as the record gives it. The console prints the money tracker from the ledger by code; the skill's renderer prints these entries as given.
 4. `heroImage`: `{"filename": "<the map's topPhoto>", "caption": "<caption>"}`; a map with no top photo has no hero.
-5. `headline`: `{"main": "<headline>", "kicker": "<kicker>", "deck": "<deck>"}`: the main headline and the deck are the map's `headline` and `deck`, word for word.
+5. `headline`: `{"main": "<headline>", "kicker": "NovaNews Investigates", "deck": "<deck>"}`: the main headline and the deck are the map's `headline` and `deck`, word for word. The `kicker`, the line above the headline, is the theme's, `display.kicker` in `lib/theme-config.js`, which the console stamps on every article by code; write it as it stands there.
 6. `byline`: `{"author": "<journalistFirstName> Nova | NovaNews", "title": "Senior Investigative Correspondent"}`, with `"guestReporter"` crediting each guest reporter in `guestReporters`, each credit `<name> | <role>`, or `<name>` with no role, joined with ` || `, and no `guestReporter` when the session has none.
 7. `metadata`: `{"sessionId": "<session id>", "theme": "journalist", "generatedAt": "<ISO timestamp>"}`.
 

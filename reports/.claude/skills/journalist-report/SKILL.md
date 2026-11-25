@@ -6,7 +6,7 @@ description: |
 
 # NovaNews article, step by step
 
-This skill makes one session's article, with the director deciding at each stop. The rule set in `references/rules/` decides what the article says and how: `world.md` (the game, what each memory became, the record), `truth-rules.md` (T1 to T15), the `craft-*.md` files (C1 to C19) and the mode files `mode-on-site.md` and `mode-remote.md`. Each agent reads the rule files its job needs. This skill holds the steps, the stops and the files passed between them; where anything below differs from the rule set, the rule set decides.
+This skill makes one session's article, with the director deciding at each stop. The rule files in `references/rules/` decide what the article says and how: `world.md` (the world, what became of each memory, and what each thing the writers are given is in the story), `limits.md` (the limits on what the article may claim), `brief.md` (how a reporter approaches this article), `job-weave.md`, `job-map.md` and `job-article.md` (each writer's own part), and `mode-on-site.md` and `mode-remote.md` (where Nova was, one of the two for a session). Each agent lists the rule files it reads, the same files and in the same order as the console's matching call. This skill holds the steps, the stops and the files passed between them; where anything below differs from the rule files, the rule files decide.
 
 The story is settled in stages, as in the console: the record; the weave, two or three angles the article could take over one set of threads, from which the director picks one and settles it at the story meeting; the story map, the settled angle laid across the article's sections, which the director settles at the map's stop; and the article, written from both.
 
@@ -55,13 +55,13 @@ Write `inputs/session-config.json`, with each guest reporter apart in `guestRepo
 ### 2. Copy the session report
 
 Copy the session report's rows into `inputs/orchestrator-parsed.json`, figures and times as written:
-- each exposure, with the name on its turn-in, or anonymous;
+- each exposure, with the name given on its turn-in, or no name given;
 - each sale: its time, amount and account;
 - the first-burial bonus, as one adjustment paid to the account its payment row credits. The game master's setup row and the reversal row on the bonus's holding account are bookkeeping, so leave both out;
 - each transfer, which the report books as two rows, a credit on the receiving account and a debit on the sending account whose detail reads "To<account>". Copy the pair as one adjustment, from the sender to the receiver, at the credit row's time;
 - the Final Standings, each account with its total, without the bonus's holding account.
 
-The report names an anonymous turn-in with a label of one form: the newsroom's name, "NovaNews" or a misspelling of it, followed by "(Anonymous)". The Final Standings list that label too, at zero. The label marks an exposure anonymous and is never an account, so its Final Standings row stays out. An account that a sale, the bonus or a transfer paid stays, whatever its name, "Anonymous" included.
+The report names an anonymous turn-in with a label of one form: the newsroom's name, "NovaNews" or a misspelling of it, followed by "(Anonymous)". The Final Standings list that label too, at zero. The label means no name was given, and it is never an account, so its Final Standings row stays out. An account that a sale, the bonus or a transfer paid stays, whatever its name, "Anonymous" included.
 
 A row that fits none of these, or a figure that looks wrong, goes in `questions`.
 
@@ -134,7 +134,7 @@ Start `journalist-outline-generator`.
 2. the settled story: the story and question of the angle the director sent on, read-only, with the gap line beside it when the map has one;
 3. the settled story's threads, in its order, each by its name;
 4. the headline, the deck and the top photo;
-5. each section in the map's order, under its slot's label: its heading, its job, then its moves in the order the article tells them, each its title (the beat's `move`), its people, the threads it carries by name, "Card" when its evidence prints as a card, and the photos beside it; then the section's photos that sit by themselves;
+5. each section in the map's order, under its slot's label: its heading, its step (the section's `job`), then its moves in the order the article tells them, each its title (the beat's `move`), its people, the threads it carries by name, "Card" when its evidence prints as a card, and the photos beside it; then the section's photos that sit by themselves;
 6. Left out: each move the map leaves out, by its title;
 7. the dropped sections, each with its reason;
 8. what the map changed to fit the meeting's changes, each with its source.
@@ -148,7 +148,7 @@ The director can edit any line, a move's title, summary and people among them; m
 
 ### 10. Write the article
 
-Start `journalist-article-generator`. It writes the article the map plans, from the settled angle and the map as the director left them, each section's beats in the map's order, each as its summary says, where it has one, drawing on its evidence for what the beat needs, and renders `output/article.html`.
+Start `journalist-article-generator`. It writes the article from the settled angle and the map as the director left them, and renders `output/article.html`.
 
 ### 11. Check the article
 

@@ -139,13 +139,13 @@ describe('the stages (phase 4)', () => {
  * - the article generator writes each beat from its evidence and prints a card from its flagged
  *   piece;
  * - no file describes what went: a thread's claim and its receipt, a beat's material, the weave's
- *   old bound and the pages of about 400 and 450 words. The beat kind `receipt` and the craft
- *   file craft-material.md keep their names (the footprint survey's dismissed hits).
+ *   old bound and the pages of about 400 and 450 words. Since phase 18's run 3 the skill names
+ *   neither the beat kind `receipt` nor craft-material.md, the two hits this scan once let pass.
  */
 describe('the story level, with the evidence underneath (phase 4b, piece 1)', () => {
   const { WEAVE_SCHEMA } = require('../../lib/sdk-client/subagents');
   const { MEETING_WORD_BOUND, PICKED_KEY } = require('../../lib/weave');
-  const { MAP_WORD_BOUND, MAP_WORD_AIM, MAP_BEAT_KINDS, directorMapSchemaFor } = require('../../lib/map');
+  const { MAP_WORD_BOUND, MAP_WORD_AIM } = require('../../lib/map');
   const { EVIDENCE_PIECE_SCHEMA, EVIDENCE_SOURCES, EVIDENCE_STANCES } = require('../../lib/evidence');
   const { WEAVE_ANSWER_KEY } = require('../../lib/writer-questions');
   const outlineSchema = require('../../lib/schemas/outline.schema.json');
@@ -195,17 +195,17 @@ describe('the story level, with the evidence underneath (phase 4b, piece 1)', ()
   }
   const atMost = (words) => new RegExp(`\\bat most ${words} words\\b`);
   const aimingFor = new RegExp(`\\baim(?:ing)? for ${MAP_WORD_AIM}\\b`);
-  // Phase 18, run 2b (brief J; R21): the writer's schema no longer holds a beat's kind, and the
-  // skill's schemas.md still lists it until slice G rewrites the skill, so the skill's beat is held
-  // to the director-side schema's, the writer's plus the kind a stored map may hold. Slice G drops
-  // the kind from schemas.md and holds the beat to outlineSchema's again.
-  const BEAT = directorMapSchemaFor('journalist').properties.sections.items.properties.beats.items.properties;
+  // Phase 18, run 2b (brief J; R21): the writer's schema no longer holds a beat's kind. Run 3 (G1):
+  // schemas.md drops it too, so the skill's beat is held to outlineSchema's, the map writer's.
+  const BEAT = outlineSchema.properties.sections.items.properties.beats.items.properties;
   const PIECE = EVIDENCE_PIECE_SCHEMA.properties;
   const SOURCES = ['<document id>', ...Object.values(EVIDENCE_SOURCES)];
 
-  it("the story meeting's page and the arc analyzer hold the meeting's bound", () => {
+  // Phase 18, run 3 (G1): the arc analyzer's task opens as the weave writer's does (WEAVE_TASK),
+  // which gives the writer's own lines and not the page's bound; the test below in "the skill
+  // reads what the pipeline reads" holds that. The stop keeps the page's bound.
+  it("the story meeting's page holds the meeting's bound", () => {
     expect(skillBetween('**Stop: the story meeting.**', '### 9.')).toMatch(atMost(MEETING_WORD_BOUND));
-    expect(section(agent('arc-analyzer'), 'Job')).toMatch(atMost(MEETING_WORD_BOUND));
   });
 
   it("the map's page and the outline generator hold the map's bound and its aim", () => {
@@ -237,7 +237,7 @@ describe('the story level, with the evidence underneath (phase 4b, piece 1)', ()
     expect(piece).not.toBe('');
     expect(keysOf(beat).sort()).toEqual(Object.keys(BEAT).sort());
     expect(keysOf(piece).sort()).toEqual(Object.keys(PIECE).sort());
-    expect(listedIn(beat, 'kind')).toEqual([...MAP_BEAT_KINDS]);
+    expect(keysOf(beat)).not.toContain('kind');
     expect(listedIn(piece, 'sources')).toEqual(SOURCES);
     expect(listedIn(piece, 'stance')).toEqual([...EVIDENCE_STANCES]);
   });
@@ -246,21 +246,19 @@ describe('the story level, with the evidence underneath (phase 4b, piece 1)', ()
     expect(section(agent('outline-generator'), 'Input')).toContain('.claude/skills/journalist-report/references/schemas.md');
   });
 
-  // Phase 17 (brief E; the writing spec's section 4): each beat draws on its evidence for what the
-  // beat needs, as C16 now words the article writer's part, in place of "each written from the
-  // pieces of its `evidence`".
-  it("the article generator draws on each beat's evidence, and prints a card from the flagged piece", () => {
+  // Phase 18, run 3 (G1; R54): how a beat draws on its evidence is job-article.md's to say, so the
+  // agent keeps only the shape: a card block for each beat the map marks, from its flagged piece.
+  it("the article generator prints a card block for each beat the map marks `card`, from its flagged piece", () => {
     const job = section(agent('article-generator'), 'Job');
-    expect(job).toContain('drawing on the pieces of its `evidence` for what the beat needs');
-    expect(job).toContain('print an inline card of the document named by its piece flagged `card`');
+    expect(job).toMatch(/one for each beat the map marks `card`, by the `tokenId` of the document its piece flagged `card` names/);
   });
 
   it.each(NAMES)('%s describes no thread claim or receipt, no beat material, and none of the old bounds', (name) => {
-    const text = FILES[name].split(MAP_BEAT_KINDS.join(' | ')).join('');
+    const text = FILES[name];
     const old = {
       claimField: /["`]claim["`]/,
       receipt: /\breceipts?\b/i,
-      material: /(?<!craft-)\bmaterial\b/i,
+      material: /\bmaterial\b/i,
       weaveBound: /WEAVE_WORD_BOUND/,
       oldPages: /\babout (?:400|450) words\b/
     };
@@ -348,11 +346,10 @@ describe('the map as a corkboard (phase 4b, piece 4)', () => {
     expect(job).toMatch(/in the order the article (?:will )?tells? them/);
   });
 
-  it("the article generator tells each section's beats in the map's order, each as its synopsis says", () => {
-    const job = section(agent('article-generator'), 'Job');
-    expect(job).toMatch(/in the map's order/);
-    // Fix B6: a beat the director added may have no synopsis, as the pipeline's STORY_MAP_LABEL says.
-    expect(job).toContain('as its `synopsis` says, where it has one');
+  // Phase 18, run 3 (G1; R54): how each beat is told, as its synopsis says, is job-article.md's;
+  // the agent keeps the order the map gives, as the pipeline's ARTICLE_TASK does.
+  it("the article generator tells each section's beats in the map's order", () => {
+    expect(section(agent('article-generator'), 'Job')).toMatch(/in the map's order/);
   });
 
   it("the map's stop shows each move with its summary, in the article's order, with both counts", () => {
@@ -513,15 +510,14 @@ describe('your words and the world (phases 14 and 15)', () => {
 /**
  * Phase 17 (brief E; spec docs/superpowers/specs/2026-10-18-the-writing-design.md sections 3, 4,
  * 6 and 8): the standalone path and the docs follow the pipeline.
- * - The article generator writes the article as ARTICLE_TASK frames it: one cohesive story that
- *   argues the settled angle's thesis, built on the headline and the deck, with the map as its
- *   plan, and the prose as C4 and C12 set it out.
- * - The outline generator's only prose is the deck under the settled angle's headline, which it
- *   carries word for word, and the headings, as mapTask (addendum a) gives it; the arc analyzer
- *   writes each angle's headline in the voice.
+ * - The outline generator's only printed lines are the deck under the settled angle's headline,
+ *   which it carries word for word, and the headings, as mapTask (addendum a) gives it.
  * - The guest reporters are a list, `guestReporters`, empty when the session has none (R5).
  * - The deep dive names the rule files it reads (since phase 18, the eight of the brief and the limits).
  * - No file says what gate 5 retires.
+ * Phase 18's run 3 (G1) retired the tests here that pinned the agents' pointers at the craft
+ * rules by number (C4, C12, C16) and G2 moved the deep dive's test from two craft rules' titles to its table of the eight rule files: the rule files
+ * that held them are gone, and the agents now point at brief.md and their own part by name.
  */
 describe('the writing (phase 17)', () => {
   const DOCS = {
@@ -530,35 +526,15 @@ describe('the writing (phase 17)', () => {
     'first-run-sheet.md': read(path.join(REPO, 'docs', 'runbook', 'first-run-sheet.md'))
   };
   const ALL = { ...FILES, ...DOCS };
-  const opening = (name) => {
-    const text = agent(name);
-    return text.slice(text.indexOf('\n# '), text.indexOf('\n## Rules'));
-  };
   const step = (n) => {
     const text = FILES['SKILL.md'];
     return text.slice(text.indexOf(`### ${n}. `), text.indexOf(`### ${n + 1}. `));
   };
 
-  it('the article generator writes one cohesive story on the headline and the deck, with the map as its plan', () => {
-    const job = section(agent('article-generator'), 'Job');
-    expect(job).toContain("Write the article: one cohesive story that argues the settled angle's thesis, built on the headline and the deck, with the story map as its plan.");
-    expect(job).toContain("Write it as C16 (`craft-story.md`) sets out the article writer's part");
-    expect(job).toContain('as C4 (`craft-telling.md`) sets out, in the voice C12 (`craft-voice.md`) sets out');
-  });
-
-  it('the article generator writes the prose under the headline, the deck and the headings the map gives it', () => {
-    expect(opening('article-generator')).not.toMatch(/all of its prose/);
-    expect(opening('article-generator')).toMatch(/under the headline, the deck and the headings the map gives it/);
-  });
-
-  it("the outline generator's only prose is the deck under the settled angle's headline, and each heading, in the voice", () => {
-    const text = opening('outline-generator');
-    expect(text).toContain("The map's only prose is the copy the article prints as you write it: the deck under the settled angle's headline, which the map carries word for word, and each section's heading, written as C5 (`craft-form.md`) sets out, in the voice C12 (`craft-voice.md`) sets out. Every other line stays in story terms.");
-  });
-
-  it("the arc analyzer writes each angle's headline in the voice, and every other line in plain words", () => {
-    expect(opening('arc-analyzer')).toMatch(/each angle's headline in the voice C12 \(`craft-voice\.md`\) sets out/);
-    expect(opening('arc-analyzer')).toMatch(/every other line in plain words/);
+  // Phase 18, run 3 (G1): the map's printed lines as the pipeline's map task names them (lib/prompt-builder.js
+  // mapTask); how each is written is brief.md's and job-map.md's.
+  it("the outline generator's task names the deck and the headings as the only lines the article prints as written", () => {
+    expect(section(agent('outline-generator'), 'Job')).toContain("The only lines on the map that the article prints as you write them are the deck under the settled angle's headline, which the map carries word for word, and each section's heading.");
   });
 
   it('the session config and the record hold the guest reporters as a list, empty when the session has none', () => {
@@ -575,11 +551,6 @@ describe('the writing (phase 17)', () => {
     "%s reads each guest reporter apart (its %s)", (name, heading) => {
       expect(section(agent(name), heading)).toMatch(/each guest reporter, when the session has any/);
     });
-
-  it("SKILL.md's article step draws on each beat's evidence for what the beat needs, as C16 words it", () => {
-    expect(step(10)).toContain('drawing on its evidence for what the beat needs');
-    expect(step(10)).toContain('writes the article the map plans');
-  });
 
   // Phase 18 (run 3, G2): the deep dive's rule files are the eight of phase 18, so this test, which
   // held its rows of the old craft files, holds the new table and the weave writer's fourth section.
@@ -604,6 +575,115 @@ describe('the writing (phase 17)', () => {
       oneGuest: /\bthe guest reporter,? when there is one\b|"guestReporter": \{|\ba guest reporter's name and role\b/i
     };
     Object.entries(old).forEach(([what, pattern]) => expect(`${name}: ${what}: ${pattern.test(ALL[name])}`).toBe(`${name}: ${what}: false`));
+  });
+});
+
+/**
+ * Phase 18, run 3 (brief G1; R53, R54; the brief-and-the-limits spec, sections 7 and 10): the skill
+ * reads what the pipeline reads and asks for the shapes the pipeline asks for.
+ * - Each agent's text keeps what is the skill's alone, and points at its own part by file name
+ *   (job-weave.md, job-map.md, job-article.md) where the pipeline's task points at its tag.
+ * - No line cites a rule by number. The validator's one exception is the list of the fifteen
+ *   limits by code and name, as the judges print it (LIMIT_CODES), since its `rule` field opens
+ *   with a code.
+ * - The arc analyzer's task opens as the weave writer's (WEAVE_TASK), less the sentence on the
+ *   check that counts the words: the skill runs no such check.
+ * - The article's blocks are the four the article writer is offered (WRITER_BUNDLE_SCHEMA), and
+ *   the line above the headline is the theme's (display.kicker), which the console stamps by code
+ *   and the skill's article generator writes as given.
+ * - A section's `job` is its step; a beat carries no kind.
+ * - Gate 6's words and R12's phrases are in no file of the skill.
+ */
+describe('the skill reads what the pipeline reads (phase 18, run 3)', () => {
+  const { _testing: { WEAVE_TASK } } = require('../../lib/workflow/nodes/arc-specialist-nodes');
+  const { WRITER_BUNDLE_SCHEMA } = require('../../lib/prompt-builder');
+  const { LIMIT_CODES } = require('../../lib/workflow/nodes/evaluator-nodes');
+  const { getThemeConfig } = require('../../lib/theme-config');
+  const CHECK_SENTENCE = ' A check counts the words and says when a page runs over.';
+  const LIMITS_LIST = LIMIT_CODES.map(({ code, name }) => `${code} ${name}.`).join(' ');
+  const RULE_NUMBER = /\b[TC]\d{1,2}\b/;
+  const OWN_PART = { 'arc-analyzer': 'job-weave.md', 'outline-generator': 'job-map.md', 'article-generator': 'job-article.md' };
+  /** An agent's text outside its fenced list of rule files. */
+  const prose = (name) => agent(name).replace(/\n```\n[\s\S]*?\n```\n/g, '\n');
+
+  it("the arc analyzer's task opens as the weave writer's does, less the check the skill does not run, and points at job-weave.md", () => {
+    expect(WEAVE_TASK).toContain(CHECK_SENTENCE);
+    const opening = WEAVE_TASK.slice(0, WEAVE_TASK.indexOf(' <job-weave> below says')).replace(CHECK_SENTENCE, '');
+    const job = section(agent('arc-analyzer'), 'Job').trimStart();
+    expect(job.startsWith(opening)).toBe(true);
+    expect(job).toContain('`job-weave.md` says what an angle, a thread and a connection are, and how each line is said. The fields hold them:');
+  });
+
+  it.each(Object.entries(OWN_PART))('%s points at its own part, %s, and at no other writer\'s, outside its list of rule files', (name, file) => {
+    const text = prose(name);
+    expect(text).toContain(`\`${file}\``);
+    Object.values(OWN_PART).filter((other) => other !== file)
+      .forEach((other) => expect(`${name}: ${other}: ${text.includes(other)}`).toBe(`${name}: ${other}: false`));
+  });
+
+  it.each(NAMES)('%s cites no rule by number, outside the validator\'s list of the limits', (name) => {
+    const text = name === 'journalist-article-validator.md' ? FILES[name].split(LIMITS_LIST).join('') : FILES[name];
+    expect(`${name}: ${(text.match(new RegExp(RULE_NUMBER.source, 'g')) || []).join(',')}`).toBe(`${name}: `);
+  });
+
+  it('the validator lists the fifteen limits by code and name, as the judges print them, once', () => {
+    expect(FILES['journalist-article-validator.md'].split(LIMITS_LIST).length).toBe(2);
+    expect(section(agent('article-validator'), 'Job')).toContain(LIMITS_LIST);
+  });
+
+  it("schemas.md gives the validator's rule field as a limit's code, or placed-player", () => {
+    const doc = FILES['schemas.md'];
+    const block = doc.slice(doc.indexOf('### Validation result')).match(/```\n([\s\S]*?)\n```/)[1];
+    const rule = block.match(/"rule": "<([^>]*)>"/)[1];
+    expect(rule).toMatch(/\bcode of the limit\b/);
+    expect(rule).toMatch(/\bplaced-player\b/);
+  });
+
+  it("the article generator offers the four blocks the article writer is offered, and writes the bundle's printed fields", () => {
+    const job = section(agent('article-generator'), 'Job');
+    const offered = WRITER_BUNDLE_SCHEMA.properties.sections.items.properties.content.items.oneOf.map((block) => block.properties.type.const);
+    const content = job.slice(job.indexOf('`content`'), job.indexOf('\n2. '));
+    const kinds = [...content.matchAll(/\{"type": "([a-z-]+)"/g)].map((m) => m[1]);
+    expect([...kinds].sort()).toEqual([...offered].sort());
+    // The skill's renderer reads no ledger, so the agent writes the money tracker the console's code prints.
+    const fields = [...job.matchAll(/^\d\. `([A-Za-z]+)`/gm)].map((m) => m[1]);
+    expect([...fields].sort()).toEqual([...Object.keys(WRITER_BUNDLE_SCHEMA.properties), 'financialTracker'].sort());
+  });
+
+  it("the line above the headline is the theme's, which the article generator writes as given", () => {
+    const kicker = getThemeConfig('journalist').display.kicker;
+    expect(typeof kicker).toBe('string');
+    const job = section(agent('article-generator'), 'Job');
+    expect(job).toContain(`"kicker": "${kicker}"`);
+    expect(job).toContain('`display.kicker` in `lib/theme-config.js`');
+    expect(FILES['schemas.md']).toContain('`display.kicker` in `lib/theme-config.js`');
+  });
+
+  it("a section's job is its step, on the map's stop, in the outline generator's task and in schemas.md", () => {
+    const text = FILES['SKILL.md'];
+    expect(text.slice(text.indexOf('**Stop: the map.**'), text.indexOf('### 10.'))).toMatch(/\bits step\b/);
+    expect(section(agent('outline-generator'), 'Job')).toContain("The job is the section's step, in one sentence of about 25 words at most.");
+    expect(FILES['schemas.md']).toMatch(/A section's `job` is its step/);
+  });
+
+  it('SKILL.md names each of the rule files, and the agents read them from the folder that holds them', () => {
+    fs.readdirSync(RULES_DIR).forEach((file) => expect(`${file}: ${FILES['SKILL.md'].includes(`\`${file}\``)}`).toBe(`${file}: true`));
+  });
+
+  it.each(NAMES)("%s carries none of gate 6's words and none of R12's phrases", (name) => {
+    const words = [
+      'craft-', 'truth-rules', 'T1 to T15', 'C1 to C19', 'reporting-mode block', 'CRAFT GUIDANCE', 'story terms',
+      'the mode block', "the room's verdict", 'exposer', '<truth-rules>', '<craft-'
+    ];
+    const lower = FILES[name].toLowerCase();
+    words.forEach((word) => expect(`${name}: ${word}: ${lower.includes(word.toLowerCase())}`).toBe(`${name}: ${word}: false`));
+  });
+
+  it("the record names a turn-in's name as the writers' record does: name given, or no name given", () => {
+    const doc = FILES['schemas.md'];
+    const block = doc.slice(doc.indexOf('### analysis/evidence-bundle.json')).match(/```\n([\s\S]*?)\n```/)[1];
+    expect(block).toContain('"turnedIn": "no name given | name given: <name>"');
+    expect(block).not.toMatch(/anonymous/i);
   });
 });
 

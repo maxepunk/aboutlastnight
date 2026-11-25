@@ -2,14 +2,14 @@
 
 The shapes of the files the journalist skill's steps pass to one another, under `data/<session-id>/`. Angle brackets hold placeholders, and `a | b` lists the allowed values. The inputs and the record keep every text, name and figure as their source gives it; the record puts logged times on the session clock.
 
-What the article says, and how, is the rule set's (`references/rules/`). Two files take their shape from JSON schemas instead of this page:
+What the article says, and how, is the rule files' (`references/rules/`). Two files take their shape from JSON schemas instead of this page:
 - `analysis/article-outline.json`, the story map: `lib/schemas/outline.schema.json`, with a beat's evidence as "The map" below gives it;
 - `output/content-bundle.json`: `lib/schemas/content-bundle.schema.json`, which `scripts/assemble-article.js` validates.
 
 A **document** is any item of the record, an exposed memory or a piece of paper evidence, named by its `id`.
 
 A **piece of evidence** is one piece of the record a line of the story rests on. A thread, a connection and a beat each carry theirs in `evidence`, each piece with:
-- `sources`: where it comes from, a document by its `id`, `ledger` for a sale, the bonus or a transfer, `evidence-log` for an exposure, or `notes` for the director's own words. A piece that sets two sources side by side names both;
+- `sources`: where it comes from, a document by its `id`, `ledger` for a sale, the bonus or a transfer, `evidence-log` for a memory turned in, or `notes` for the director's own words. A piece that sets two sources side by side names both;
 - `shows`: what it shows, in a short line with the words or figures that matter; a quotation is word for word from its source;
 - `stance`: whether it supports its line or cuts against it.
 
@@ -56,7 +56,7 @@ The session report's rows, figures and times as written.
 
 ```
 {
-  "exposures": [{"memoryId": "<id>", "time": "<as logged>", "turnedIn": "anonymous | named: <name>"}],
+  "exposures": [{"memoryId": "<id>", "time": "<as logged>", "turnedIn": "no name given | name given: <name>"}],
   "sales": [{"time": "<as logged>", "amount": <number>, "account": "<account>"}],
   "adjustments": [{"kind": "bonus | transfer", "time": "<as logged>", "amount": <number>, "from": "<account> | null", "to": "<account>"}],
   "finalStandings": [{"account": "<account>", "total": <number>}],
@@ -108,14 +108,14 @@ One per session photo, the image analyzer's reply; `analysis/image-analyses-comb
   },
   "timeline": [
     {"minute": "<hh:mm AM|PM>", "events": [
-      {"kind": "exposure", "memoryId": "<id>", "turnedIn": "anonymous | named: <name>"},
+      {"kind": "exposure", "memoryId": "<id>", "turnedIn": "no name given | name given: <name>"},
       {"kind": "sale", "amount": <number>, "account": "<account>"},
       {"kind": "bonus", "amount": <number>, "account": "<account>", "loggedTime": "<as logged, only when the shift moved it>"},
       {"kind": "transfer", "amount": <number>, "from": "<account>", "to": "<account>", "loggedTime": "<as logged, only when the shift moved it>"}
     ]}
   ],
   "timeOfDay": "The investigation ran this <morning | afternoon>, from <h:mm> to <h:mm AM | PM>." | null,
-  "whiteboardReading": {"label": "A model's reading of the whiteboard photo: the room's working notes, context only", "text": "<legible text>"} | null,
+  "whiteboardReading": {"label": "A model's reading of the photo of the whiteboard where the people in the warehouse worked out their thinking during the investigation: context for how they reached the verdict, not a source.", "text": "<legible text>"} | null,
   "photos": [{"filename": "<file>", "path": "<local path>", "characters": ["<name>"], "description": "<the director's description>", "excluded": false, "analysis": "<the photo analysis's visualContent>"}],
   "bundledAt": "<ISO timestamp>"
 }
@@ -147,31 +147,33 @@ The arc analyzer writes the weave: two or three angles over one shared set of th
 
 ```
 {
-  "angles": [{"id": "<angle id>", "headline": "<the headline the article would print>", "gist": "<one sentence that sums the angle up, for its card>", "story": "<the story, in two or three sentences>", "question": "<the question the story carries through the article>", "lands": "<why it lands with the players, in one line>", "ends": "<where it ends up, in one line>", "threads": ["<thread id>", "<thread id>"]}],
+  "angles": [{"id": "<angle id>", "headline": "<the headline the article would print>", "gist": "<one sentence that sums the angle up, for its card>", "story": "<the story, in two or three sentences>", "question": "<the question the article asks near its top and answers at its end>", "lands": "<why it lands with the players, in one line>", "ends": "<where it ends up: Nova's answer to the question, in one line>", "threads": ["<thread id>", "<thread id>"]}],
   "fromYourNotes": "<the director's own words angle 1 rests on, copied exactly>",
   "threads": [{"id": "<thread id>", "name": "<what happened, with its people, in a few plain words>", "line": "<the thread in one plain line>", "verdict": true, "evidence": [{"sources": ["<document id> | ledger | evidence-log | notes"], "shows": "<what the piece shows, with the words or figures that matter>", "stance": "supports | cuts-against"}]}],
-  "connections": [{"id": "<connection id>", "joins": ["<thread id>", "<thread id>"], "line": "<where the two threads touch, in one plain line>", "kind": "person | moment | document | line", "evidence": [{"sources": ["<document id> | ledger | evidence-log | notes"], "shows": "<what the piece shows>", "stance": "supports | cuts-against"}]}],
-  "questions": [{"id": "<question id>", "kind": "player | pronoun | figure", "about": "<the player's name; for a figure, the ledger entry's time and amount or the words said in the room>", "question": "<the question>", "changes": "<what its answer changes in print>", "thread": "<the id of the thread its answer changes>", "answer": "<the director's answer, word for word>"}],
+  "connections": [{"id": "<connection id>", "joins": ["<thread id>", "<thread id>"], "line": "<where the two threads connect, in one plain line>", "kind": "person | moment | document | line", "evidence": [{"sources": ["<document id> | ledger | evidence-log | notes"], "shows": "<what the piece shows>", "stance": "supports | cuts-against"}]}],
+  "questions": [{"id": "<question id>", "kind": "player | pronoun | figure", "about": "<the player's name; for a figure, the ledger entry's time and amount or the words someone said>", "question": "<the question>", "changes": "<what its answer changes in print>", "thread": "<the id of the thread its answer changes>", "answer": "<the director's answer, word for word>"}],
   "picked": "<the id of the angle the director picked>",
   "directorChanges": [{"id": "E<n>", "change": "<what the director changed at the story meeting, as they gave it>"}]
 }
 ```
 
-An angle's `threads` are the threads it tells, in the order it tells them, the verdict's thread among them. `fromYourNotes` is there only when angle 1 starts from the director's read, `verdict` only on the thread that carries the room's verdict, and a question's `thread` only when its answer changes that thread; a question without one sits by the pitch. A thread the director adds has an id of its own, a name and a line, and no evidence yet: the outline generator finds its evidence. `picked`, `answer` and `directorChanges` are the director's, written at the story meeting: `picked` on the weave, naming the angle they sent on (with none, angle 1), `answer` on each question they answered, and in `directorChanges` each change they made, under the next id from E1.
+An angle's `threads` are the threads it tells, in the order it tells them, the verdict's thread among them. `fromYourNotes` is there only when angle 1 starts from the director's read, `verdict` only on the thread that carries the verdict, and a question's `thread` only when its answer changes that thread; a question without one sits by the pitch. A thread the director adds has an id of its own, a name and a line, and no evidence yet: the outline generator finds its evidence. `picked`, `answer` and `directorChanges` are the director's, written at the story meeting: `picked` on the weave, naming the angle they sent on (with none, angle 1), `answer` on each question they answered, and in `directorChanges` each change they made, under the next id from E1.
 
 ## The map
 
 ### analysis/article-outline.json
 
-The story map, in the shape of `lib/schemas/outline.schema.json`. Each section's `slot`, and each dropped slot, is one of the journalist theme's slots, `map.slots` in `lib/theme-config.js`. A section's `beats` are in the order the article tells them. The schema leaves a piece of evidence open; a beat, in a section's `beats` or in `leftOut`, is:
+The story map, in the shape of `lib/schemas/outline.schema.json`. Each section's `slot`, and each dropped slot, is one of the journalist theme's slots, `map.slots` in `lib/theme-config.js`. A section's `job` is its step: what the reader learns there about the question, and what that leaves them wanting to know, in one sentence. A section's `beats` are in the order the article tells them. The schema leaves a piece of evidence open; a beat, in a section's `beats` or in `leftOut`, is:
 
 ```
-{"id": "<beat id, its own across the map, such as b1>", "move": "<the move of the story, in a few plain words with its people>", "players": ["<roster player's name>"], "synopsis": "<one sentence, in story terms, saying what the article tells at this move>", "threads": ["<id of a settled angle's thread the move carries>"], "connection": "<id of the connection between two of the settled angle's threads that lands here>", "card": true, "kind": "scene | receipt | line | figure", "evidence": [{"sources": ["<document id> | ledger | evidence-log | notes"], "shows": "<what the piece shows, with the words or figures that matter>", "stance": "supports | cuts-against", "card": true}]}
+{"id": "<beat id, its own across the map, such as b1>", "move": "<the move of the story, in a few plain words with its people>", "players": ["<roster player's name>"], "synopsis": "<one sentence, in the same plain words as the move, saying what the article tells at this beat>", "threads": ["<id of a settled angle's thread the move carries>"], "connection": "<id of the connection between two of the settled angle's threads that lands here>", "card": true, "evidence": [{"sources": ["<document id> | ledger | evidence-log | notes"], "shows": "<what the piece shows, with the words or figures that matter>", "stance": "supports | cuts-against", "card": true}]}
 ```
 
-`connection` is there only on the beat where a connection between two of the settled angle's threads lands. `card` marks a beat whose evidence prints as a card, and then one of its pieces, whose source is the card's document. `kind` is a hint for the article generator; the map's page never prints it. `synopsis` is the move's summary, folded under its title on the map's page. A beat the director adds has an id, a move and its people, a `synopsis` only when they write one, and no evidence yet: the article generator finds its evidence. The director's changes at the map's stop are written into the map: a struck beat moves to `leftOut`, a beat brought back moves into the section the director picks, and a beat moved within its section, or to the foot of another, takes its place in that section's `beats`.
+`connection` is there only on the beat where a connection between two of the settled angle's threads lands. `card` marks a beat whose evidence prints as a card, and then one of its pieces, whose source is the card's document. `synopsis` is the move's summary, folded under its title on the map's page. A beat the director adds has an id, a move and its people, a `synopsis` only when they write one, and no evidence yet: the article generator finds its evidence. The director's changes at the map's stop are written into the map: a struck beat moves to `leftOut`, a beat brought back moves into the section the director picks, and a beat moved within its section, or to the foot of another, takes its place in that section's `beats`.
 
 ## The article
+
+`output/content-bundle.json` takes the shape of `lib/schemas/content-bundle.schema.json`, held to what the console's article writer is offered: a section's `content` holds blocks of four kinds, a paragraph, a quote, an inline card and a photo; and the headline's `kicker`, the line above the headline, is the theme's, `display.kicker` in `lib/theme-config.js`, as it stands there.
 
 ### output/article-metadata.json
 
@@ -188,7 +190,7 @@ The article validator's reply.
 ```
 {
   "passed": <true when mustFix is empty>,
-  "mustFix": [{"rule": "<T1 to T15, or placed-player for a player the map places whom the page never names>", "text": "<the printed words at fault>", "record": "<what the record shows>", "fix": "<the change>"}],
+  "mustFix": [{"rule": "<the code of the limit broken, as the article validator lists them, or placed-player for a player the map places whom the page never names>", "text": "<the printed words at fault>", "record": "<what the record shows>", "fix": "<the change>"}],
   "flags": [{"flag": "em-dash | over-length", "where": "<the section id, or headline>", "text": "<the printed words, or the words per section>"}],
   "narratorWords": {"total": <n>, "bySection": {"<section id>": <n>}}
 }
