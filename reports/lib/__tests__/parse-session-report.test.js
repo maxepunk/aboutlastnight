@@ -238,7 +238,8 @@ describe('the parse prompts in the fiction\'s terms', () => {
     expect(captured).toHaveLength(1);
     expect(captured[0].roster).toEqual(['Vic', 'Alex', 'Randy']);
     expect(captured[0].characters).toEqual(['Vic Kingsley', 'Alex Reeves', 'Morgan Reed']);
-    expect(captured[0].npcs).toEqual(expect.arrayContaining(['Marcus Blackwood', 'Blake', 'Nova']));
+    // Phase 18, run 2h (R51): Blake's full name, as the theme gives it.
+    expect(captured[0].npcs).toEqual(expect.arrayContaining(['Marcus Blackwood', 'Blake Manley', 'Nova']));
   });
 });
 

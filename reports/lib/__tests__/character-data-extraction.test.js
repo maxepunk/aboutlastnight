@@ -206,7 +206,8 @@ describe('extractCharacterData', () => {
     test('describes Blake by the canon line, not as "the Black Market operator"', async () => {
       const prompt = await promptOf();
       expect(prompt).not.toMatch(/Black Market/i);
-      expect(prompt).toContain('Blake: manages operations at NeurAI; Marcus called Blake his Valet');
+      // Phase 18, run 2h (R51): the canon line names Blake by the full name, Blake Manley.
+      expect(prompt).toContain('- Blake Manley: manages operations at NeurAI; Marcus called Blake his Valet\n');
     });
   
     // Phase 3 (3.2; M26): the NPC lines are theme-config's canon, stated once there

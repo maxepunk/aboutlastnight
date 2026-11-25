@@ -271,3 +271,18 @@ describe('one field of the map', () => {
     expect(renders['map writer'].prompt).not.toContain('live connection');
   });
 });
+
+describe("R51: Blake's full name, in the journalist theme only", () => {
+  const blake = (theme) => getThemeNPCEntries(theme).find((entry) => entry && entry.name === 'Blake');
+
+  it('is Blake Manley for the journalist, and the parked theme keeps its own', () => {
+    expect(blake('journalist').fullName).toBe('Blake Manley');
+    expect(blake('detective').fullName).toBe('Blake');
+  });
+
+  it("the list of names prints it beside Blake's role, and the alias still names Blake", () => {
+    ['weave writer', 'map writer', 'article writer'].forEach((name) => {
+      expect(whole(name)).toContain('\n- Blake Manley - manages operations at NeurAI; Marcus called Blake his Valet\n');
+    });
+  });
+});

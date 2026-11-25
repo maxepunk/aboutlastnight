@@ -42,7 +42,8 @@ describe('generateRosterSection (journalist)', () => {
 
   it('lists Blake once, in the NPC block, with no pronoun (the canon states none)', () => {
     const blake = linesOf(section).filter((l) => /\bBlake\b/.test(l));
-    expect(blake).toEqual(['- Blake - manages operations at NeurAI; Marcus called Blake his Valet']);
+    // Phase 18, run 2h (R51): by the full name the theme gives.
+    expect(blake).toEqual(['- Blake Manley - manages operations at NeurAI; Marcus called Blake his Valet']);
   });
 
   it('gives a roster character its captured pronoun', () => {

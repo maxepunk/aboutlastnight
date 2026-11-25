@@ -594,11 +594,14 @@ const REPO = path.join(__dirname, '..', '..');
  *   follow it (+261), and the map as shown holds no dropped (-198; the fixture's map has no
  *   gapNote): arcs-journalist 12831 -> 13031 (+200), outline-journalist 25089 -> 25571 (+482),
  *   article-journalist 26387 -> 27260 (+873).
+ * - Phase 18, run 2h, slice W (R51), Blake's full name in the journalist theme is Blake Manley, so
+ *   the list of names every writer reads prints it (+7): arcs-journalist 13031 -> 13038,
+ *   outline-journalist 25571 -> 25578, article-journalist 27260 -> 27267.
  */
 const PINNED = {
-  'outline-journalist': ['ad4ebd8c0dade3785ad4339b5936c73889cfe5e367637a29a42dfd6d3adf41f5', 25571],
-  'article-journalist': ['5dc3eae4f24f04c518d869d98b6fb4a199ba140bc7c5f7dbb4862498ad0ee0af', 27260],
-  'arcs-journalist': ['127f4fbcc52bbbaf0def5dde9085b6c51871a44d644622dd47bec4c3a0324dee', 13031]
+  'outline-journalist': ['cc86ac423b57bc64366f1f266eeedd3dc232f0725e646936b7b7d5c8d64c463e', 25578],
+  'article-journalist': ['1af0ba0f57746a4a0b9a08481feca2c661f24b3384256752fb5247ec80c7f16f', 27267],
+  'arcs-journalist': ['6456b789025a9e9d9dbb85d62947735299b005fa5064bbcd17dd5fd95f0c0da5', 13038]
 };
 
 describe('the writers send exactly what they sent before the reworkers were built from them', () => {

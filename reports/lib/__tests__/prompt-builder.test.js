@@ -1479,7 +1479,8 @@ describe('phase 3 (3.2): the journalist writers read the rule set', () => {
 
     it('gives Marcus he/him and the canon line, and invents nothing for Blake', () => {
       expect(lines.filter((l) => l.startsWith('- Marcus'))).toEqual(['- Marcus Blackwood (he/him) - the man whose death is being investigated']);
-      expect(lines.filter((l) => l.startsWith('- Blake'))).toEqual(['- Blake - manages operations at NeurAI; Marcus called Blake his Valet']);
+      // Phase 18, run 2h (R51): the full name the theme gives, Blake Manley, with no pronoun.
+      expect(lines.filter((l) => l.startsWith('- Blake'))).toEqual(['- Blake Manley - manages operations at NeurAI; Marcus called Blake his Valet']);
     });
 
     it("prints \"pronoun not given\" for a roster character with none captured, and keeps the director's they/them", () => {

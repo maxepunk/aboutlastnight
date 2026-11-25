@@ -93,6 +93,11 @@ const THEME_CONFIGS = {
     //   first name with it), so the mark does not repeat it (the final fix wave, K4).
     // - inTheRoom: on site only, SESSION_FACTS' line beside Blake's (the final fix wave, K1),
     //   which points at the part about this session rather than restating it.
+    //
+    // Phase 18, run 2h (R51): Blake's surname is Manley, the director's word. Every reader of
+    // `fullName` prints it (the list of names each writer and judge reads, the character
+    // extraction's canon lines, the whiteboard parse's names); every check reads `name`, so
+    // "Blake" alone stays right.
     npcs: [
       { name: 'Marcus', fullName: 'Marcus Blackwood', pronouns: 'he/him', role: 'the man whose death is being investigated' },
       {
@@ -109,7 +114,7 @@ const THEME_CONFIGS = {
           inTheRoom: 'Nova was in the warehouse too, working on the story, as the part about this session sets out.'
         }
       },
-      { name: 'Blake', fullName: 'Blake', role: 'manages operations at NeurAI; Marcus called Blake his Valet' },
+      { name: 'Blake', fullName: 'Blake Manley', role: 'manages operations at NeurAI; Marcus called Blake his Valet' },
       { name: 'Valet', aliasOf: 'Blake', role: 'alias for Blake' }
     ],
 
