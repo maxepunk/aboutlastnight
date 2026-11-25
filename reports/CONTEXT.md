@@ -49,7 +49,7 @@ The character whose memory it is: the point of view the memory records. The arti
 _Avoid_: author, source
 
 **Exposer**:
-The player who turned a memory in to Nova. Anonymous unless the evidence log carries a name or the director's own words (the notes, a correction at the input review, the accusation as written, an answer at the story meeting, or a note sent at a stop) record who turned it in. A name on a turn-in is the player taking public credit: an honest attribution, which the article may print. Never assumed to be the owner.
+The player who turned a memory in to Nova. The code's word; the rule files and the writers say "the person who turned it in". Anonymous unless the evidence log carries a name or the director's own words (the notes, a correction at the input review, the accusation as written, an answer at the story meeting, or a note sent at a stop) record who turned it in. A name on a turn-in is the player taking public credit: an honest attribution, which the article may print. Never assumed to be the owner.
 _Avoid_: source, submitter
 
 **Ledger**:
@@ -81,7 +81,7 @@ One writer pass on an existing output. A send-back, a failed check or a failed e
 _Avoid_: revision, regeneration (a rework starts from the existing output; a rebuild does not)
 
 **Evaluation**:
-The model's rubric-scored opinion of an output, produced before the director sees it.
+A judge's check of an output against the limits, scored by criterion, produced before the director sees it. Each finding is a place where a limit is broken, and it opens with the code of the limit it breaks, as the judges' list of the limits gives each code beside its name. A rework reads the limit's name in place of the code.
 _Avoid_: review, verdict, validation, evaluator feedback
 
 **Review**:
@@ -97,11 +97,27 @@ A journalist working the room who shares Nova's byline for what they contributed
 _Avoid_: co-author, second reporter
 
 **Writer**:
-The model pass that produces the arcs, the outline or the article.
+The model pass that produces the weave, the story map or the article. Each reads the world and the limits, then the brief and its own part.
 _Avoid_: generator, agent, model, Nova (the reporter persona, not the pass)
 
+**Brief**:
+How a reporter approaches this article, with the reasons: what the article is, the one question it asks and answers, the steps between, what a section is, the threads and a place for everyone. The three writers read it, the same text, before their own part. `brief.md` in the rules folder.
+_Avoid_: craft rules, guidance, style guide
+
+**Limits**:
+The fifteen limits on what the article may claim, each named by its lead-in: what can be stated as fact, the verdict, sold memories, whose account it is, the money, who made a memory public, three stretches of time, Nova takes no side, pronouns, how many people, characters never the players, quotes are exact, photos, nothing from outside the story, and the fixed facts. Every writer and both judges read them, after the world. The judges score them and nothing else. `limits.md` in the rules folder.
+_Avoid_: truth rules, rule numbers in anything a writer reads
+
+**Own part**:
+The short text on one writer's work, read right after the brief by that writer alone: the weave writer's (`job-weave.md`), the map writer's (`job-map.md`) and the article writer's (`job-article.md`). It says what that writer's part of the work is, what was settled before it, and who works from it after.
+_Avoid_: job description, craft file
+
+**Exposed, buried**:
+The code's words for what became of a memory: exposed, turned in to Nova and its summary put up on the Evidence Board; buried, sold to be erased. The rule files and the writers say "made public" and "sold", and print no code word.
+_Avoid_: exposed and buried in anything a writer reads
+
 **Beat**:
-One move of the story on the story map: a few words in story terms, the people in it, the threads it carries, one sentence on what the article tells there, and the evidence under it. On the map's page it is a move, and its words are its title. The article writer tells every beat in the map's order, as its sentence says, where it has one, drawing on its evidence for what the beat needs, and adds none.
+One move of the story on the story map: a few plain words, the people in it, the threads it carries, one sentence on what the article tells there, and the evidence under it. On the map's page it is a move, and its words are its title. The article writer tells every beat in the map's order, as its sentence says, where it has one, drawing on its evidence for what the beat needs, and adds none.
 _Avoid_: point, item, paragraph plan
 
 **Photo description**:
@@ -117,11 +133,11 @@ One thread of the session's story, a line of it: an idea about what happened or 
 _Avoid_: storyline
 
 **Weave**:
-What the arc writer brings to the story meeting: the angles, the threads they draw on, and the connections where the threads touch, each said in story terms with its evidence underneath. The settled weave is the angle the director settled, with its threads, the threads it leaves out by name, and the connections between its threads.
+What the arc writer brings to the story meeting: the angles, the threads they draw on, and the connections where the threads touch, each said in plain words with its evidence underneath. The settled weave is the angle the director settled, with its threads, the threads it leaves out by name, and the connections between its threads.
 _Avoid_: interweaving plan, structure
 
 **Connection**:
-A point where two threads touch, said in story terms: a shared person, a moment, a document or a line, with the evidence that shows it underneath. A cause counts as a connection only when the record shows it.
+A point where two threads touch, said in plain words: a shared person, a moment, a document or a line, with the evidence that shows it underneath. A cause counts as a connection only when the record shows it.
 _Avoid_: bridge, link, callback
 
 **Verdict**:
@@ -137,7 +153,7 @@ The question that carries the thesis. It opens early and runs through every sect
 _Avoid_: thread (an arc), theme
 
 **Convergence**:
-The point near the end where the threads meet and the thesis lands. Each angle says where it ends up in a line of story terms; the article says it once and sharply, in this session's names and sums.
+The point near the end where the threads meet and the thesis lands. Each angle says where it ends up in a plain line; the article says it once and sharply, in this session's names and sums.
 _Avoid_: climax, resolution, payoff (a detail planted early coming back)
 
 **Whiteboard**:
@@ -149,15 +165,23 @@ The arc stop, where the director picks one of the angles the arc writer pitches 
 _Avoid_: story memo, arc cards, arc analysis
 
 **Story map**:
-The outline: the settled angle laid across the article's sections, in story terms, with each beat's evidence underneath. Under the headline, the deck and the settled story, each section has its job, its beats in the order the article tells them, and its photos; sections the story does not need are dropped, and the beats left out are listed. On screen it is a corkboard: a column for each section and a card for each beat. Length comes from what is on the map, not from a budget per section.
+The outline: the settled angle laid across the article's sections, in plain words, with each beat's evidence underneath. Under the headline, the deck and the settled story, each section has its step, its beats in the order the article tells them, and its photos; sections the story does not need are dropped, and the beats left out are listed. On screen it is a corkboard: a column for each section and a card for each beat. Length comes from what is on the map, not from a budget per section.
 _Avoid_: outline structure, allocation, section plan, script
+
+**Step**:
+A section's step in the argument: one plain sentence saying what the reader learns there about the question, and what that leaves them wanting to know. Read in order, the steps are the article's argument from the question to the answer. The map holds it as the section's `job`, and the map's page labels it "Step".
+_Avoid_: topic, section summary, job (the field's name, not the word for it)
+
+**Director's lines**:
+The lines that count as the director's own, which no automatic pass changes: every edit the director makes at a stop, and, from the approval of the map, the map's headline, the line under it and each section's heading, whoever wrote them. A judge's finding in one is a concern for the director, never a rework. Only a send-back's rework may change one, and it says why.
+_Avoid_: locked lines, protected text
 
 **Reweave**:
 The rework of the story meeting after the director changes the angle they have open: its pitch, which threads are in, a thread's words, or a thread they added. The writer fits the changes into that angle, keeps every line the director wrote, and leaves the other angles as they were.
 _Avoid_: rebuild, regenerate
 
 **Evidence**:
-What gets cited. A piece of evidence is a memory, a paper document, a ledger line, an exposure in the evidence log, or something the director's own words record from the room (their notes, their corrections and their answers at the story meeting, as T1 sets out). Each piece names its source or sources, says in a short line what it shows, with the words or figures that matter, and is marked as supporting its line or cutting against it; a piece that sets two sources side by side names both. One thread draws on many pieces, and one piece can serve several threads. The evidence travels under each thread, connection and beat to the article writer, which draws on it and cites what it prints. The writers choose it; the director sees it only by opening a line, and never edits it.
+What gets cited. A piece of evidence is a memory, a paper document, a ledger line, an exposure in the evidence log, or something the director's own words record from the room (their notes, their corrections and their answers at the story meeting, as the limit on what can be stated as fact sets out). Each piece names its source or sources, says in a short line what it shows, with the words or figures that matter, and is marked as supporting its line or cutting against it; a piece that sets two sources side by side names both. One thread draws on many pieces, and one piece can serve several threads. The evidence travels under each thread, connection and beat to the article writer, which draws on it and cites what it prints. The writers choose it; the director sees it only by opening a line, and never edits it.
 _Avoid_: sources (what a piece names), citation (the line on an evidence card)
 
 **Evidence card**:

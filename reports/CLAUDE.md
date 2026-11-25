@@ -90,11 +90,11 @@ Each file below holds the full account of its part, moved verbatim from this fil
 | Refining published reports | The two-pass fact-check and copy-edit workflow | `refining.md` |
 | Commands | Every command and harness option, with what each does | `commands.md` |
 
-The rules the writers and judges read are model-facing Markdown in `.claude/skills/journalist-report/references/rules/` (`world.md`, `truth-rules.md`, the eight `craft-*.md` files and the two mode files).
+The rules the writers and judges read are eight model-facing Markdown files in `.claude/skills/journalist-report/references/rules/`: `world.md` and `limits.md`, which every writer and judge reads; `brief.md`, which the three writers read; `job-weave.md`, `job-map.md` and `job-article.md`, each writer's own part; and `mode-on-site.md` and `mode-remote.md`, where Nova was this session. `RULE_SET_CALLS` in `lib/rule-set.js` gives what each call reads (`prompts.md`).
 
 ## Rules every change keeps
 
-- **The director's edits are final.** An automatic pass never changes a line the director wrote: code puts back what a pass changed (`settleEdits`), and a judge's finding located in the director's text is a concern, never a rework. Only a send-back's rework may change an edit, and it says why. (`director-edits.md`)
+- **The director's edits are final.** An automatic pass never changes a line the director wrote: code puts back what a pass changed (`settleEdits`), and a judge's finding located in the director's text is a concern, never a rework. Only a send-back's rework may change an edit, and it says why. The map's headline, its deck and each section's heading count as the director's lines at the article once the map is approved, whoever wrote them (`stampFromMap`). (`director-edits.md`, `article.md`)
 - **One rule, one function.** A reading many parts share lives in one function that every reader calls, such as `photoKey`, `isPhotoExcluded`, `settledAngleOf`, `stopRoundOf`, `recordDocumentOf` and `DIRECTOR_WORDS_SOURCES`. Where the console keeps its own copy of a server rule, a test holds the two equal. Extend the one function; never write a second reading.
 - **A stop's gate and the console decide alike.** Each stop's payload gate on the server and the console's validator for it reach the same decisions, held by corpus tests. Change both together. (`story-meeting.md`, `map.md`, `console.md`)
 - **The record is one section.** Every writer and judge reads the evidence through the record view. A buried memory appears only as a sale; a character sheet never appears. (`prompts.md`)
