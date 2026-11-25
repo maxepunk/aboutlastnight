@@ -152,11 +152,11 @@ Start `journalist-article-generator`. It writes the article from the settled ang
 
 ### 11. Check the article
 
-Start `journalist-article-validator`. When its `mustFix` list holds findings, show them and ask the director whether to send them back to the article generator as a rework or to go on to the stop. That rework gets the `mustFix` list alone: the flags are the director's, shown at step 12. Check every rework again.
+Start `journalist-article-validator`. Each `mustFix` finding's `rule` is a limit's code, which neither the director nor the article generator can look up. Wherever a finding goes from here, to the director or to a rework, its `rule` holds the limit's name in place of its code, from the list of the limits in `.claude/agents/journalist-article-validator.md`; `placed-player` stays as it is. When the `mustFix` list holds findings, show them and ask the director whether to send them back to the article generator as a rework or to go on to the stop. That rework gets the `mustFix` list alone: the flags are the director's, shown at step 12. Check every rework again.
 
 ### 12. Stop: the article, and publish
 
-Show the director the validation result, its flags included, and the page. The copy in the session folder shows no photos; the published copy does. A send-back is a rework of step 10.
+Show the director the validation result, its findings under the limits' names and its flags included, and the page. The copy in the session folder shows no photos; the published copy does. A send-back is a rework of step 10.
 
 On approval, publish:
 - `output/article.html` as `outputs/report-<session-id>.html`;

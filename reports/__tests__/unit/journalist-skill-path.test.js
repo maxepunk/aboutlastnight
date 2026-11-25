@@ -679,6 +679,22 @@ describe('the skill reads what the pipeline reads (phase 18, run 3)', () => {
     words.forEach((word) => expect(`${name}: ${word}: ${lower.includes(word.toLowerCase())}`).toBe(`${name}: ${word}: false`));
   });
 
+  // Run 3, fix round 1, finding 1: the head shows no rework and no director a rule by number
+  // (withLimitNames; the desk strips the code), and limits.md carries no codes, so step 11 hands
+  // each must-fix finding on under the limit's name, from the validator's list, the one place.
+  it("step 11 shows the director, and hands a rework, each finding under the limit's name from the validator's list", () => {
+    const text = FILES['SKILL.md'];
+    const step11 = text.slice(text.indexOf('### 11.'), text.indexOf('### 12.'));
+    expect(step11).toContain("its `rule` holds the limit's name in place of its code");
+    expect(step11).toContain('the list of the limits in `.claude/agents/journalist-article-validator.md`');
+    expect(step11).toContain('`placed-player` stays as it is');
+    const step12 = text.slice(text.indexOf('### 12.'), text.indexOf('## When a step fails'));
+    expect(step12).toContain("its findings under the limits' names");
+    const generator = agent('article-generator');
+    expect(section(generator, 'Input')).toContain("its must-fix findings, which your task gives, each under the name of the limit it breaks");
+    expect(generator).not.toMatch(/"rule"|limit's code/);
+  });
+
   it("the record names a turn-in's name as the writers' record does: name given, or no name given", () => {
     const doc = FILES['schemas.md'];
     const block = doc.slice(doc.indexOf('### analysis/evidence-bundle.json')).match(/```\n([\s\S]*?)\n```/)[1];

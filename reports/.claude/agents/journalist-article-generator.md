@@ -29,7 +29,7 @@ From `data/<session-id>/`:
 - `analysis/article-outline.json`: the story map as the director left it at the map's stop, each beat with its evidence;
 - `analysis/evidence-bundle.json`: the record, whose documents are its exposed memories and its paper evidence, with the ledger, the photos and the session's facts: when the investigation ran (`timeOfDay`), Nova's first name for the session and each guest reporter, when the session has any;
 - `inputs/director-notes.json`: the director's words, the notes and every stop note;
-- on a rework, also `output/content-bundle.json` and `output/article-metadata.json`, the version the rework starts from, and, when the validator set the rework off, its must-fix findings.
+- on a rework, also `output/content-bundle.json` and `output/article-metadata.json`, the version the rework starts from, and, when the validator set the rework off, its must-fix findings, which your task gives, each under the name of the limit it breaks.
 
 And `lib/schemas/content-bundle.schema.json`, the bundle's shape.
 
