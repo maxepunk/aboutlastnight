@@ -61,9 +61,19 @@ function boldLeadIns(text) {
  */
 const LIMITS_LINE = 'T1 What can be stated as fact. T2 The verdict. T3 Sold memories. T4 Whose account it is. T5 The money. T6 Who made a memory public. T7 Three stretches of time. T8 Nova takes no side, with the part about this session. T9 Pronouns. T10 How many people. T11 Characters, never the players. T12 Quotes are exact. T13 Photos. T14 Nothing from outside the story. T15 Fixed facts.';
 
-/** The two paragraphs run 2c adds after "One breach fails it", word for word (the wording doc's part 7). */
-const BREACH_LINE = "A breach is something you can show: the sentence, and what in the record or the director's words it goes against. A line you only doubt is not a breach. A plain statement of what Nova thinks is Nova's opinion, and it needs no label to pass.";
-const WORDS_LINE = "The director's words are the director's notes, the corrections at the input review, the accusation as the director wrote it, the answers at the story meeting and the notes at the stops.";
+/**
+ * The two paragraphs run 2c adds after "One breach fails it", word for word, as run 2h rewords them
+ * (the wording doc's part 10: a breach can go against the limit itself, doubt is read by how a line
+ * is said, and a line the director wrote or changed counts with the director's words).
+ */
+const BREACH_LINE = "A breach is something you can show: the sentence, and what it goes against, in the record, in the director's words or in the limit itself. A line you only doubt is not a breach. A line that shows by how it is said that it is what Nova suspects, asks or believes needs no label to pass.";
+const WORDS_LINE = "The director's words are the director's notes, the corrections at the input review, the accusation as the director wrote it, the answers at the story meeting and the notes at the stops. A line the director wrote or changed, marked as theirs, counts with them.";
+
+/** Run 2h (the wording doc's part 10): the line after the list, on the limits no question of the judge scores. */
+const UNASKED = {
+  article: 'No question below asks about the head count. Code checks it.',
+  arcs: 'No question below asks about the head count, photos or words from running the game. Code checks the first, and the other two are checked on the article.'
+};
 
 const RULE = '═══════════════════════════════════════════════════════════════════════════';
 
@@ -120,10 +130,11 @@ describe('R8: the judges\' list of the limits', () => {
     });
   });
 
+  // Run 2h: the line on the limits no question scores follows the list (judge-lines.test.js derives it).
   it.each(['arcs', 'article'])('the %s judge prints its list once, as one line, right under its heading', (phase) => {
     const system = systemFor(phase, stateFor());
     expect(count(system, LIMITS_LINE)).toBe(1);
-    expect(system).toContain(`${RULE}\nTHE LIMITS (MUST PASS: a breach is a definite error, so the output goes back for a rework)\n${RULE}\n${LIMITS_LINE}\nEach criterion below scores the limits it names by their codes, against the record and the director's words in the evaluation prompt. One breach fails it: score it below 0.8.\n`);
+    expect(system).toContain(`${RULE}\nTHE LIMITS (MUST PASS: a breach is a definite error, so the output goes back for a rework)\n${RULE}\n${LIMITS_LINE}\n${UNASKED[phase]}\nEach criterion below scores the limits it names by their codes, against the record and the director's words in the evaluation prompt. One breach fails it: score it below 0.8.\n`);
     expect(system).not.toContain('TRUTH RULES');
   });
 });
@@ -179,7 +190,8 @@ describe('run 2c: the fixed facts are the first question\'s', () => {
     const { evidenceTruth } = getPhaseCriteria(phase, 'journalist');
     expect(evidenceTruth.rules).toEqual(['T1', 'T3', 'T4', 'T6', 'T15']);
     expect(evidenceTruth.description.endsWith(CLAUSE)).toBe(true);
-    expect(systemFor(phase, stateFor())).toContain(`\n- evidenceTruth (T1, T3, T4, T6, T15; must pass): ${evidenceTruth.description}\n`);
+    // Run 2h (the wording doc's part 10): "must pass" is off each question's line; the heading keeps it.
+    expect(systemFor(phase, stateFor())).toContain(`\n- evidenceTruth (T1, T3, T4, T6, T15): ${evidenceTruth.description}\n`);
   });
 
   it('a finding that opens with T15 is read as the first question\'s: no second line for it, and it holds the output', () => {
@@ -226,7 +238,9 @@ describe('R28: the two judges read the same notes, roster and totals', () => {
     // The block opens on the time-of-day line, as SESSION_FACTS does; the fixture's sale gives one.
     const facts = buildSessionFacts(state);
     expect(typeof facts.timeOfDayLine).toBe('string');
-    const block = `${facts.timeOfDayLine}\n\nSESSION ROSTER (${facts.playerCount} players who were present at this session's investigation):\n${facts.roster.join('\n')}\n\n${getPromptBuilder(null, state)._rosterSection()}`;
+    const block = `${facts.timeOfDayLine}\n\nSESSION ROSTER (${facts.playerCount} players who were present at this session's investigation):\n${facts.roster.join('\n')}\n\n${getPromptBuilder(null, state)._rosterSection({ withCharacterContext: false })}`;
+    // Run 2h (the wording doc's part 10): the roster with pronouns, without the summary of the characters.
+    expect(arcs).not.toContain('CHARACTER CONTEXT');
     expect(count(arcs, block)).toBe(1);
     expect(count(article, block)).toBe(1);
     expect(count(arcs, 'SESSION ROSTER (4 players who were present at this session\'s investigation):')).toBe(1);
@@ -278,9 +292,10 @@ describe("5e: the judges' own instructions", () => {
     const system = systemFor(phase, stateFor());
     expect(system).toContain(`\n\nYour task is to find each place where ${judged} breaks a limit. The world and the limits above are the ones the ${writer} followed: judge ${judged} by them, against the record and the director's words in the evaluation prompt.\n\n`);
     expect(system).toContain('The entry opens with the limits\' codes and a colon, ');
-    // Run 2c (the wording doc's part 7, "What a fix holds"): what the record or the director's words
-    // show instead, and no new sentence; the sample entry follows, as it stood.
-    expect(system).toContain(`, ${FINDING_QUOTE[phase]}, and says what the record or the director's words show instead. Say what is wrong and what is true. Do not write the new sentence. The writer words it, and a sentence you write is printed as it stands.\nT3: "<the text at fault>" states what a sold memory held; the record holds only its sale (<time>, <amount>, <account>). Report the sale instead.\n`);
+    // Run 2c (the wording doc's part 7, "What a fix holds"), as run 2h rewords it (part 10, "What a
+    // finding says"): what is wrong, by the record, the director's words or the limit, and no new
+    // sentence; the sample entry follows, as it stood.
+    expect(system).toContain(`, ${FINDING_QUOTE[phase]}, and says what is wrong: what the record or the director's words show instead, or what the limit rules out. Do not write the new sentence. The writer words it, and a sentence you write is printed as it stands.\nT3: "<the text at fault>" states what a sold memory held; the record holds only its sale (<time>, <amount>, <account>). Report the sale instead.\n`);
     expect(system).not.toContain('names the record it contradicts, and gives the fix');
     expect(system).toContain('EVALUATION RULES:\n1. The truth criteria above are the whole evaluation: each finding is a place where a limit is broken.\n');
     ['breach of the truth rules', 'truth rule', 'opens with the rule ids', 'buried memory said', 'The rules above'].forEach((gone) => {
@@ -309,7 +324,8 @@ describe("5e: the judges' own instructions", () => {
 // lines are printed as given, and a concern about one is the director's; a concern about one of the
 // director's edits names the limit it concerns.
 describe('run 2c: what each judge reads its material as', () => {
-  const WEAVE_OPENING = "Check this weave against the record and the director's words. The weave is the writer's notes to the director. Only an angle's headline is printed. Judge what each line claims, not how it is worded: a line breaks a limit when the article it leads to would state something the record and the director's words do not support. It pitches two or three angles, each a story told through the threads it names, and the director may pick any of them, so check every angle: each line of its pitch against the evidence of its threads. Each thread and each connection carries its evidence: the pieces of the record it rests on, each with its sources, what it shows, and whether it supports the line or cuts against it. Read each line against its evidence, and each piece against the record.";
+  // Run 2h (the wording doc's part 10): the fourth and fifth sentences reworded.
+  const WEAVE_OPENING = "Check this weave against the record and the director's words. The weave is the writer's notes to the director. Only an angle's headline is printed. A line here is a note, so do not hold it to the manner of printed prose. A line breaks a limit when the article it leads to would state as fact something the record and the director's words do not support. The weave pitches two or three angles, each a story told through the threads it names, and the director may pick any of them, so check every angle. The evidence under a line is the first place to look. The record and the director's words decide. Each thread and each connection carries its evidence: the pieces of the record it rests on, each with its sources, what it shows, and whether it supports the line or cuts against it. Read each line against its evidence, and each piece against the record.";
   const MAP_LINE = "The map below is the one the article writer wrote from, as the director left it. The headline, the line under it and each section's heading were settled on it before the article was written, and the writer prints them as given. A concern about one of them is for the director, reported the way a concern about one of the director's edits is. Whether the article follows the map is not yours to judge.";
 
   it("the weave's judge opens on what a weave is, after its first sentence", () => {

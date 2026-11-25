@@ -1291,14 +1291,17 @@ describe('what each judge sees (phase 2, brief 2.4)', () => {
     };
   }
 
-  /** The roster section the article writer's system prompt carries, for this state. */
+  /**
+   * The roster section the article writer's system prompt carries, for this state: without the
+   * summary of the characters (run 2b, R22), the form the judges print since run 2h.
+   */
   function writerRosterSection(state) {
     return createPromptBuilder({
       theme: state.theme,
       sessionConfig: state.sessionConfig,
       canonicalCharacters: state.canonicalCharacters,
       characterData: state.characterData.characters
-    })._rosterSection();
+    })._rosterSection({ withCharacterContext: false });
   }
 
   /** The director's notes with the corrections after them, as every writer renders them. */
@@ -1397,9 +1400,11 @@ describe('what each judge sees (phase 2, brief 2.4)', () => {
         sessionConfig: state.sessionConfig,
         canonicalCharacters: state.canonicalCharacters,
         characterData: state.characterData.characters
-      })._rosterSection();
+      })._rosterSection({ withCharacterContext: false });
 
       expect(prompt).toContain(writerRoster);
+      // Run 2h (the wording doc's part 10): no summary of the characters; the judge has the documents.
+      expect(prompt).not.toContain('CHARACTER CONTEXT');
       expect(prompt).toContain('- Alex → Alex Reeves (she/her)');
       expect(prompt).toContain('- Sam → Sam Thorne (he/him)');
       // The judge is told which characters were this session's players (playersTruth
@@ -1665,11 +1670,14 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
     it.each(['arcs', 'article'])('the %s system prompt lists each truth criterion with its rules, and asks for the sentence and the record', (phase) => {
       const prompt = systemFor(phase, stateFor());
       for (const key of TRUTH_BY_PHASE[phase]) {
-        expect(prompt).toContain(`- ${key} (${TRUTH_GROUPS[key].join(', ')}; must pass):`);
+        // Run 2h (the wording doc's part 10): "must pass" is off each question's line.
+        expect(prompt).toContain(`- ${key} (${TRUTH_GROUPS[key].join(', ')}):`);
       }
       expect(prompt).toContain('THE LIMITS (MUST PASS');
       expect(prompt).toMatch(/opens with the limits' codes and a colon/);
-      expect(prompt).toMatch(/the record it contradicts/);
+      // Run 2h: a finding and a criterion's notes say what is wrong, by the record or the limit.
+      expect(prompt).toMatch(/what the record or the director's words show instead, or what the limit rules out/);
+      expect(prompt).toMatch(/and what is wrong with it/);
     });
 
     // Phase 4: each judge scores the truth criteria alone, and its overallScore comes from
@@ -2261,21 +2269,20 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
   // Brief 4.13 (R14; R1): a judge's prompt is its theme's, and the parked detective, which
   // names no rules folder, has none, so the contract is the journalist's judges' alone.
   describe('the judge\'s output contract asks for the must-fix work only', () => {
-    it('the schema asks for a criterion\'s fix only below the bar, and guidance only for the structural issues', () => {
+    // Run 2h (R49): the judge is no longer asked for numbered steps, which no rework reads.
+    it('the schema asks for a criterion\'s fix only below the bar, and for no numbered steps', () => {
       const { fix } = TRUTH_ONLY_EVALUATION_JSON_SCHEMA.properties.criteriaScores.additionalProperties.properties;
       expect(fix.description).toContain('Only for a score below 0.8');
       expect(fix.description).not.toContain('raise this score');
-      const { revisionGuidance } = TRUTH_ONLY_EVALUATION_JSON_SCHEMA.properties;
-      expect(revisionGuidance.type).toBe('string');
-      expect(revisionGuidance.description).toContain('One step per structural issue');
+      expect(Object.keys(TRUTH_ONLY_EVALUATION_JSON_SCHEMA.properties)).not.toContain('revisionGuidance');
     });
 
-    it.each(['journalist'])('the %s judges\' OUTPUT FORMAT asks for a fix only below the bar and one step per structural issue', (theme) => {
+    it.each(['journalist'])('the %s judges\' OUTPUT FORMAT asks for a fix only below the bar and for no numbered steps', (theme) => {
       for (const phase of ['arcs', 'article']) {
         const prompt = systemFor(phase, stateFor(theme));
         const format = prompt.slice(prompt.indexOf('OUTPUT FORMAT (JSON):'));
         expect([phase, format]).toEqual([phase, expect.stringContaining('"fix": "only for a score below 0.8:')]);
-        expect([phase, format]).toEqual([phase, expect.stringContaining('"revisionGuidance": "one step per structural issue')]);
+        expect([phase, format.includes('revisionGuidance')]).toEqual([phase, false]);
         expect([phase, /optional/i.test(format)]).toEqual([phase, false]);
       }
     });

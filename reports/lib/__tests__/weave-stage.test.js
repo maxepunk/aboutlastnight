@@ -570,8 +570,9 @@ describe('the fact check scores the truth criteria only, for the weave', () => {
   it('its user prompt opens by naming the evidence under each line, and prints it with the weave', () => {
     const prompt = buildEvaluationUserPrompt('arcs', weaveState());
     // Piece 3 (brief 3B; spec 9.2): it names the angles and checks every one. Run 2c (the wording
-    // doc's part 7): after its first sentence, what a weave is to its judge.
-    expect(prompt.split('\n')[0]).toBe("Check this weave against the record and the director's words. The weave is the writer's notes to the director. Only an angle's headline is printed. Judge what each line claims, not how it is worded: a line breaks a limit when the article it leads to would state something the record and the director's words do not support. It pitches two or three angles, each a story told through the threads it names, and the director may pick any of them, so check every angle: each line of its pitch against the evidence of its threads. Each thread and each connection carries its evidence: the pieces of the record it rests on, each with its sources, what it shows, and whether it supports the line or cuts against it. Read each line against its evidence, and each piece against the record.");
+    // doc's part 7): after its first sentence, what a weave is to its judge. Run 2h (part 10): its
+    // fourth and fifth sentences reworded.
+    expect(prompt.split('\n')[0]).toBe("Check this weave against the record and the director's words. The weave is the writer's notes to the director. Only an angle's headline is printed. A line here is a note, so do not hold it to the manner of printed prose. A line breaks a limit when the article it leads to would state as fact something the record and the director's words do not support. The weave pitches two or three angles, each a story told through the threads it names, and the director may pick any of them, so check every angle. The evidence under a line is the first place to look. The record and the director's words decide. Each thread and each connection carries its evidence: the pieces of the record it rests on, each with its sources, what it shows, and whether it supports the line or cuts against it. Read each line against its evidence, and each piece against the record.");
     const weave = prompt.slice(prompt.indexOf('WEAVE:'), prompt.indexOf('THE ACCUSATION'));
     expect(weave).toContain('"evidence": [');
     expect(weave).toContain('"shows": "Marcus on the sale: \\"Worth it. Finally worth it.\\""');
@@ -618,7 +619,8 @@ describe('the fact check scores the truth criteria only, for the weave', () => {
 // seam that chose between them went, with the tests that compared the two contracts.
 describe('the fact check writes to the truth-only contract (fix round 1)', () => {
   const { truthOnlyOutputFormat, TRUTH_ONLY_ADVISORY_WARNINGS, TRUTH_ONLY_EVALUATION_JSON_SCHEMA } = evalTesting;
-  const NOTES = 'the breach: the text at fault, the angle, thread or connection it is in, the piece of evidence where one is at fault, and the record it contradicts';
+  // Run 2h (the wording doc's part 10): a criterion's notes end on what is wrong with the text.
+  const NOTES = 'the breach: the text at fault, the angle, thread or connection it is in, the piece of evidence where one is at fault, and what is wrong with it';
   const systemFor = (phase, theme = 'journalist') => buildEvaluationSystemPrompt(
     phase, getPhaseCriteria(phase, theme), theme, { sessionConfig: weaveState().sessionConfig }
   );
@@ -683,13 +685,14 @@ describe('the fact check writes to the truth-only contract (fix round 1)', () =>
             properties: {
               score: { type: 'number' },
               notes: { type: 'string', description: 'Specific explanation naming the characters, IDs or sections at fault' },
-              fix: { type: 'string', description: `Only for a score below ${STRUCTURAL_PASS_SCORE}: the one concrete action that brings this criterion up to ${STRUCTURAL_PASS_SCORE}` }
+              // Run 2h (the wording doc's part 10): what has to change, with no new sentence.
+              fix: { type: 'string', description: `Only for a score below ${STRUCTURAL_PASS_SCORE}: what has to change, in a few words, with no new sentence` }
             }
           }
         },
-        structuralIssues: { type: 'array', items: { type: 'string' }, description: 'Issues that MUST be fixed, one self-contained sentence each' },
+        // Run 2h: each breach as the prompt describes it, and no numbered steps (R49).
+        structuralIssues: { type: 'array', items: { type: 'string' }, description: 'Each breach, written as described above' },
         advisoryWarnings: { type: 'array', items: { type: 'string' }, description: TRUTH_ONLY_ADVISORY_WARNINGS },
-        revisionGuidance: { type: 'string', description: 'One step per structural issue, each the fix for that issue; empty when there is none' },
         confidence: { type: 'string' }
       },
       required: ['ready', 'overallScore', 'structuralPassed']

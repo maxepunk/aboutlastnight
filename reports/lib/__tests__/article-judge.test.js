@@ -204,9 +204,9 @@ describe('4.7a: the article judge scores the truth criteria alone', () => {
     expect(system.startsWith(`${system.split('\n')[0]}\n\n${loadModeBlock('remote')}\n\n`)).toBe(true);
     expect(count(system, loadRuleSet('judge-article').core)).toBe(1);
     expect(system).toContain('Your task is to find each place where the article breaks a limit. The world and the limits above are the ones the article writer followed: judge the article by them, against the record and the director\'s words in the evaluation prompt.');
-    for (const [key, rules] of Object.entries(ARTICLE_TRUTH)) expect(system).toContain(`- ${key} (${rules.join(', ')}; must pass): `);
+    for (const [key, rules] of Object.entries(ARTICLE_TRUTH)) expect(system).toContain(`- ${key} (${rules.join(', ')}): `);
     expect(system).toContain(TRUTH_ONLY_EVALUATION_RULES);
-    expect(system).toContain('"notes": "the breach: the sentence at fault, its section, and the record it contradicts"');
+    expect(system).toContain('"notes": "the breach: the sentence at fault, its section, and what is wrong with it"');
     // The weighted criteria, the craft findings and the old frame went (spec 6.2).
     ['STRUCTURAL CRITERIA', 'ADVISORY CRITERIA', 'CRAFT FINDINGS', 'IMMUTABLE INPUTS', 'selectedArcs', 'COMPELLING GIFT',
       'weighted average', 'voiceConsistency', 'reporterMode', 'arcThreading', 'emotionalResonance', 'Human always makes final decision',
@@ -404,7 +404,7 @@ describe('4.7a: a theory struck from the map stays out, through the judge', () =
     const map = mapIn(prompt);
     expect(map.sections.flatMap((s) => s.beats).map((b) => b.id)).not.toContain('b7');
     expect(map.leftOut.find((b) => b.id === 'b7')).toEqual(THEORY_BEAT);
-    expect(systemPrompt).toContain(`- verdictTruth (T2; must pass): ${VERDICT_QUESTION}`);
+    expect(systemPrompt).toContain(`- verdictTruth (T2): ${VERDICT_QUESTION}`);
     // The questions that asked for the theories the room debated, or for the map's leftOut, are gone.
     expect(VERDICT_QUESTION).not.toMatch(/theor|leftOut|the map/i);
     expect(systemPrompt).not.toContain('with the alternative theories the room debated reported');
@@ -558,7 +558,7 @@ describe("4.7f: the judge reads the map and the director's edits", () => {
     const edits = prompt.indexOf(TRUTH_MATERIAL.directorEdits);
     expect(edits).toBeGreaterThan(prompt.indexOf('CONTENT BUNDLE:'));
     expect(prompt.slice(edits)).toContain('E1 (section "the-story", evidence-card mor001, cut)');
-    expect(systemPrompt).toContain(`- verdictTruth (T2; must pass): ${VERDICT_QUESTION}`);
+    expect(systemPrompt).toContain(`- verdictTruth (T2): ${VERDICT_QUESTION}`);
   });
 
   it("a theory the director printed from leftOut in their own words: the judge reads their paragraph among the director's edits, and the verdict's question is the limit's", async () => {
@@ -572,6 +572,6 @@ describe("4.7f: the judge reads the map and the director's edits", () => {
     const { systemPrompt, prompt } = sdk.mock.calls[0][0];
     expect(mapIn(prompt).leftOut.filter((beat) => beat.id === 'b7').map((beat) => beat.move)).toEqual([THEORY]);
     expect(prompt.slice(prompt.indexOf(TRUTH_MATERIAL.directorEdits))).toContain(`E1 (section "the-story", paragraph): "${DIRECTORS}"`);
-    expect(systemPrompt).toContain(`- verdictTruth (T2; must pass): ${VERDICT_QUESTION}`);
+    expect(systemPrompt).toContain(`- verdictTruth (T2): ${VERDICT_QUESTION}`);
   });
 });

@@ -197,11 +197,14 @@ describe("R22: the article writer's system prompt holds no character digest", ()
     });
   });
 
-  it("the article judge's roster keeps it, as before", async () => {
+  // Run 2h (the wording doc's part 10): the judges have the documents, so their roster prints
+  // without the summary too, in the article writer's form, and the list of names stays.
+  it("the article judge's roster leaves it out as well, and keeps the list of names", async () => {
     const state = articleState({ contentBundle: clone(PREVIOUS_BUNDLE) });
     const user = await evalTesting.buildEvaluationUserPrompt('article', state, {});
-    expect(user).toContain('CHARACTER CONTEXT');
-    expect(user).toContain('Role: CEO');
+    expect(user).not.toContain('CHARACTER CONTEXT');
+    expect(user).not.toContain('Role: CEO');
+    expect(user).toContain('- Alex → Alex Reeves (he/him)');
   });
 });
 

@@ -687,7 +687,8 @@ function concernLimitCodes(finding) {
  *   A failed truth criterion that no finding names and no concern covers is a must-fix
  *   line (truthIssueLines).
  * - The judge's guidance (one step per structural issue) stays out of the rework when an
- *   issue moved, or when it quotes the director's text: its steps would fix that text.
+ *   issue moved, or when it quotes the director's text: its steps would fix that text. Since
+ *   run 2h (R49) no judge is asked for it, and a verdict with none gives '' (guidanceOf).
  * - Ready: no structural issue remains, and every structural criterion that failed is one
  *   a concern covers (FA, requirement 5). The judge's own structuralPassed does not hold
  *   an output with nothing left to fix (final review, finding 6).
@@ -722,7 +723,7 @@ function guardDirectorEdits({ evaluation, criteria, edits, output, record = [] }
       holding: failedTruth.map(({ key }) => key),
       ready: failedTruth.length > 0 ? false : judgeReady,
       criteriaScores: judged.criteriaScores,
-      revisionGuidance: judged.revisionGuidance
+      revisionGuidance: guidanceOf(judged)
     };
   }
 
@@ -813,8 +814,8 @@ function guardDirectorEdits({ evaluation, criteria, edits, output, record = [] }
     && scoredBelowBar(scores[key])
     && (!covered(key) || kept.some((issue) => leadingRuleIds(issue).some((id) => rulesOf(key).includes(id)))));
 
-  const guidance = judged.revisionGuidance;
-  const guidanceAboutEdits = moved.length > 0 || (typeof guidance === 'string' && quotedEdits(guidance).length > 0);
+  const guidance = guidanceOf(judged);
+  const guidanceAboutEdits = moved.length > 0 || (guidance !== '' && quotedEdits(guidance).length > 0);
 
   return {
     kept,
@@ -827,6 +828,19 @@ function guardDirectorEdits({ evaluation, criteria, edits, output, record = [] }
     criteriaScores,
     revisionGuidance: guidanceAboutEdits ? '' : guidance
   };
+}
+
+/**
+ * A judge's guidance as one text, '' when it wrote none (run 2h, R49). Since run 2h a judge is not
+ * asked for numbered steps, so its verdict holds none and the guard, truthOnlyVerdict and the
+ * evaluator's record carry ''; a verdict that still holds a text (a judge that wrote one unasked)
+ * keeps it as before, and no rework reads it (node-helpers.js buildRevisionContext).
+ *
+ * @param {Object} judged - the judge's output
+ * @returns {string}
+ */
+function guidanceOf(judged) {
+  return typeof judged.revisionGuidance === 'string' ? judged.revisionGuidance : '';
 }
 
 /** Not a concern about one of the director's edits: what a rework may read (validationResults). */
@@ -1003,6 +1017,14 @@ function buildFactCheckArgs(state) {
 const TRUTH_ONLY_ADVISORY_WARNINGS = "only a concern about one of the director's edits; empty when there is none";
 
 /**
+ * What a criterion's `fix` holds, below the bar (run 2h; the wording doc's part 10): what has to
+ * change, never the new sentence, as the finding's own line says (FIX_HOLDS). One wording, for the
+ * schema and the OUTPUT FORMAT. A fix reaches a rework only in the must-fix line code writes for a
+ * failed criterion the judge wrote no breach for (truthIssueLines), after the criterion's notes.
+ */
+const TRUTH_ONLY_FIX = 'what has to change, in a few words, with no new sentence';
+
+/**
  * The structured-output schema the judges are sent: the truth-only contract (phase 4, brief
  * 4.4, fix round 1), which both judges read, the weave's fact check (brief 4.4) and the
  * article judge (brief 4.7a). Its OUTPUT FORMAT (truthOnlyOutputFormat) restates it in the
@@ -1017,6 +1039,10 @@ const TRUTH_ONLY_ADVISORY_WARNINGS = "only a concern about one of the director's
  * Phase 3 (3.9; final review judges-factcheck[1], the integrator's ruling): the judge writes
  * a criterion's `fix` only below the bar, and `revisionGuidance` holds only the steps that
  * fix the structural issues.
+ *
+ * Run 2h (R49; the wording doc's part 10): the judge is no longer asked for numbered steps, so the
+ * schema holds no `revisionGuidance`: no rework reads them, and each restated a must-fix line. A
+ * criterion's fix (TRUTH_ONLY_FIX) and the list of breaches take the approved words.
  *
  * A criterion carries no `type`: each truth criterion's type is its definition's
  * (truthOnlyVerdict sets it). advisoryWarnings holds only the concerns about the director's
@@ -1040,23 +1066,19 @@ const TRUTH_ONLY_EVALUATION_JSON_SCHEMA = {
         properties: {
           score: { type: 'number' },
           notes: { type: 'string', description: 'Specific explanation naming the characters, IDs or sections at fault' },
-          fix: { type: 'string', description: `Only for a score below ${STRUCTURAL_PASS_SCORE}: the one concrete action that brings this criterion up to ${STRUCTURAL_PASS_SCORE}` }
+          fix: { type: 'string', description: `Only for a score below ${STRUCTURAL_PASS_SCORE}: ${TRUTH_ONLY_FIX}` }
         }
       }
     },
     structuralIssues: {
       type: 'array',
       items: { type: 'string' },
-      description: 'Issues that MUST be fixed, one self-contained sentence each'
+      description: 'Each breach, written as described above'
     },
     advisoryWarnings: {
       type: 'array',
       items: { type: 'string' },
       description: TRUTH_ONLY_ADVISORY_WARNINGS
-    },
-    revisionGuidance: {
-      type: 'string',
-      description: 'One step per structural issue, each the fix for that issue; empty when there is none'
     },
     confidence: { type: 'string' }
   },
@@ -1086,6 +1108,10 @@ function boxedHeading(title) {
  * format it was built from, with a type line and advisories as suggestions, went with its
  * last caller; this is the judges' one format.
  *
+ * Run 2h (R49; the wording doc's part 10): a criterion's notes end on what is wrong with the text
+ * (BREACH_NOTES), its fix is TRUTH_ONLY_FIX, the list of breaches points at how a breach is written
+ * above it, and no numbered steps are asked for.
+ *
  * @param {string} notes - what a criterion's notes hold, for this judge
  * @returns {string}
  */
@@ -1099,12 +1125,11 @@ function truthOnlyOutputFormat(notes) {
     "criterionName": {
       "score": number,
       "notes": "${notes}",
-      "fix": "only for a score below ${STRUCTURAL_PASS_SCORE}: the one concrete action that brings this criterion up to ${STRUCTURAL_PASS_SCORE}"
+      "fix": "only for a score below ${STRUCTURAL_PASS_SCORE}: ${TRUTH_ONLY_FIX}"
     }
   },
-  "structuralIssues": [ "issues that MUST be fixed" ],
+  "structuralIssues": [ "each breach, written as described above" ],
   "advisoryWarnings": [ "${TRUTH_ONLY_ADVISORY_WARNINGS}" ],
-  "revisionGuidance": "one step per structural issue, each the fix for that issue (Step 1: ..., Step 2: ...); empty when there is none",
   "confidence": "high" | "medium" | "low"
 }`;
 }
@@ -1152,8 +1177,8 @@ const JUDGED_WRITERS = { arcs: 'arc writer', article: 'article writer' };
 
 /** What a truth criterion's notes hold, per judge, as its OUTPUT FORMAT asks for them. */
 const BREACH_NOTES = {
-  arcs: 'the breach: the text at fault, the angle, thread or connection it is in, the piece of evidence where one is at fault, and the record it contradicts',
-  article: 'the breach: the sentence at fault, its section, and the record it contradicts'
+  arcs: 'the breach: the text at fault, the angle, thread or connection it is in, the piece of evidence where one is at fault, and what is wrong with it',
+  article: 'the breach: the sentence at fault, its section, and what is wrong with it'
 };
 
 /**
@@ -1184,24 +1209,45 @@ const TRUTH_ONLY_EVALUATION_RULES = `EVALUATION RULES:
  * is something the judge can show against the record or the director's words, and a line it only
  * doubts is not one. The prompt read found every "must pass" mark pushing a judge to fail a line
  * of Nova's opinion it was unsure of, and the rework then hedging it.
+ *
+ * Run 2h (the wording doc's part 10): a breach can go against the limit itself, as Nova taking a
+ * side or a word from running the game does; and a line passes unlabelled only when how it is said
+ * shows it is what Nova suspects, asks or believes, so a suspicion stated flat is still a breach.
  */
-const BREACH_LINE = "A breach is something you can show: the sentence, and what in the record or the director's words it goes against. A line you only doubt is not a breach. A plain statement of what Nova thinks is Nova's opinion, and it needs no label to pass.";
+const BREACH_LINE = "A breach is something you can show: the sentence, and what it goes against, in the record, in the director's words or in the limit itself. A line you only doubt is not a breach. A line that shows by how it is said that it is what Nova suspects, asks or believes needs no label to pass.";
 
 /**
  * The director's words, said once for both judges (run 2c; the wording doc's part 7), in the order
  * lib/director-words.js lists their sources (DIRECTOR_WORDS_SOURCES; judge-limits.test.js holds the
  * two to one order). Every question that says "the director's words" points at this line, and reads
- * every block of them its judge's prompt holds (R35).
+ * every block of them its judge's prompt holds (R35). Run 2h (part 10): a closing sentence, after
+ * the sources, counts the lines the director wrote or changed and marked as theirs (the director's
+ * edits and changes, the settled angle's marked lines) among them.
  */
-const DIRECTOR_WORDS_LINE = "The director's words are the director's notes, the corrections at the input review, the accusation as the director wrote it, the answers at the story meeting and the notes at the stops.";
+const DIRECTOR_WORDS_LINE = "The director's words are the director's notes, the corrections at the input review, the accusation as the director wrote it, the answers at the story meeting and the notes at the stops. A line the director wrote or changed, marked as theirs, counts with them.";
 
 /**
  * What a judge's fix holds (run 2c; the wording doc's part 7): what is wrong and what the record or
  * the director's words show, never the new sentence. The prompt read found a judge writing the
  * replacement sentence, which the rework printed as it stood: the judge became a second, unbriefed
- * writer of the article.
+ * writer of the article. Run 2h (part 10): what is wrong is what the record or the director's words
+ * show instead, or, for a breach of the limit itself, what the limit rules out.
  */
-const FIX_HOLDS = "and says what the record or the director's words show instead. Say what is wrong and what is true. Do not write the new sentence. The writer words it, and a sentence you write is printed as it stands.";
+const FIX_HOLDS = "and says what is wrong: what the record or the director's words show instead, or what the limit rules out. Do not write the new sentence. The writer words it, and a sentence you write is printed as it stands.";
+
+/**
+ * The limits no question of a judge scores, said right after its list of the fifteen (run 2h; the
+ * wording doc's part 10). The list names every limit, and the questions are the whole evaluation,
+ * so without this line a judge could not tell whether a limit no question names is its to report.
+ * The article's judge has no question on the head count (T10), which the fact check counts; the
+ * weave's has none on it either, nor on photos (T13) or words from running the game (T14), which
+ * the article's judge scores. lib/__tests__/judge-lines.test.js derives each set from LIMIT_CODES
+ * and the judge's criteria and holds each sentence to it.
+ */
+const UNASKED_LIMITS_LINE = Object.freeze({
+  arcs: 'No question below asks about the head count, photos or words from running the game. Code checks the first, and the other two are checked on the article.',
+  article: 'No question below asks about the head count. Code checks it.'
+});
 
 /**
  * The truth criteria and how to write a breach, or '' when the criteria carry none. Phase 18
@@ -1210,7 +1256,9 @@ const FIX_HOLDS = "and says what the record or the director's words show instead
  * codes, as code reads them (leadingRuleIds). Run 2c (R30): the list holds all fifteen
  * (limitsLine); after the pass mark, what a breach is (BREACH_LINE) and what the director's words
  * are (DIRECTOR_WORDS_LINE), then the questions; a finding says what is true and leaves the new
- * sentence to the writer (FIX_HOLDS), and the sample entry follows as it stood.
+ * sentence to the writer (FIX_HOLDS), and the sample entry follows as it stood. Run 2h (part 10):
+ * after the list, the limits none of this judge's questions scores (UNASKED_LIMITS_LINE); and a
+ * question's line names its codes alone, since the heading says the limits must pass.
  *
  * @param {'arcs'|'article'} phase
  * @param {Object} criteria
@@ -1219,10 +1267,11 @@ const FIX_HOLDS = "and says what the record or the director's words show instead
 function truthCriteriaSection(phase, criteria) {
   const lines = Object.entries(criteria)
     .filter(([_, { truth }]) => truth)
-    .map(([key, { rules, description }]) => `- ${key} (${rules.join(', ')}; must pass): ${description}`);
+    .map(([key, { rules, description }]) => `- ${key} (${rules.join(', ')}): ${description}`);
   if (lines.length === 0) return '';
   return `${boxedHeading('THE LIMITS (MUST PASS: a breach is a definite error, so the output goes back for a rework)')}
 ${limitsLine()}
+${UNASKED_LIMITS_LINE[phase]}
 Each criterion below scores the limits it names by their codes, against the record and the director's words in the evaluation prompt. One breach fails it: score it below ${STRUCTURAL_PASS_SCORE}.
 ${BREACH_LINE}
 ${DIRECTOR_WORDS_LINE}
@@ -1359,11 +1408,15 @@ ${sessionFacts.roster.join('\n')}${guest}`;
  * (PromptBuilder#_rosterSection), reached through the writers' builder factory.
  * The detective theme's section has no pronouns, as the detective writer's has none.
  *
+ * Run 2h (the wording doc's part 10): without the summary of the characters, in the form the
+ * article writer reads (`withCharacterContext: false`; run 2b, R22). The judges have the documents,
+ * which decide where a model's summary of them differs.
+ *
  * @param {Object} state
  * @returns {string}
  */
 function renderJudgeRosterSection(state) {
-  return getPromptBuilder(null, state)._rosterSection();
+  return getPromptBuilder(null, state)._rosterSection({ withCharacterContext: false });
 }
 
 /**
@@ -1647,9 +1700,14 @@ function buildEvaluationUserPrompt(phase, state, options = {}) {
       // print; and after the record the money totals the weave writer now reads, from the same
       // builder (renderJudgeFinancialSummary). No question names the totals: they are material a
       // figure can be checked against.
+      //
+      // Run 2h (the wording doc's part 10): the opening's fourth and fifth sentences say a line is
+      // a note, held to what the article it leads to would state as fact, not to printed prose; and
+      // the evidence under a line is the first place to look, while the record and the director's
+      // words decide.
       const answers = renderDirectorAnswers(state.weave && state.weave.questions);
       const weaveMoney = renderJudgeFinancialSummary(state);
-      return `Check this weave against the record and the director's words. The weave is the writer's notes to the director. Only an angle's headline is printed. Judge what each line claims, not how it is worded: a line breaks a limit when the article it leads to would state something the record and the director's words do not support. It pitches two or three angles, each a story told through the threads it names, and the director may pick any of them, so check every angle: each line of its pitch against the evidence of its threads. Each thread and each connection carries its evidence: the pieces of the record it rests on, each with its sources, what it shows, and whether it supports the line or cuts against it. Read each line against its evidence, and each piece against the record.
+      return `Check this weave against the record and the director's words. The weave is the writer's notes to the director. Only an angle's headline is printed. A line here is a note, so do not hold it to the manner of printed prose. A line breaks a limit when the article it leads to would state as fact something the record and the director's words do not support. The weave pitches two or three angles, each a story told through the threads it names, and the director may pick any of them, so check every angle. The evidence under a line is the first place to look. The record and the director's words decide. Each thread and each connection carries its evidence: the pieces of the record it rests on, each with its sources, what it shows, and whether it supports the line or cuts against it. Read each line against its evidence, and each piece against the record.
 
 WEAVE:
 ${JSON.stringify(weaveForJudge(state.weave) || null, null, 2)}
@@ -2041,7 +2099,8 @@ function createEvaluator(phase, options = {}) {
       // reviser had already fixed.
       //
       // `feedback` and `revisionGuidance` carry the same text under both names, and
-      // buildRevisionContext reads revisionGuidance first.
+      // buildRevisionContext reads revisionGuidance first. Since run 2h (R49) the judge is not
+      // asked for numbered steps, so both are '' (guidanceOf); a stored verdict keeps its own.
       //
       // A proven defect outranks an opinion. At the cap the fact-check runs
       // without short-circuiting, so Opus can return structuralPassed:true over
